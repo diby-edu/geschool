@@ -1,26 +1,32 @@
 import type { TenantContext } from '@/lib/tenant/context';
 import { hasAnyPermission } from '@/lib/permissions';
 import type { NavItem } from '@/components/layout/AppShell';
+import type { PermissionCode } from '@/lib/permissions';
 
 /**
  * Navigation de l'espace etablissement, filtree par permissions.
  *
  * Regle §77 : on ne liste QUE des pages qui existent reellement et auxquelles
- * l'utilisateur a acces. Les entrees commentees correspondent aux modules des
- * lots suivants ; elles seront activees quand leurs pages seront livrees, pas
- * avant — pas de lien mort, pas de « bientot disponible ».
+ * l'utilisateur a acces. Chaque entree declare les permissions qui l'ouvrent ;
+ * une entree sans permission correspondante n'apparait pas. Les modules des
+ * lots suivants s'ajoutent ici au fur et a mesure que leurs pages sont livrees.
  */
+type NavDef = { path: string; label: string; any: PermissionCode[] };
+
+const MODULES: NavDef[] = [
+  { path: 'subjects', label: 'Matieres', any: ['subjects.view'] },
+  { path: 'rooms', label: 'Salles', any: ['rooms.view'] },
+];
+
 export function buildSchoolNav(ctx: TenantContext): NavItem[] {
   const base = `/e/${ctx.school.slug}`;
-  const nav: NavItem[] = [{ href: `${base}/dashboard`, label: "Tableau de bord" }];
+  const nav: NavItem[] = [{ href: `${base}/dashboard`, label: 'Tableau de bord' }];
 
-  // Les modules ci-dessous arrivent au lot 4. Exemple d'activation conditionnee
-  // par la permission, a decommenter quand la page existe :
-  //
-  // if (hasAnyPermission(ctx, ['students.view'])) {
-  //   nav.push({ href: `${base}/students`, label: 'Eleves' });
-  // }
-  void hasAnyPermission;
+  for (const m of MODULES) {
+    if (hasAnyPermission(ctx, m.any)) {
+      nav.push({ href: `${base}/${m.path}`, label: m.label });
+    }
+  }
 
   return nav;
 }
