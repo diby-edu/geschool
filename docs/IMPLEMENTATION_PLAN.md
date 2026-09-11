@@ -14,7 +14,7 @@ d'acceptation. La vision produit est dans [`ROADMAP.md`](./ROADMAP.md), les arbi
 | **1** | Socle technique | types + lint + tests + build verts | — · *terminé* |
 | **2** | Base de données et RLS | 30 migrations, 57 tests d'isolation verts | — · *terminé* |
 | **3** | Authentification et RBAC | connexion 3 identifiants, 1re connexion, RBAC, 4 e2e verts | — · *terminé* |
-| **4** | Administration : structure | classes, matières, enseignants, salles | lot 3 |
+| **4** | Administration : structure | 8 modules CRUD livrés et vérifiés ; reste config secondaire | *en cours* |
 | **5** | Élèves, parents, accès | inscription → comptes → SMS de bout en bout | lot 4 |
 | **6** | Emploi du temps manuel | trame saisie, validée, publiée | lot 4 |
 | **7** | Solveur OR-Tools | génération automatique expliquée | lot 6 |
@@ -224,22 +224,41 @@ pnpm test:e2e 4 parcours Playwright verts (redirection, connexion, erreur géné
 
 ---
 
-## Lot 4 — Administration : structure
+## Lot 4 — Administration : structure · **EN COURS** (11/09/2026)
 
-**Tâches** — dans cet ordre, chacune étant un CRUD complet et réellement fonctionnel :
+**Mécanique transverse livrée** — le patron CRUD réutilisé par tous les modules :
+tableau serveur (recherche, tri par en-tête, pagination — aucune donnée au-delà de la page
+n'atteint le navigateur), convention de formulaire (Zod partagé, erreurs par champ,
+redirection serveur, bandeau de confirmation), garde de page par permission (404), navigation
+filtrée (un module n'apparaît que si l'utilisateur y a droit **et** que la page existe),
+primitives UI. Chaque écriture est cloisonnée par `ctx.school.id` (IDOR) et auditée.
 
-1. Établissements et paramétrage — espace Super Admin, personnalisation visuelle,
-   `school_settings` typés Zod, écrans simple et avancé (§59)
-2. Années scolaires, périodes, calendrier, vacances et fériés
-3. Cycles, niveaux, classes, professeur principal
-4. Matières, programme par niveau (`level_subjects`)
-5. Enseignants, qualifications, disponibilités
-6. Salles, types, équipements, disponibilités
-7. Affectations d'enseignement
+| # | Module | État |
+|---|---|---|
+| 1 | **Création d'établissement** par le Super Admin | **fait** (partie 3) — vérifié en navigateur |
+| 1 | Paramétrage `school_settings`, personnalisation visuelle | à faire |
+| 2 | **Années scolaires + périodes** — activer/clôturer/rouvrir | **fait** — invariant « 1 seule courante » confirmé en base |
+| 2 | Calendrier, vacances, fériés | à faire |
+| 3 | **Cycles, niveaux, classes** + professeur principal | **fait** — vérifié en navigateur |
+| 4 | **Matières** | **fait** — vérifié (code normalisé, conflit d'unicité) |
+| 4 | Programme par niveau (`level_subjects`) | à faire |
+| 5 | **Enseignants** — téléphone E.164, archivage logique | **fait** |
+| 5 | Qualifications (`teacher_subjects`), disponibilités | à faire |
+| 6 | **Salles + types de salle** | **fait** — vérifié (salle rattachée à un type) |
+| 6 | Équipements, disponibilités des salles | à faire |
+| 7 | Affectations d'enseignement (`teaching_assignments`) | à faire |
+| — | Import Excel/CSV avec assistant | à faire |
 
-**Transverse** — le composant `DataTable` réutilisable : recherche, tri, filtres, pagination
-**serveur**, sélection multiple, actions groupées, export, colonnes configurables. Il est
-écrit une fois ici et sert partout ensuite.
+**Vérifié en navigateur** : création de matière (`fr` → `FR`), conflit de code, type + salle,
+bascule d'année courante (invariant confirmé en base), classe avec niveau et PP + comptage
+d'inscrits, création d'établissement par le Super Admin puis accès à son espace.
+
+Trois commits : `feat(admin)` matières+salles, `feat(admin)` années+structure+classes+
+enseignants, `feat(platform)` création d'établissement. CI verte à chaque fois.
+
+**Reste à faire pour clôturer le lot** : affectations d'enseignement (le dernier lien
+structurel), programme par niveau, paramétrage `school_settings`, et les compléments
+secondaires (calendrier, qualifications, disponibilités, équipements, import).
 
 **Terminé quand** — un établissement se configure de bout en bout sans toucher au code.
 
