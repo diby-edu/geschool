@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { Card, CardContent } from '@/components/ui/card';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = { title: 'Etablissements' };
 export const dynamic = 'force-dynamic';
@@ -27,18 +29,21 @@ export default async function PlatformHome() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Etablissements</h1>
-        <p className="mt-1 text-sm text-[color:var(--muted-foreground)]">
-          {list.length} au total · {active} actif{active > 1 ? 's' : ''}
-        </p>
-      </div>
+      <PageHeader
+        title="Etablissements"
+        description={`${list.length} au total · ${active} actif${active > 1 ? 's' : ''}`}
+        action={
+          <Link href="/admin/schools/new">
+            <Button>Nouvel etablissement</Button>
+          </Link>
+        }
+      />
 
       {list.length === 0 ? (
         <Card>
           <CardContent>
             <p className="text-sm text-[color:var(--muted-foreground)]">
-              Aucun etablissement. La creation d&apos;etablissements arrive au lot 4.
+              Aucun etablissement. Creez-en un pour commencer.
             </p>
           </CardContent>
         </Card>
