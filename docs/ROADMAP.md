@@ -45,7 +45,7 @@ rejoue sans effet.
 
 Le cœur. Rien ne se construit dessus tant qu'elle n'est pas verrouillée.
 
-- Migrations `0001` à `0027` de `DATABASE.md`
+- Migrations `0001` à `0030` de `DATABASE.md` §17 — **terminé le 11/09/2026**
 - Fonctions `app.*` de sécurité, toutes `STABLE` et `SECURITY DEFINER`
 - RLS activée **et forcée** sur chaque table tenant, quatre policies par table
 - Policies Storage alignées sur les mêmes fonctions

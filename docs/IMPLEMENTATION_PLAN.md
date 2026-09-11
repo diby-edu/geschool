@@ -12,7 +12,7 @@ d'acceptation. La vision produit est dans [`ROADMAP.md`](./ROADMAP.md), les arbi
 |---|---|---|---|
 | **0** | Documentation d'architecture | 12 documents | — · *terminé* |
 | **1** | Socle technique | types + lint + tests + build verts | — · *terminé* |
-| **2** | Base de données et RLS | 27 migrations, tests d'isolation verts | Supabase |
+| **2** | Base de données et RLS | 30 migrations, 57 tests d'isolation verts | — · *terminé* |
 | **3** | Authentification et RBAC | 5 profils se connectent au bon espace | lot 2 |
 | **4** | Administration : structure | classes, matières, enseignants, salles | lot 3 |
 | **5** | Élèves, parents, accès | inscription → comptes → SMS de bout en bout | lot 4 |
@@ -118,29 +118,56 @@ serveur standalone lancé -> / en HTTP 200, /api/health en 200,
 
 ---
 
-## Lot 2 — Base de données et RLS
+## Lot 2 — Base de données et RLS · **TERMINÉ le 11/09/2026**
 
 **Le lot le plus important.** Aucune interface ne s'écrit tant qu'il n'est pas verrouillé.
 
-**Tâches**
+**Livré**
 
-- Migrations `0001` à `0027` de [`DATABASE.md`](./DATABASE.md) §17
-- Fonctions `app.*` — toutes `STABLE`, `SECURITY DEFINER`, `search_path` figé
-- RLS **activée et forcée** sur chaque table tenant, 4 policies par table
-- Policies Storage sur les 3 buckets privés, mêmes fonctions que les tables
-- Index de [`DATABASE.md`](./DATABASE.md) §16, en priorité
-  `school_memberships (user_id, school_id, status)` dont dépend chaque policy
-- Seed : 120+ permissions, 9 rôles système, pack pays `CI`
-- **Harnais RLS généré depuis le catalogue Postgres** : il énumère les tables portant un
-  `school_id` et vérifie que chacune possède ses 4 policies. Une table oubliée fait
-  échouer la CI — c'est le garde-fou qui tient sur la durée.
-- Tous les scénarios de [`RBAC.md`](./RBAC.md) §7 avec deux vrais utilisateurs de deux écoles
+- [x] **30 migrations** appliquées sur Supabase — liste réelle dans
+      [`DATABASE.md`](./DATABASE.md) §17
+- [x] **83 tables**, dont **74 tenant** ; **70 énumérations**
+- [x] **RLS activée et forcée sur 100 % des tables** de `public`, 4 policies par table tenant
+- [x] **39 fonctions `app.*`** : sécurité en `STABLE` + `SECURITY DEFINER` + `search_path`
+      figé ; calcul des moyennes en `SECURITY INVOKER` pour subir la RLS de l'appelant
+- [x] Périmètres **dérivés** du métier : parent ← `student_guardians`, élève ← soi-même,
+      enseignant ← `teaching_assignments` + professeur principal
+- [x] Stockage : 3 buckets **privés** (`documents`, `avatars`, `reports`), taille et types MIME
+      plafonnés, lecture d'un fichier **héritée de la visibilité** de sa ligne `documents`
+- [x] Seed : **131 permissions**, **9 rôles système**, 347 attributions, plan `STARTER`
+- [x] Une seule génération d'emploi du temps à la fois sur la plateforme, garantie par un
+      index unique partiel et non par une convention (ADR-014)
+- [x] Journal d'audit **immuable** pour tout client
+- [x] Types TypeScript générés par un **générateur maison** lisant `pg_catalog`
+- [x] Job CI `rls`, actif dès qu'un secret `DATABASE_URL_TEST` est configuré
 
-**Terminé quand** — la suite d'isolation passe intégralement et qu'aucune table tenant
-n'échappe à la RLS.
+**Vérifié réellement — 57 tests contre la vraie base**
 
-**Point de vigilance.** Une policy mal écrite ne se voit pas : elle laisse simplement passer.
-D'où la génération automatique des tests plutôt que leur écriture à la main.
+```
+Couverture (9)   aucune table tenant sans RLS complète ; RLS forcée partout ;
+                 fonctions de sécurité STABLE/DEFINER/search_path ; fonctions de calcul
+                 non DEFINER ; vues en security_invoker ; PARENT et STUDENT sans
+                 aucune permission ; buckets privés ; 4 policies sur storage.objects
+Isolation (36)   A ne lit, n'écrit, ne modifie, ne supprime rien de B ; IDOR ;
+                 parent : son enfant oui, le camarade de classe non ; notes visibles
+                 seulement une fois publiées ; élève : soi-même uniquement ;
+                 enseignant : ses classes ; Super Admin : tout ; établissement suspendu
+                 en lecture seule ; audit_logs inaltérable
+Stockage (12)    photos, documents et bulletins cloisonnés ; dépôt refusé hors du
+                 préfixe schools/{id}/ ; chemin mal formé refusé sans erreur
+```
+
+**Trois défauts trouvés par les tests, avant toute mise en production**
+
+| Défaut | Gravité | Correctif |
+|---|---|---|
+| La vue `v_lateness_records` s'exécutait avec les droits de son propriétaire et **contournait la RLS** : tout utilisateur aurait lu les retards de tous les établissements | Critique — fuite inter-tenant | `security_invoker = true` (0021), et un test vérifie désormais toutes les vues |
+| Récursion infinie entre les policies `grades` et `assessments` | Majeure — déni de service sur toutes les notes | Fonctions `SECURITY DEFINER` de rupture de cycle (0029) |
+| Le CLI Supabase ne démarre pas sur ce poste Windows | Bloquant pour les types | Générateur maison, sans dépendance |
+
+**Point de vigilance tenu.** Une policy mal écrite ne se voit pas, elle laisse passer. Les deux
+premiers défauts ci-dessus en sont exactement l'illustration : ni l'un ni l'autre n'aurait
+produit d'erreur visible à l'écran.
 
 ---
 

@@ -13,7 +13,10 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     include: ['src/**/*.test.{ts,tsx}', 'tests/**/*.test.ts'],
-    exclude: ['node_modules', '.next', 'tests/e2e/**'],
+    // tests/rls exige une VRAIE base : il est lance separement par
+    // `pnpm test:rls`, et en CI seulement si un DATABASE_URL est configure.
+    // L'inclure ici ferait echouer `pnpm test` sur tout poste sans base.
+    exclude: ['node_modules', '.next', 'tests/e2e/**', 'tests/rls/**'],
 
     // Les tests RLS ouvrent de vraies connexions Postgres et doivent
     // s'executer en serie : deux suites concurrentes se marcheraient dessus

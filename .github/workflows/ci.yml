@@ -39,6 +39,58 @@ jobs:
       - name: Tests unitaires
         run: pnpm test
 
+  rls:
+    name: Isolation multi-tenant (RLS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: verify
+
+    # S'execute UNIQUEMENT si le secret DATABASE_URL_TEST est configure.
+    #
+    # Ce secret doit pointer vers un projet Supabase DEDIE AUX TESTS, jamais
+    # vers la production : la suite y cree puis supprime des etablissements,
+    # des comptes et des donnees de test (prefixe `rlstest-`).
+    #
+    # Sans secret, le job se termine proprement sans rien tester. C'est
+    # volontaire : un job rouge en permanence finit desactive, et c'est
+    # exactement le garde-fou de l'isolation qui disparaitrait avec lui.
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL_TEST }}
+
+    steps:
+      - name: Base de test configuree ?
+        id: check
+        run: |
+          if [ -n "$DATABASE_URL" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::DATABASE_URL_TEST absent — suite RLS non executee."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.enabled == 'true'
+
+      - uses: pnpm/action-setup@v4
+        if: steps.check.outputs.enabled == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.enabled == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+        if: steps.check.outputs.enabled == 'true'
+
+      - name: Migrations sur la base de test
+        if: steps.check.outputs.enabled == 'true'
+        run: pnpm db:migrate
+
+      - name: Suite d'isolation
+        if: steps.check.outputs.enabled == 'true'
+        run: pnpm test:rls
+
   build:
     name: Build
     runs-on: ubuntu-latest

@@ -687,34 +687,57 @@ notifications        (user_id, read_at, created_at desc)
 
 ---
 
-## 17. Ordre des migrations
+## 17. Migrations appliquées
+
+État réel au 11/09/2026 — 30 migrations, toutes appliquées sur la base Supabase.
 
 | # | Contenu |
 |---|---|
-| 0001 | Extensions (`pgcrypto`, `citext`), schéma `app`, énumérations globales |
-| 0002 | `schools`, `school_settings`, `platform_admins` |
-| 0003 | `users`, trigger de synchronisation `auth.users`, `school_memberships` |
-| 0004 | `roles`, `permissions`, `role_permissions`, `membership_roles`, `membership_scope_grants` |
-| 0005 | Fonctions `app.*` de sécurité |
-| 0006 | `account_access`, `credential_deliveries`, `credential_delivery_batches`, `access_events` |
-| 0007 | `academic_years`, `academic_periods`, `school_calendar_events` |
-| 0008 | `cycles`, `levels`, `classes`, `groups`, `group_classes` |
-| 0009 | `students`, `student_enrollments`, `guardians`, `student_guardians`, `student_groups` |
-| 0010 | `teachers`, `teacher_subjects`, `teacher_availability` |
-| 0011 | `subjects`, `level_subjects`, `teaching_assignments` |
+| 0001 | Schéma `app`, `touch_updated_at()`, énumérations transverses |
+| 0002 | `schools`, `school_settings`, `school_branding_templates`, `platform_admins` |
+| 0003 | `users`, trigger de synchronisation depuis `auth.users`, `school_memberships` |
+| 0004 | `permissions`, `roles`, `role_permissions`, `membership_roles`, `membership_scope_grants` |
+| 0005 | Fonctions de sécurité `app.*` + `app.tenant_tables_without_rls()` |
+| 0006 | RLS du noyau (0002 à 0004) |
+| 0007 | Gestion des accès : `account_access`, `credential_deliveries`, lots, `access_events` ; protection de `_migrations` |
+| 0008 | `academic_years`, `academic_periods`, `school_calendar_events`, `app.can_write_year()` |
+| 0009 | `cycles`, `levels` |
+| 0010 | `subjects`, `level_subjects` |
+| 0011 | `teachers`, `teacher_subjects`, `teacher_availability` |
 | 0012 | `room_types`, `room_features`, `rooms`, `room_room_features`, `room_availability` |
-| 0013 | `schedule_configurations`, `time_slots` |
-| 0014 | `teaching_requirements` + tables cibles et enseignants |
-| 0015 | `schedule_versions`, `schedule_sessions` + liaisons, `schedule_constraints` |
-| 0016 | `schedule_conflicts`, `schedule_generation_jobs`, `session_occurrences` |
-| 0017 | `attendance_registers`, `attendance_records`, `absence_justifications`, vues |
-| 0018 | `grading_scales`, `grading_scale_bands`, `assessment_types`, `assessments`, `grades` |
-| 0019 | Fonctions de calcul des moyennes et des rangs |
-| 0020 | `report_card_templates`, `report_cards`, `report_card_items`, conseils de classe |
-| 0021 | `applications`, `student_transfers` |
-| 0022 | `document_categories`, `documents`, policies Storage |
-| 0023 | `notifications`, `notification_preferences`, `announcements` |
-| 0024 | `plans`, `subscriptions`, `subscription_items`, `usage_records`, `payments`, `school_features` |
-| 0025 | `audit_logs`, `sync_operations`, triggers d'audit |
-| 0026 | RLS : activation, forçage et policies sur l'intégralité des tables tenant |
-| 0027 | Seed : permissions, rôles système, pack pays `CI` |
+| 0013 | `classes`, `groups`, `group_classes` |
+| 0014 | `students`, `student_enrollments`, `guardians`, `student_guardians`, `student_groups` ; périmètres parent et élève |
+| 0015 | `teaching_assignments` ; périmètre enseignant, complétion de `app.can_see_student()` |
+| 0016 | `schedule_configurations`, `time_slots` |
+| 0017 | `teaching_requirements` + cibles + enseignants |
+| 0018 | `schedule_versions`, `schedule_sessions` + liaisons, `schedule_constraints`, `app.can_see_session()` |
+| 0019 | `schedule_conflicts`, `schedule_generation_jobs`, `session_occurrences` |
+| 0020 | `attendance_registers`, `attendance_records`, `absence_justifications`, vue `v_lateness_records` |
+| 0021 | Barèmes, types d'évaluation, `assessments`, `grades` ; vue passée en `security_invoker` |
+| 0022 | Calcul des moyennes et des rangs (`SECURITY INVOKER`) |
+| 0023 | Bulletins, modèles, conseils de classe |
+| 0024 | `applications`, `student_transfers`, `document_categories`, `documents` |
+| 0025 | `notifications`, `notification_preferences`, `announcements`, `push_subscriptions` |
+| 0026 | `plans`, `subscriptions`, `subscription_items`, `usage_records`, `payments`, `school_features` |
+| 0027 | `audit_logs` (immuable), `sync_operations` |
+| 0028 | Seed : 131 permissions, 9 rôles système, matrice, plan `STARTER` |
+| 0029 | **Correctif** : récursion infinie entre les policies `grades` et `assessments` |
+| 0030 | Stockage : 3 buckets privés, policies alignées sur les tables |
+
+### Écarts par rapport à la conception initiale
+
+| Écart | Raison |
+|---|---|
+| Pas d'extension `citext` | Index uniques sur `lower(colonne)` : même garantie, sans extension ni problème de `search_path`. |
+| RLS écrite **dans chaque migration de domaine**, et non regroupée en fin de parcours | Aucune fenêtre où une table existe sans protection, et chaque domaine se relit d'un seul tenant. |
+| Ordre des domaines revu (matières et enseignants avant les classes) | Supprime toutes les références en avant : chaque clé étrangère pointe vers une table déjà créée. |
+| Pack pays `CI` absent du seed SQL | Barème, trimestres et structure sont rattachés à un établissement : ils n'existent qu'à sa création, via `src/config/defaults/`. |
+| 0029, correctif de récursion | Détecté par la suite de tests, pas en production. Voir ci-dessous. |
+
+### Leçon retenue de 0029
+
+Deux policies qui s'interrogent mutuellement par sous-requête provoquent une récursion
+infinie (SQLSTATE `42P17`) : ni fuite, mais un déni de service complet sur la table. Règle
+désormais appliquée : **toute condition qui lit une autre table protégée passe par une
+fonction `SECURITY DEFINER` renvoyant un booléen**, jamais par une sous-requête directe dans
+la policy.
