@@ -1,0 +1,55 @@
+# Service solveur OR-Tools — le SEUL composant conteneurise.
+#
+# L'application Next.js et son worker tournent sous PM2 aux cotes des dix
+# autres applications du VPS (voir ecosystem.config.cjs). Les mettre en
+# conteneur n'apporterait rien et consommerait de la memoire en double.
+#
+# Le solveur, lui, a besoin de Python 3.12 et d'OR-Tools, quand le VPS n'a que
+# Python 3.10 sans pip. Docker 29.1.3 est deja installe : le conteneur regle le
+# probleme sans rien modifier sur le systeme hote.
+
+services:
+  solver:
+    build: ./solver-service
+    image: geschool-solver:latest
+    container_name: gs-solver
+    restart: unless-stopped
+
+    # ATTENTION — le prefixe 127.0.0.1 est OBLIGATOIRE.
+    # Sans lui, Docker ecrit directement dans iptables, CONTOURNE UFW et
+    # expose le solveur a Internet. Le pare-feu ne protegerait plus rien.
+    ports:
+      - '127.0.0.1:8110:8000'
+
+    env_file:
+      - ./solver-service/.env
+
+    # Bridage CPU et memoire (ADR-014) : un seul vCPU partage avec huit sites
+    # en production. Le solveur ne doit jamais pouvoir les affamer.
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1g
+    cpu_shares: 512
+
+    # Le solveur ne recoit AUCUNE variable Supabase : il n'a structurellement
+    # aucun moyen d'atteindre la base (SOLVER_API.md §10).
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'

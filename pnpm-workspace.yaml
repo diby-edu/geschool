@@ -1,0 +1,13 @@
+# Fichier de configuration pnpm (v10+ : les reglages ne vivent plus dans
+# package.json). Aucun paquet enfant declare : le projet est une application
+# unique, avec solver-service a cote en Python.
+
+# Binaires natifs autorises a executer leur script d'installation.
+# Sans cette autorisation, pnpm les bloque et Vitest (esbuild) comme ESLint
+# (unrs-resolver) echouent avec des erreurs peu explicites.
+# Declaratif volontairement : la CI se comporte comme le poste de developpement.
+allowBuilds:
+  '@parcel/watcher': true
+  '@swc/core': true
+  esbuild: true
+  unrs-resolver: true

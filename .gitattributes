@@ -1,0 +1,32 @@
+# Normalisation des fins de ligne.
+#
+# Le developpement se fait sous Windows, le deploiement sous Linux. Sans cette
+# normalisation, Git convertit les fichiers en CRLF et scripts/deploy.sh devient
+# inexecutable sur le VPS : bash echoue sur un « \r » invisible, avec un message
+# incomprehensible du genre « /usr/bin/env: 'bash\r': No such file or directory ».
+
+* text=auto eol=lf
+
+# Fichiers qui DOIVENT rester en LF : ils sont interpretes sur le serveur.
+*.sh        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+Dockerfile  text eol=lf
+*.py        text eol=lf
+*.sql       text eol=lf
+
+# Binaires : aucune conversion
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.pdf    binary
+*.woff   binary
+*.woff2  binary
+*.ttf    binary
+*.xlsx   binary
+
+# Fichiers generes : masques dans les diffs pour garder les revues lisibles
+pnpm-lock.yaml        -diff linguist-generated
+src/types/database.ts -diff linguist-generated

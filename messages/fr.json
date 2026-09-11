@@ -1,0 +1,48 @@
+{
+  "app": {
+    "name": "Gestion Scolaire",
+    "tagline": "Plateforme de gestion d'établissements scolaires"
+  },
+  "common": {
+    "loading": "Chargement…",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "create": "Créer",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "export": "Exporter",
+    "import": "Importer",
+    "back": "Retour",
+    "next": "Suivant",
+    "previous": "Précédent",
+    "close": "Fermer",
+    "yes": "Oui",
+    "no": "Non",
+    "none": "Aucun",
+    "all": "Tous",
+    "actions": "Actions",
+    "required": "Champ obligatoire"
+  },
+  "errors": {
+    "UNAUTHENTICATED": "Vous devez vous connecter pour continuer.",
+    "FORBIDDEN": "Vous n'avez pas l'autorisation d'effectuer cette action.",
+    "NOT_FOUND": "Cet élément est introuvable.",
+    "VALIDATION": "Les informations saisies sont invalides.",
+    "CONFLICT": "Cette opération entre en conflit avec des données existantes.",
+    "RATE_LIMITED": "Trop de tentatives. Merci de patienter.",
+    "TENANT_READ_ONLY": "Cet établissement est en lecture seule : aucune modification n'est possible.",
+    "EXTERNAL_SERVICE": "Un service externe est temporairement indisponible.",
+    "INTERNAL": "Une erreur inattendue s'est produite.",
+    "pageTitle": "Une erreur est survenue",
+    "retry": "Réessayer",
+    "notFoundTitle": "Page introuvable",
+    "notFoundBody": "La page demandée n'existe pas, ou vous n'y avez pas accès."
+  },
+  "empty": {
+    "noResults": "Aucun résultat",
+    "noResultsHint": "Modifiez vos filtres ou votre recherche."
+  }
+}

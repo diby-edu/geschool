@@ -1,0 +1,6 @@
+Les migrations SQL arrivent au lot 2, numérotées 0001_ à 0027_
+selon docs/DATABASE.md §17.
+
+Règle : une migration appliquée est immuable. Le runner enregistre une somme
+de contrôle et refuse un fichier modifié après coup — corriger se fait par un
+nouveau fichier, jamais par édition.

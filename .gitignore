@@ -1,0 +1,72 @@
+# Dependances
+node_modules/
+.pnpm-store/
+
+# Build Next.js
+.next/
+out/
+build/
+dist/
+next-env.d.ts
+*.tsbuildinfo
+
+# ---------------------------------------------------------------------------
+# SECRETS — ne jamais commiter
+# Seul .env.example, depourvu de toute valeur reelle, vit dans le depot.
+# ---------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+solver-service/.env
+*.pem
+*.key
+*.p12
+
+# NB : src/types/database.ts est genere (pnpm db:types) mais VOLONTAIREMENT
+# versionne — la CI doit pouvoir typer le projet sans acces a la base.
+
+# Tests
+coverage/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# Python (solver-service)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Outils et editeurs
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# Systeme
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Journaux et temporaires
+*.log
+npm-debug.log*
+pnpm-debug.log*
+logs/
+tmp/
+.cache/
+
+# ---------------------------------------------------------------------------
+# Documents d'infrastructure — le depot est public.
+# Adresse du VPS, compte d'acces, inventaire des services voisins, references
+# de projet : reunis, ce sont les elements d'une carte d'attaque. Ils vivent
+# dans des fichiers *.local.md, non versionnes.
+# ---------------------------------------------------------------------------
+*.local.md
+.env.deploy
