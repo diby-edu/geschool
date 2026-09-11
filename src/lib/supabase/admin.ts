@@ -33,6 +33,7 @@ export type AdminOperation =
   | 'auth.create_user'
   | 'auth.update_password'
   | 'auth.delete_user'
+  | 'auth.resolve_login'
   | 'worker.job'
   | 'schedule.publish'
   | 'cron.task'

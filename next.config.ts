@@ -35,6 +35,10 @@ const nextConfig: NextConfig = {
   // Ne jamais divulguer la stack technique
   poweredByHeader: false,
 
+  // Ne pas generer AGENTS.md / CLAUDE.md a chaque `next dev` : ce sont des
+  // artefacts, pas du code source du projet.
+  agentRules: false,
+
   // Un build ne doit jamais passer malgre une erreur de type.
   typescript: { ignoreBuildErrors: false },
   // NB : Next 16 a retire l'option `eslint` de la configuration. Le lint est

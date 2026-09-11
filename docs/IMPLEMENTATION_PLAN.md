@@ -13,7 +13,7 @@ d'acceptation. La vision produit est dans [`ROADMAP.md`](./ROADMAP.md), les arbi
 | **0** | Documentation d'architecture | 12 documents | — · *terminé* |
 | **1** | Socle technique | types + lint + tests + build verts | — · *terminé* |
 | **2** | Base de données et RLS | 30 migrations, 57 tests d'isolation verts | — · *terminé* |
-| **3** | Authentification et RBAC | 5 profils se connectent au bon espace | lot 2 |
+| **3** | Authentification et RBAC | connexion 3 identifiants, 1re connexion, RBAC, 4 e2e verts | — · *terminé* |
 | **4** | Administration : structure | classes, matières, enseignants, salles | lot 3 |
 | **5** | Élèves, parents, accès | inscription → comptes → SMS de bout en bout | lot 4 |
 | **6** | Emploi du temps manuel | trame saisie, validée, publiée | lot 4 |
@@ -171,23 +171,56 @@ produit d'erreur visible à l'écran.
 
 ---
 
-## Lot 3 — Authentification et RBAC applicatif
+## Lot 3 — Authentification et RBAC applicatif · **TERMINÉ le 11/09/2026**
 
-**Tâches**
+**Livré**
 
-- Connexion à trois identifiants — email, téléphone, matricule (ADR-005)
-- Résolution serveur `(school_id, identifiant) → auth_email`, jamais côté client
-- Normalisation E.164, fonction pure et testée, **partagée** par formulaire, import et synchro
-- Middleware : slug → tenant, appartenance active, **404** si absente
-- **Première connexion imposée**, y compris sur les Route Handlers
-- Mot de passe oublié ; MFA TOTP obligatoire pour les Super Admins
-- `getTenantContext`, `hasPermission`, `requirePermission`, `canAccess`, résolution des scopes
-- Sélecteur d'établissement pour les comptes multi-appartenance
-- Coquilles des 5 espaces, avec sidebar, en-tête, fil d'Ariane
-- `audit_logs` écrit dès la première mutation
+- [x] **Connexion à trois identifiants** — email (personnel, `/login`), téléphone et matricule
+      (parents, élèves, `/e/{slug}/login`), résolus vers l'email Auth synthétique (ADR-005)
+- [x] Résolution **côté serveur uniquement**, via `service_role` et `app.resolve_login_email`,
+      avec réponse générique et tentative même sur échec (anti-énumération)
+- [x] Normalisation E.164 pure et testée (12 tests), partagée entre formulaire, import et synchro
+- [x] `proxy.ts` (ex-`middleware.ts`, renommé pour Next 16) : rafraîchit la session,
+      **impose la première connexion** globalement — y compris les Route Handlers —, renvoie
+      un non-authentifié vers `/login`
+- [x] Première connexion : nouveau mot de passe, drapeau `must_change_password` levé dans le
+      **JWT** (app_metadata, donc lisible sans requête) et reflété dans `account_access`,
+      événement `ACCOUNT_ACTIVATED`
+- [x] Mot de passe oublié par email (personnel), callback `/auth/callback`
+- [x] `getTenantContext` (mis en cache par requête) → `hasPermission`, `requirePermission`,
+      `requireWritable`, périmètres dérivés
+- [x] Espace établissement gardé (404 pour un non-membre), espace Super Admin gardé,
+      dispatcher racine, sélecteur multi-établissement
+- [x] Tableau de bord **adapté au rôle et filtré par RLS** : personnel → statistiques,
+      enseignant → ses classes, parent/élève → son périmètre
+- [x] `audit()` cloisonné (`service_role`), masquage des champs sensibles
+- [x] Pages 404 et frontière d'erreur
 
-**Terminé quand** — cinq profils réels se connectent, atterrissent au bon endroit, et qu'un
-test automatisé prouve qu'aucun ne franchit son périmètre.
+**Vérifié réellement**
+
+```
+pnpm verify   types + lint + 18 tests unitaires verts
+pnpm test:rls 57 tests d'isolation verts (migrations 0031-0033 incluses)
+navigateur    admin email -> vue personnel (1/1/1) ; parent par « 01 01 01 01 01 »
+              -> normalisation E.164 -> première connexion imposée -> vue « son enfant »
+              uniquement ; parent sur /admin -> 404
+pnpm test:e2e 4 parcours Playwright verts (redirection, connexion, erreur générique, 404)
+```
+
+**Écarts assumés**
+
+| Sujet | Choix | Raison |
+|---|---|---|
+| **MFA TOTP** | Reportée | Supabase Auth la fournit nativement (enrôlement/défi) ; l'ajouter proprement — enrôlement, écran de défi, rattrapage — est un incrément à part. Les comptes Super Admin restent à protéger avant la vraie production ; noté au lot 10 (SaaS/sécurité). |
+| **`canAccess` (périmètre objet)** | Fourni au niveau base | Les périmètres sont déjà appliqués par la RLS (fonctions `app.*`). Le helper applicatif `canAccess`/`requireAccess` sera ajouté au lot 4, quand des écrans manipuleront des identifiants d'objets à vérifier avant écriture. |
+| Portails distincts enseignant/parent/élève | Un seul tableau de bord adaptatif | Le contenu s'adapte déjà au rôle. Des routes `(teacher)`/`(parent)`/`(student)` séparées n'ont d'intérêt qu'avec des écrans propres, aux lots 8-10. |
+
+**Deux défauts trouvés par la vérification navigateur, avant tout commit**
+
+| Défaut | Correctif |
+|---|---|
+| `supabase.rpc()` cherche dans `public` ; les fonctions vivent dans `app` → rôles et permissions vides (« Membre » au lieu d'« Administrateur », mauvaise vue), Super Admin non reconnu | Passerelles `public` minimales (0032, 0033) |
+| Redirection post-connexion **côté client** (useEffect + router) non fiable — ne suivait pas la redirection serveur en cascade | Redirection **côté serveur** (`redirect()`) dans les actions |
 
 ---
 

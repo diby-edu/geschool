@@ -1,51 +1,73 @@
-import { publicEnv } from '@/lib/env';
+import { redirect } from 'next/navigation';
+import Link from 'next/link';
+import { createClient, getAuthenticatedUser } from '@/lib/supabase/server';
+import { Card, CardContent } from '@/components/ui/card';
+import { LogoutButton } from '@/features/auth/components/LogoutButton';
+
+export const dynamic = 'force-dynamic';
 
 /**
- * Page d'accueil provisoire.
- *
- * Elle indique l'etat REEL du projet et ne propose aucune action qui n'existe
- * pas encore (regle §77 : pas de bouton mort, pas de « bientot disponible »).
- * Elle sera remplacee par la page de connexion au lot 3.
+ * Aiguillage apres connexion. Le middleware garantit deja une session active et
+ * une premiere connexion effectuee. Ici on choisit la destination :
+ *   Super Admin              -> /admin
+ *   un seul etablissement    -> /e/{slug}
+ *   plusieurs etablissements -> choix explicite (comptes multi-appartenance)
+ *   aucun                    -> compte sans acces
  */
-export default function HomePage() {
+export default async function RootPage() {
+  const user = await getAuthenticatedUser();
+  if (!user) redirect('/login');
+
+  const supabase = await createClient();
+
+  const { data: isAdmin } = await supabase.rpc('is_platform_admin' as never);
+  if (isAdmin === true) redirect('/admin');
+
+  const { data: memberships } = await supabase
+    .from('school_memberships')
+    .select('schools(slug, name)')
+    .eq('user_id', user.id)
+    .eq('status', 'ACTIVE');
+
+  // Les jointures imbriquees ne sont pas typees (Relationships vides dans les
+  // types generes) : on annote explicitement la forme reelle.
+  const rows = (memberships ?? []) as unknown as { schools: { slug: string; name: string } | null }[];
+  const schools = rows
+    .map((m) => m.schools)
+    .filter((s): s is { slug: string; name: string } => s !== null);
+
+  if (schools.length === 1) redirect(`/e/${schools[0]!.slug}`);
+
   return (
-    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col justify-center gap-8 px-6 py-16">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {publicEnv.NEXT_PUBLIC_PLATFORM_NAME}
-        </h1>
-        <p className="mt-2 text-[color:var(--muted-foreground)]">
-          Plateforme de gestion d&apos;établissements scolaires — socle technique en place.
-        </p>
-      </header>
-
-      <section
-        className="rounded-[--radius-card] border p-5"
-        style={{ backgroundColor: 'var(--surface)' }}
-      >
-        <h2 className="text-sm font-medium uppercase tracking-wide text-[color:var(--muted-foreground)]">
-          État du projet
-        </h2>
-        <dl className="mt-4 space-y-2 text-sm">
-          <div className="flex justify-between gap-4">
-            <dt>Lot 1 — Socle technique</dt>
-            <dd className="font-medium text-[color:var(--color-success)]">en place</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt>Lot 2 — Base de données et RLS</dt>
-            <dd className="text-[color:var(--muted-foreground)]">à venir</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt>Lot 3 — Authentification</dt>
-            <dd className="text-[color:var(--muted-foreground)]">à venir</dd>
-          </div>
-        </dl>
-      </section>
-
-      <p className="text-xs text-[color:var(--muted-foreground)]">
-        La connexion sera disponible au lot 3. Le plan complet est dans{' '}
-        <code className="font-mono">docs/IMPLEMENTATION_PLAN.md</code>.
-      </p>
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 px-4 py-10">
+      {schools.length === 0 ? (
+        <Card>
+          <CardContent className="space-y-3">
+            <h1 className="text-lg font-semibold">Aucun acces</h1>
+            <p className="text-sm text-[color:var(--muted-foreground)]">
+              Votre compte n&apos;est rattache a aucun etablissement actif. Contactez
+              l&apos;administration.
+            </p>
+            <LogoutButton />
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <h1 className="text-lg font-semibold">Choisissez un etablissement</h1>
+          <ul className="space-y-2">
+            {schools.map((s) => (
+              <li key={s.slug}>
+                <Link href={`/e/${s.slug}`}>
+                  <Card>
+                    <CardContent className="py-3 font-medium hover:underline">{s.name}</CardContent>
+                  </Card>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <LogoutButton />
+        </>
+      )}
     </main>
   );
 }

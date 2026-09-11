@@ -70,3 +70,7 @@ tmp/
 # ---------------------------------------------------------------------------
 *.local.md
 .env.deploy
+
+# Artefacts generes par Next dev (agentRules)
+AGENTS.md
+CLAUDE.md

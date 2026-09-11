@@ -62,6 +62,13 @@ const config = [
       'src/workers/**',
       'src/services/**',
       'src/lib/audit/**',
+      // Frontiere d'authentification (ADR-013) : la resolution d'identifiant
+      // s'execute AVANT qu'une session existe, donc la RLS ne peut pas
+      // s'appliquer ; et lever le drapeau de premiere connexion passe par
+      // l'Admin API. Ces usages sont dans la liste fermee des operations
+      // service_role.
+      'src/features/auth/service.ts',
+      'src/features/auth/actions.ts',
     ],
     rules: {
       'no-restricted-imports': ['error', { paths: [restrictAdminClient] }],
