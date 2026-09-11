@@ -31,17 +31,19 @@ Les lots 6 et 5 sont parallélisables : ils ne partagent que le lot 4.
 
 ## Répartition des rôles
 
-**Vous, une fois, en amont**
+**Vous, en amont — fait**
 
-1. Enregistrement DNS `A` : `geschool.numerik360.com` → `<IP_DU_VPS>` *(lot 1)*
-2. Projet Supabase créé, et les 4 valeurs de la section 1 du `.env.example` *(lot 2)*
-3. Dépôt git créé, URL communiquée *(lot 1)*
+1. ~~Enregistrement DNS `A` : `geschool.numerik360.com`~~ — fait le 10/09/2026
+2. ~~Projet Supabase et clés~~ — fait, base jointe et vérifiée
+3. ~~Dépôt git `diby-edu/geschool`~~ — fait, CI verte
+4. ~~Décision sur l'upgrade CPU~~ — écartée, ADR-014
 
 **Vous, plus tard**
 
-4. Décision sur l'upgrade CPU du VPS — voir `DEPLOYMENT.md` §2 *(avant production)*
-5. Fournisseur SMS et clés *(lot 5)*
-6. Moyen de paiement des abonnements *(lot 12)*
+5. Passer `DATABASE_URL` au Session pooler — recommandé, non bloquant (`DEPLOYMENT.md` §7)
+6. Fournisseur SMS et clés *(lot 5)*
+7. Secrets GitHub Actions, si vous voulez un déploiement automatique
+8. Moyen de paiement des abonnements *(lot 12)*
 
 **Moi** : tout le reste — code, migrations, tests, déploiement, documentation.
 
@@ -100,8 +102,19 @@ serveur standalone lancé -> / en HTTP 200, /api/health en 200,
 | shadcn/ui | **reporté au lot 3** | Ses composants n'ont d'utilité qu'avec de vrais écrans. Les dépendances (`clsx`, `tailwind-merge`, `cva`, `lucide-react`) et l'utilitaire `cn()` sont déjà en place. |
 | Hooks de pré-commit | **non installés** | `pnpm verify` couvre le besoin, et la CI est bloquante. Un hook sera ajouté si des commits non vérifiés apparaissent. |
 
-**Restait dépendant de vous** — le dépôt git n'existant pas encore, la CI est écrite mais
-n'a jamais tourné. Le dépôt local est initialisé, sans commit.
+**Mise en service du 11/09/2026**
+
+- Dépôt `diby-edu/geschool` — poussé, branche `main`, **dépôt public** (choix assumé).
+- **CI verte** : les deux jobs passent et l'artefact `standalone` est produit et archivé.
+  Un correctif a été nécessaire : `pnpm/action-setup` refuse de démarrer quand la version
+  est déclarée à la fois dans son input et dans `packageManager` de `package.json`.
+- Les données d'infrastructure ont été **sorties du dépôt** avant le premier push, le dépôt
+  étant public : adresse du VPS, compte d'accès, inventaire nominatif des services voisins
+  et référence du projet Supabase vivent désormais dans `docs/DEPLOYMENT.local.md`, exclu
+  par `.gitignore`. `scripts/deploy.sh` exige maintenant `VPS_HOST` par variable
+  d'environnement au lieu de la coder en dur.
+- Base Supabase jointe et vérifiée : PostgreSQL 17.6, schéma `public` vide, `pgcrypto`
+  déjà présente. Prête pour le lot 2.
 
 ---
 
