@@ -241,12 +241,12 @@ primitives UI. Chaque écriture est cloisonnée par `ctx.school.id` (IDOR) et au
 | 2 | Calendrier, vacances, fériés | à faire |
 | 3 | **Cycles, niveaux, classes** + professeur principal | **fait** — vérifié en navigateur |
 | 4 | **Matières** | **fait** — vérifié (code normalisé, conflit d'unicité) |
-| 4 | Programme par niveau (`level_subjects`) | à faire |
+| 4 | **Programme par niveau** (`level_subjects`) | **fait** (partie 4) — coefficients + volumes, vérifié |
 | 5 | **Enseignants** — téléphone E.164, archivage logique | **fait** |
 | 5 | Qualifications (`teacher_subjects`), disponibilités | à faire |
 | 6 | **Salles + types de salle** | **fait** — vérifié (salle rattachée à un type) |
 | 6 | Équipements, disponibilités des salles | à faire |
-| 7 | Affectations d'enseignement (`teaching_assignments`) | à faire |
+| 7 | **Affectations d'enseignement** (`teaching_assignments`) | **fait** (partie 4) — unicité vérifiée |
 | — | Import Excel/CSV avec assistant | à faire |
 
 **Vérifié en navigateur** : création de matière (`fr` → `FR`), conflit de code, type + salle,
