@@ -18,7 +18,9 @@ const MODULES: NavDef[] = [
   { path: 'structure', label: 'Structure', any: ['cycles.view', 'levels.view'] },
   { path: 'classes', label: 'Classes', any: ['classes.view'] },
   { path: 'subjects', label: 'Matieres', any: ['subjects.view'] },
+  { path: 'programme', label: 'Programme', any: ['subjects.view'] },
   { path: 'teachers', label: 'Enseignants', any: ['teachers.view'] },
+  { path: 'assignments', label: 'Affectations', any: ['assignments.view'] },
   { path: 'rooms', label: 'Salles', any: ['rooms.view'] },
 ];
 

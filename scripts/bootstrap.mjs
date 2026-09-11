@@ -240,11 +240,27 @@ async function main() {
       }).select('id').single()
     ).data;
   }
-  await db.from('teaching_assignments').upsert(
-    { school_id: schoolId, academic_year_id: yearId, teacher_id: teacher.id,
-      subject_id: subject.id, class_id: klass.id, weekly_minutes: 240, status: 'ACTIVE' },
-    { onConflict: 'academic_year_id,teacher_id,subject_id,class_id,group_id,academic_period_id' },
-  );
+  // L'unicite des affectations passe par un index d'EXPRESSION (coalesce sur
+  // group_id/period_id) : ON CONFLICT ne peut pas le cibler. On verifie donc
+  // l'existence avant d'inserer, plutot qu'un upsert qui echouerait en silence.
+  {
+    const { data: existingTa } = await db
+      .from('teaching_assignments')
+      .select('id')
+      .eq('school_id', schoolId)
+      .eq('academic_year_id', yearId)
+      .eq('teacher_id', teacher.id)
+      .eq('subject_id', subject.id)
+      .eq('class_id', klass.id)
+      .is('group_id', null)
+      .maybeSingle();
+    if (!existingTa) {
+      await db.from('teaching_assignments').insert({
+        school_id: schoolId, academic_year_id: yearId, teacher_id: teacher.id,
+        subject_id: subject.id, class_id: klass.id, weekly_minutes: 240, status: 'ACTIVE',
+      });
+    }
+  }
   console.log(`Enseignant         ${teacherEmail}`);
 
   // --- Parent (telephone) — premiere connexion imposee ----------------------
