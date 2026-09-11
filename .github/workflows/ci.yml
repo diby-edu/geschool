@@ -19,9 +19,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pas d'input `version` : la version vient de `packageManager` dans
+      # package.json. Declarer les deux fait echouer l'action.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
 
       - uses: actions/setup-node@v4
         with:
@@ -51,9 +51,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pas d'input `version` : la version vient de `packageManager` dans
+      # package.json. Declarer les deux fait echouer l'action.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
 
       - uses: actions/setup-node@v4
         with:
