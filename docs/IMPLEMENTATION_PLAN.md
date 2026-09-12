@@ -15,7 +15,7 @@ d'acceptation. La vision produit est dans [`ROADMAP.md`](./ROADMAP.md), les arbi
 | **2** | Base de données et RLS | 30 migrations, 57 tests d'isolation verts | — · *terminé* |
 | **3** | Authentification et RBAC | connexion 3 identifiants, 1re connexion, RBAC, 4 e2e verts | — · *terminé* |
 | **4** | Administration : structure | 8 modules CRUD livrés et vérifiés ; reste config secondaire | *en cours* |
-| **5** | Élèves, parents, accès | inscription → comptes → SMS de bout en bout | lot 4 |
+| **5** | Élèves, parents, accès | inscription → comptes → SMS de bout en bout, vérifié | — · *cœur terminé* |
 | **6** | Emploi du temps manuel | trame saisie, validée, publiée | lot 4 |
 | **7** | Solveur OR-Tools | génération automatique expliquée | lot 6 |
 | **8** | Notes et évaluations | moyennes exactes, classements | lot 5 |
