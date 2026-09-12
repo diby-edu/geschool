@@ -22,6 +22,7 @@ const MODULES: NavDef[] = [
   { path: 'schedule', label: 'Emploi du temps', any: ['schedule.view'] },
   { path: 'evaluations', label: 'Evaluations', any: ['assessments.view'] },
   { path: 'attendance', label: 'Presences', any: ['attendance.view'] },
+  { path: 'bulletins', label: 'Bulletins', any: ['reports.view'] },
   { path: 'subjects', label: 'Matieres', any: ['subjects.view'] },
   { path: 'programme', label: 'Programme', any: ['subjects.view'] },
   { path: 'teachers', label: 'Enseignants', any: ['teachers.view'] },
@@ -37,6 +38,13 @@ export function buildSchoolNav(ctx: TenantContext): NavItem[] {
     if (hasAnyPermission(ctx, m.any)) {
       nav.push({ href: `${base}/${m.path}`, label: m.label });
     }
+  }
+
+  // Portail famille/eleve : visible pour qui ne gere pas les bulletins (parents,
+  // eleves). Le personnel utilise l'entree « Bulletins ». La RLS garantit que
+  // chacun n'y voit que ses propres bulletins publies.
+  if (!ctx.permissions.has('reports.view')) {
+    nav.push({ href: `${base}/mes-bulletins`, label: 'Mes bulletins' });
   }
 
   return nav;
