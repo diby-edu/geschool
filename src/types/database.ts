@@ -1252,6 +1252,24 @@ export type Database = {
         }
         Relationships: []
       }
+      matricule_counters: {
+        Row: {
+          school_id: string
+          academic_year_id: string
+          next_seq: number
+        }
+        Insert: {
+          school_id: string
+          academic_year_id: string
+          next_seq?: number
+        }
+        Update: {
+          school_id?: string
+          academic_year_id?: string
+          next_seq?: number
+        }
+        Relationships: []
+      }
       membership_roles: {
         Row: {
           membership_id: string

@@ -20,6 +20,7 @@ const MODULES: NavDef[] = [
   { path: 'students', label: 'Eleves', any: ['students.view'] },
   { path: 'access', label: 'Gestion des acces', any: ['access_accounts.view'] },
   { path: 'schedule', label: 'Emploi du temps', any: ['schedule.view'] },
+  { path: 'evaluations', label: 'Evaluations', any: ['assessments.view'] },
   { path: 'subjects', label: 'Matieres', any: ['subjects.view'] },
   { path: 'programme', label: 'Programme', any: ['subjects.view'] },
   { path: 'teachers', label: 'Enseignants', any: ['teachers.view'] },
