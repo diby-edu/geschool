@@ -29,6 +29,7 @@ const MODULES: NavDef[] = [
   { path: 'teachers', label: 'Enseignants', any: ['teachers.view'] },
   { path: 'assignments', label: 'Affectations', any: ['assignments.view'] },
   { path: 'rooms', label: 'Salles', any: ['rooms.view'] },
+  { path: 'facturation', label: 'Facturation', any: ['billing.view'] },
 ];
 
 export function buildSchoolNav(ctx: TenantContext): NavItem[] {

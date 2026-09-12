@@ -22,7 +22,10 @@ export default async function PlatformLayout({ children }: { children: React.Rea
     <AppShell
       brand="Plateforme"
       subtitle="Administration globale"
-      nav={[{ href: '/admin', label: "Etablissements" }]}
+      nav={[
+        { href: '/admin', label: 'Etablissements' },
+        { href: '/admin/plans', label: 'Plans' },
+      ]}
       user={{ displayName, roleLabel: 'Super Admin' }}
     >
       {children}

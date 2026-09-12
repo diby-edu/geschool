@@ -22,7 +22,7 @@ export default async function PlatformHome() {
   const { data: schools } = await supabase
     .from('schools')
     .select('id, slug, name, status')
-    .order('name');
+    .order('name') as { data: { id: string; slug: string; name: string; status: string }[] | null };
 
   const list = schools ?? [];
   const active = list.filter((s) => s.status === 'ACTIVE').length;
@@ -63,6 +63,12 @@ export default async function PlatformHome() {
                     <span className="text-xs text-[color:var(--muted-foreground)]">
                       {STATUS_LABEL[s.status] ?? s.status}
                     </span>
+                    <Link
+                      href={`/admin/facturation/${s.id}`}
+                      className="text-sm text-[color:var(--color-brand)] hover:underline"
+                    >
+                      Facturation
+                    </Link>
                     <Link
                       href={`/e/${s.slug}`}
                       className="text-sm text-[color:var(--color-brand)] hover:underline"
