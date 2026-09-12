@@ -23,6 +23,7 @@ const MODULES: NavDef[] = [
   { path: 'evaluations', label: 'Evaluations', any: ['assessments.view'] },
   { path: 'attendance', label: 'Presences', any: ['attendance.view'] },
   { path: 'bulletins', label: 'Bulletins', any: ['reports.view'] },
+  { path: 'annonces', label: 'Annonces', any: ['announcements.view'] },
   { path: 'subjects', label: 'Matieres', any: ['subjects.view'] },
   { path: 'programme', label: 'Programme', any: ['subjects.view'] },
   { path: 'teachers', label: 'Enseignants', any: ['teachers.view'] },
@@ -46,6 +47,9 @@ export function buildSchoolNav(ctx: TenantContext): NavItem[] {
   if (!ctx.permissions.has('reports.view')) {
     nav.push({ href: `${base}/mes-bulletins`, label: 'Mes bulletins' });
   }
+
+  // Boîte de notifications : pour tout membre (chacun n'y voit que les siennes).
+  nav.push({ href: `${base}/notifications`, label: 'Notifications' });
 
   return nav;
 }

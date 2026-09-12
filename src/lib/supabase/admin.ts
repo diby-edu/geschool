@@ -39,6 +39,7 @@ export type AdminOperation =
   | 'cron.task'
   | 'import.bulk'
   | 'sync.apply'
+  | 'notifications.send'
   | 'platform.seed';
 
 let cached: SupabaseClient<Database> | null = null;
