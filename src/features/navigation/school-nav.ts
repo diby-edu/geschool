@@ -17,6 +17,8 @@ const MODULES: NavDef[] = [
   { path: 'academic-years', label: 'Annees scolaires', any: ['academic_years.view'] },
   { path: 'structure', label: 'Structure', any: ['cycles.view', 'levels.view'] },
   { path: 'classes', label: 'Classes', any: ['classes.view'] },
+  { path: 'students', label: 'Eleves', any: ['students.view'] },
+  { path: 'access', label: 'Gestion des acces', any: ['access_accounts.view'] },
   { path: 'subjects', label: 'Matieres', any: ['subjects.view'] },
   { path: 'programme', label: 'Programme', any: ['subjects.view'] },
   { path: 'teachers', label: 'Enseignants', any: ['teachers.view'] },
