@@ -89,6 +89,14 @@ const serverSchema = z.object({
   CHROMIUM_EXECUTABLE_PATH: z.string().default(''),
   PDF_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(4).default(1),
 
+  // Couche IA (lot 13). Sans cle, l'assistance fonctionne en mode deterministe
+  // (regles), sans appel externe. Avec une cle, elle s'appuie sur le LLM.
+  // L'IA n'accede JAMAIS a la base : elle ne transforme que des donnees deja
+  // retournees a l'utilisateur par des requetes autorisees.
+  ANTHROPIC_API_KEY: z.string().default(''),
+  ANTHROPIC_MODEL: z.string().default('claude-sonnet-5'),
+  AI_TIMEOUT_SECONDS: z.coerce.number().int().min(3).max(60).default(20),
+
   CRON_SECRET: z.string().default(''),
   RATE_LIMIT_LOGIN_PER_15MIN: z.coerce.number().int().min(1).default(10),
   RATE_LIMIT_PASSWORD_RESET_PER_HOUR: z.coerce.number().int().min(1).default(5),
