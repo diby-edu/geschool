@@ -1,0 +1,32 @@
+# Déploiement du solveur sur le VPS (ADR-014, docs/DEPLOYMENT.md).
+#
+# Le port n'est publié que sur 127.0.0.1 : le service reste injoignable depuis
+# l'extérieur, quelle que soit la configuration UFW. Le secret partagé est passé
+# par l'environnement de l'hôte (jamais commité). Aucune variable Supabase ici.
+services:
+  solver:
+    build: .
+    image: geschool-solver:latest
+    container_name: geschool-solver
+    restart: unless-stopped
+    # Publication limitée à la boucle locale — obligatoire (ne pas mettre "8110:8110").
+    ports:
+      - "127.0.0.1:8110:8110"
+    environment:
+      SOLVER_SHARED_SECRET: "${SOLVER_SHARED_SECRET:?SOLVER_SHARED_SECRET requis}"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    # Bornes sur le vCPU unique partagé (ADR-014).
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8110/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

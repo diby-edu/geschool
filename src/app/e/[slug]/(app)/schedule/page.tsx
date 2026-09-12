@@ -44,6 +44,7 @@ export default async function SchedulePage({
   const versions = config ? await listVersions(ctx, ctx.academicYear.id) : [];
   const canConfig = hasPermission(ctx, 'schedule.manage_configuration');
   const canCreate = hasPermission(ctx, 'schedule.create');
+  const canGenerate = hasPermission(ctx, 'schedule.generate');
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -53,11 +54,18 @@ export default async function SchedulePage({
         title="Emploi du temps"
         description={`Annee ${ctx.academicYear.name}`}
         action={
-          canConfig ? (
-            <Link href={`${base}/config`}>
-              <Button variant="secondary">{config ? 'Modifier la grille' : 'Configurer la grille'}</Button>
-            </Link>
-          ) : null
+          <div className="flex items-center gap-2">
+            {config && canGenerate ? (
+              <Link href={`${base}/generate`}>
+                <Button>Generer automatiquement</Button>
+              </Link>
+            ) : null}
+            {canConfig ? (
+              <Link href={`${base}/config`}>
+                <Button variant="secondary">{config ? 'Modifier la grille' : 'Configurer la grille'}</Button>
+              </Link>
+            ) : null}
+          </div>
         }
       />
 

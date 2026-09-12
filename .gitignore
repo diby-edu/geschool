@@ -74,3 +74,6 @@ tmp/
 # Artefacts generes par Next dev (agentRules)
 AGENTS.md
 CLAUDE.md
+
+# Configuration outillage local (Claude Code)
+.claude/

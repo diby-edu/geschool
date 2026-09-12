@@ -26,3 +26,13 @@ export const sessionSchema = z.object({
 });
 
 export type SessionInput = z.infer<typeof sessionSchema>;
+
+/** Reglage d'une exigence pedagogique (docs/DATABASE.md §7, additif §22). */
+export const requirementSchema = z.object({
+  sessionsCount: z.coerce.number().int().min(1, 'Au moins une seance.').max(20),
+  sessionDurationMinutes: z.coerce.number().int().min(15).max(480),
+  roomMode: z.enum(['NONE', 'PREFERRED', 'REQUIRED_ROOM', 'REQUIRED_TYPE']),
+  status: z.enum(['DRAFT', 'ACTIVE', 'SATISFIED', 'IGNORED']),
+});
+
+export type RequirementInput = z.infer<typeof requirementSchema>;

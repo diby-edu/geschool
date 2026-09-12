@@ -338,8 +338,31 @@ disent pas la même chose.
 la confirme indépendamment, et un cas infaisable produit une explication en français citant
 des noms réels.
 
-**Contrainte VPS.** Conteneur bridé à 0,5 vCPU, `num_search_workers=1`, une génération à la
-fois. Les temps mesurés sur `LARGE` détermineront s'il faut passer à 2 ou 4 vCPU.
+**Contrainte VPS.** Conteneur bridé, `num_search_workers=1`, une génération à la
+fois (index partiel `generation_jobs_single_running`). Les temps mesurés sur `LARGE`
+détermineront s'il faut passer à 2 ou 4 vCPU.
+
+**État — livré (contrat v1.0.0)** ✅
+
+- 7.1 `solver-service` FastAPI (`/health`, `/solve`, `/diagnose`), Pydantic, Dockerfile,
+  `docker-compose` (127.0.0.1 only), 18 tests pytest. ✅
+- 7.3 Pré-contrôle arithmétique (enseignant / classe / domaine vide), avant tout appel solveur. ✅
+- 7.4 Génération des candidats (dispos enseignant, jours, tenue dans la journée) — unaires. ✅
+- 7.5 Modèle CP-SAT `IntervalVar` + `NoOverlap` enseignant / classe / groupe / salle. ✅
+- 7.6 (partiel) recouvrement groupe/classe multi-classes (§30, §16), co-enseignement. ✅
+- 7.8 Séances verrouillées + occupations fixes (paramètres du contrat). ✅
+- 7.9 Diagnostic d'infaisabilité : noyau CP-SAT (hypothèses) + traduction française (noms réels). ✅
+- 7.11 Écrans : exigences (synchro depuis les affectations + édition), génération, résultat,
+  historique des jobs. ✅
+- Interface `ScheduleSolver` + `OrToolsSolver` (client HTTP, revalidation Zod), fabrique `getSolver()`. ✅
+- Vérifié de bout en bout (Supabase réel + service OR-Tools réel) : synchro → génération OPTIMAL
+  → version DRAFT « Aucun conflit » confirmée par le validateur indépendant ; cas sur-contraint →
+  diagnostic « Enseignant … : 40 créneaux nécessaires, 20 disponibles ». ✅
+
+**Reporté — contrat v1.1** (voir `docs/SOLVER_API.md` §10) : 7.7 contraintes souples / objectif /
+score, 7.2 garde-fou JSON Schema en CI, 7.10 job **asynchrone** pg-boss (la génération est
+aujourd'hui **synchrone et bornée**, adaptée au mono-vCPU), 7.12 jeux SMALL/MEDIUM/LARGE complets,
+`allowedDurations`, endpoint `/validate`.
 
 ---
 
