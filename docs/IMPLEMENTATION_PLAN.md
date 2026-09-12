@@ -454,6 +454,37 @@ déjà retournées par des requêtes autorisées. Ni `service_role`, ni accès d
 
 ---
 
+## État de livraison (lots 8 → 13) ✅
+
+Tous vérifiés de bout en bout sur la base Supabase réelle (typecheck, ESLint, tests et
+`next build` verts à chaque lot). Le détail « fait / reste » figure dans chaque message de
+commit.
+
+- **Lot 8 — Notes et évaluations** ✅ : barèmes + types configurables (jeu par défaut /20),
+  évaluations + workflow DRAFT→CLOSED→PUBLISHED, saisie des notes (validation serveur),
+  moyennes/classement via les fonctions SQL (wrapper public 0036). *Reporté* : cible groupe,
+  saisie en masse multi-évaluations, mentions lettrées avancées.
+- **Lot 9 — Présence + hors-ligne** ✅ : appel sur occurrences, workflow OPEN→SUBMITTED→VALIDATED,
+  idempotence hors-ligne (route handler + `sync_operations` en service_role + file locale rejouée),
+  absences/retards, justificatifs + passage en EXCUSED. *Reporté* : PWA complète (service worker),
+  sync multi-opérations générique.
+- **Lot 10 — Bulletins + portails + PDF** ✅ : génération figée (report_cards + items) via SQL
+  (fonction 0037), workflow Généré→Validé→Publié, bulletin imprimable (PDF navigateur), portail
+  « Mes bulletins » (RLS). *Reporté* : PDF serveur par lot (Chromium), conseils de classe,
+  modèles personnalisables.
+- **Lot 11 — Communication** ✅ : annonces + ciblage par public, fan-out de notifications IN_APP
+  (service_role), boîte de réception (marquer lu). *Reporté* : canaux EMAIL/PUSH/WhatsApp,
+  préférences par canal, ciblage par classe.
+- **Lot 12 — SaaS / facturation** ✅ : plans + quotas, attribution d'abonnement (Super Admin),
+  facturation établissement (consommation vs quotas, enregistrement de paiement reçu). *Reporté* :
+  fournisseur de paiement en ligne, `usage_records` par cron, dérogations `school_features`.
+- **Lot 13 — Couche IA** ✅ : proposition d'appréciation de bulletin, mode déterministe (règles)
+  par défaut, LLM Anthropic si clé, validation humaine obligatoire, jamais de `service_role` ni
+  d'accès direct à la base. *Reporté* : explication de statistiques, analyse des conflits d'EDT,
+  détection d'anomalies (mêmes garde-fous).
+
+---
+
 ## Méthode, à chaque lot
 
 1. Inspecter l'existant avant de modifier
