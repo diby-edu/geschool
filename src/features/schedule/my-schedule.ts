@@ -26,24 +26,47 @@ function hm(t: string): string {
   return t.slice(0, 5);
 }
 
-export async function getMyWeeklySchedule(ctx: TenantContext): Promise<MyScheduleSlot[]> {
+/** Id du membre `teachers` correspondant a l'utilisateur connecte, s'il en est un. */
+export async function getMyTeacherId(ctx: TenantContext): Promise<string | null> {
   const supabase = await createClient();
-  const schoolId = ctx.school.id;
-  const yearId = ctx.academicYear?.id;
-  if (!yearId) return [];
-
-  const { data: teacherRow } = await supabase
+  const { data } = await supabase
     .from('teachers')
     .select('id')
-    .eq('school_id', schoolId)
+    .eq('school_id', ctx.school.id)
     .eq('user_id', ctx.user.id)
     .maybeSingle();
-  if (!teacherRow) return [];
+  return data?.id ?? null;
+}
+
+type SessionRow = {
+  session_id: string;
+  schedule_sessions: {
+    id: string;
+    day_of_week: number;
+    starts_at: string;
+    ends_at: string;
+    subjects: { name: string } | null;
+  } | null;
+};
+
+/**
+ * Seances (trame hebdomadaire, pas les occurrences datees) de la version
+ * PUBLIEE de l'annee courante ou l'enseignant intervient. Base commune a la
+ * vue « mon emploi du temps » et a la detection du cours en cours (module
+ * Presence) : une seule requete de perimetre, jamais deux logiques.
+ */
+export async function getMyPublishedSessions(
+  ctx: TenantContext,
+  teacherId: string,
+): Promise<NonNullable<SessionRow['schedule_sessions']>[]> {
+  const supabase = await createClient();
+  const yearId = ctx.academicYear?.id;
+  if (!yearId) return [];
 
   const { data: version } = await supabase
     .from('schedule_versions')
     .select('id')
-    .eq('school_id', schoolId)
+    .eq('school_id', ctx.school.id)
     .eq('academic_year_id', yearId)
     .eq('status', 'PUBLISHED')
     .maybeSingle();
@@ -54,22 +77,20 @@ export async function getMyWeeklySchedule(ctx: TenantContext): Promise<MySchedul
     .select(
       'session_id, schedule_sessions!inner(id, day_of_week, starts_at, ends_at, schedule_version_id, subjects(name))',
     )
-    .eq('teacher_id', teacherRow.id)
+    .eq('teacher_id', teacherId)
     .eq('schedule_sessions.schedule_version_id', version.id);
 
-  type SessionRow = {
-    session_id: string;
-    schedule_sessions: {
-      id: string;
-      day_of_week: number;
-      starts_at: string;
-      ends_at: string;
-      subjects: { name: string } | null;
-    } | null;
-  };
-  const sessions = ((rows ?? []) as unknown as SessionRow[])
+  return ((rows ?? []) as unknown as SessionRow[])
     .map((r) => r.schedule_sessions)
     .filter((s): s is NonNullable<SessionRow['schedule_sessions']> => s !== null);
+}
+
+export async function getMyWeeklySchedule(ctx: TenantContext): Promise<MyScheduleSlot[]> {
+  const teacherId = await getMyTeacherId(ctx);
+  if (!teacherId) return [];
+  const supabase = await createClient();
+
+  const sessions = await getMyPublishedSessions(ctx, teacherId);
   if (sessions.length === 0) return [];
 
   const sessionIds = sessions.map((s) => s.id);

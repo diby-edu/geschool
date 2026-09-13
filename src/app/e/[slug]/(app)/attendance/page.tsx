@@ -4,6 +4,9 @@ import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { listOccurrences } from '@/features/attendance/occurrences';
+import { getCurrentCoursesForTeacher } from '@/features/attendance/current';
+import { loadAppel } from '@/features/attendance/registers';
+import { CurrentAppelCard } from '@/features/attendance/components/CurrentAppelCard';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +14,10 @@ import { Button } from '@/components/ui/button';
 export const metadata: Metadata = { title: 'Appel et présences' };
 
 const REG_LABEL: Record<string, string> = { OPEN: 'En cours', SUBMITTED: 'Soumis', VALIDATED: 'Validé' };
+
+const TODAY_LABEL = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }).format(
+  new Date(),
+);
 
 export default async function AttendancePage({
   params,
@@ -24,6 +31,66 @@ export default async function AttendancePage({
   const ctx = await getTenantContext(slug);
   requirePageAccess(ctx, 'attendance.view');
   const base = `/e/${slug}/attendance`;
+
+  // Enseignant sans vision d'ensemble (censeur/surveillant/direction) : le
+  // module identifie automatiquement SON cours en ce moment, sans liste ni
+  // selection de classe (cahier des charges §3). Le reste du personnel garde
+  // la vue par date, inchangee.
+  const isPlainTeacher = !hasPermission(ctx, 'attendance.view_all') && (ctx.membership?.roles ?? []).includes('TEACHER');
+
+  if (isPlainTeacher) {
+    const courses = await getCurrentCoursesForTeacher(ctx);
+    const chosenId = typeof sp.occurrence === 'string' ? sp.occurrence : undefined;
+    const chosen = chosenId ? courses.find((c) => c.occurrenceId === chosenId) : courses.length === 1 ? courses[0] : undefined;
+
+    if (courses.length === 0) {
+      return (
+        <div className="mx-auto max-w-2xl">
+          <PageHeader title="Présences" description={TODAY_LABEL} />
+          <EmptyState title="Aucun cours actuellement" hint="Le module affichera automatiquement l'appel dès le début de votre prochain cours." />
+        </div>
+      );
+    }
+
+    if (!chosen) {
+      return (
+        <div className="mx-auto max-w-2xl space-y-4">
+          <PageHeader title="Plusieurs cours en ce moment" description="Choisissez le cours concerné." />
+          <ul className="space-y-2">
+            {courses.map((c) => (
+              <li key={c.occurrenceId}>
+                <Link href={`${base}?occurrence=${c.occurrenceId}`}>
+                  <Card>
+                    <CardContent className="flex items-center justify-between py-3">
+                      <span className="font-medium">{c.klass} — {c.subject}</span>
+                      <span className="text-sm text-[color:var(--muted-foreground)]">{c.startsAt}–{c.endsAt}</span>
+                    </CardContent>
+                  </Card>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+
+    const appel = await loadAppel(ctx, chosen.occurrenceId);
+    return (
+      <div className="mx-auto max-w-2xl space-y-6">
+        <PageHeader title="Présences" />
+        <CurrentAppelCard
+          slug={slug}
+          occurrenceId={chosen.occurrenceId}
+          klass={chosen.klass}
+          subject={chosen.subject}
+          dateLabel={TODAY_LABEL}
+          timeLabel={`${chosen.startsAt}–${chosen.endsAt}`}
+          editable={appel.editable}
+          students={appel.students}
+        />
+      </div>
+    );
+  }
 
   const today = new Date().toISOString().slice(0, 10);
   const date = typeof sp.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : today;

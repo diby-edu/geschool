@@ -36,6 +36,7 @@ export type AppelStudent = {
   studentId: string;
   matricule: string;
   name: string;
+  photoUrl: string | null;
   status: string;
   minutesLate: number;
   comment: string;
@@ -78,19 +79,20 @@ export async function loadAppel(ctx: TenantContext, occurrenceId: string): Promi
   if (occ.class_id) {
     const { data: enr } = await supabase
       .from('student_enrollments')
-      .select('student_id, students(matricule, first_name, last_name)')
+      .select('student_id, students(matricule, first_name, last_name, photo_url)')
       .eq('school_id', ctx.school.id)
       .eq('class_id', occ.class_id)
       .eq('status', 'ENROLLED');
     for (const e of (enr ?? []) as unknown as {
       student_id: string;
-      students: { matricule: string; first_name: string; last_name: string } | null;
+      students: { matricule: string; first_name: string; last_name: string; photo_url: string | null } | null;
     }[]) {
       const rec = records.get(e.student_id);
       students.push({
         studentId: e.student_id,
         matricule: e.students?.matricule ?? '',
         name: e.students ? `${e.students.last_name.toUpperCase()} ${e.students.first_name}` : '—',
+        photoUrl: e.students?.photo_url ?? null,
         status: rec?.status ?? 'PRESENT',
         minutesLate: rec?.minutes_late ?? 0,
         comment: rec?.comment ?? '',
