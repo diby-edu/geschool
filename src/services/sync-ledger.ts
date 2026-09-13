@@ -10,7 +10,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
  * empêche un client de contourner la déduplication ou le contrôle de périmètre.
  */
 
-export type SyncResult = { registerId?: string; savedCount?: number };
+export type SyncResult = { registerId?: string; savedCount?: number; submitted?: boolean };
 
 /** Résultat mémorisé d'une opération déjà appliquée, ou null si inédite. */
 export async function getAppliedSyncResult(schoolId: string, clientOperationId: string): Promise<SyncResult | null> {

@@ -1,10 +1,11 @@
 'use client';
 
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import type { AppelStudent } from '@/features/attendance/registers';
+import { submitOrQueue, flushAttendanceQueue, queueLength } from '@/features/attendance/offline-queue';
 
 type Status = 'PRESENT' | 'ABSENT' | 'LATE';
 
@@ -52,8 +53,22 @@ export function CurrentAppelCard({
   const router = useRouter();
   const [students, setStudents] = useState(() => initialStudents.map((s) => ({ ...s, status: normalize(s.status) })));
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
+  const [message, setMessage] = useState<{ tone: 'error' | 'success' | 'info'; text: string } | null>(null);
   const [locked, setLocked] = useState(!editable);
+  const [pending, setPending] = useState(() => queueLength());
+
+  const flush = useCallback(async () => {
+    const { synced } = await flushAttendanceQueue();
+    setPending(queueLength());
+    if (synced > 0) setMessage({ tone: 'success', text: `${synced} appel(s) en attente synchronisé(s).` });
+  }, []);
+
+  useEffect(() => {
+    const run = () => void flush();
+    queueMicrotask(run); // synchro initiale hors du corps de l'effet
+    window.addEventListener('online', run);
+    return () => window.removeEventListener('online', run);
+  }, [flush]);
 
   const total = students.length;
   const absences = students.filter((s) => s.status === 'ABSENT').length;
@@ -72,46 +87,34 @@ export function CurrentAppelCard({
 
     setBusy(true);
     setMessage(null);
-    try {
-      const saveRes = await fetch(`/e/${slug}/api/attendance`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          slug,
-          clientOperationId: crypto.randomUUID(),
-          occurrenceId,
-          source: 'ONLINE',
-          entries: students.map((s) => ({
-            studentId: s.studentId,
-            status: s.status,
-            minutesLate: s.status === 'LATE' ? DEFAULT_LATE_MINUTES : 0,
-            comment: '',
-          })),
-        }),
-      });
-      const saveBody = (await saveRes.json()) as { registerId?: string; error?: { message: string } };
-      if (!saveRes.ok || !saveBody.registerId) {
-        throw new Error(saveBody.error?.message ?? "Échec de l'enregistrement.");
-      }
+    const outcome = await submitOrQueue({
+      slug,
+      clientOperationId: crypto.randomUUID(),
+      occurrenceId,
+      alsoSubmit: true,
+      entries: students.map((s) => ({
+        studentId: s.studentId,
+        status: s.status,
+        minutesLate: s.status === 'LATE' ? DEFAULT_LATE_MINUTES : 0,
+        comment: '',
+      })),
+    });
 
-      const submitRes = await fetch(`/e/${slug}/api/attendance/submit`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ registerId: saveBody.registerId }),
-      });
-      const submitBody = (await submitRes.json()) as { ok?: boolean; error?: { message: string } };
-      if (!submitRes.ok || !submitBody.ok) {
-        throw new Error(submitBody.error?.message ?? 'Échec de la validation.');
-      }
-
-      setLocked(true);
+    // Valide dans les deux cas : confirme et synchronise tout de suite, ou
+    // enregistre sur l'appareil pour synchronisation automatique des le
+    // retour du reseau (l'enseignant n'a pas a attendre ni a reessayer).
+    setLocked(true);
+    if (outcome.ok) {
       setMessage({ tone: 'success', text: 'Appel validé. Il ne peut plus être modifié.' });
       router.refresh();
-    } catch (e) {
-      setMessage({ tone: 'error', text: e instanceof Error ? e.message : 'Une erreur est survenue.' });
-    } finally {
-      setBusy(false);
+    } else {
+      setPending(queueLength());
+      setMessage({
+        tone: 'info',
+        text: "Réseau indisponible : appel enregistré sur l'appareil, il sera synchronisé automatiquement au retour de la connexion.",
+      });
     }
+    setBusy(false);
   }
 
   return (
@@ -130,6 +133,7 @@ export function CurrentAppelCard({
         </div>
       </div>
 
+      {pending > 0 ? <Alert tone="info">{pending} appel(s) en attente de synchronisation.</Alert> : null}
       {message ? <Alert tone={message.tone}>{message.text}</Alert> : null}
 
       {students.length === 0 ? (

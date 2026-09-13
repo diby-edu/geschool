@@ -51,6 +51,14 @@ export function AssessmentForm({
   const [maxScore, setMaxScore] = useState<string>(val('maxScore') || '20');
   const coefficient = coefficientFromMaxScore(Number(maxScore) || 0);
   const singleSubject = lockSubjectIfSingle && refs.subjects.length === 1 ? refs.subjects[0] : null;
+  // Une seule classe proposee = deja choisie avant d'arriver ici (dossier de
+  // classe du tableau de bord enseignant) : la reproposer en menu serait une
+  // question sans reponse possible. L'admin, lui, voit toujours la liste
+  // complete de l'etablissement (jamais un seul choix).
+  const singleClass = refs.classes.length === 1 ? refs.classes[0] : null;
+  // Meme logique pour la periode : deja choisie via l'onglet du dossier de
+  // classe avant d'ouvrir ce formulaire.
+  const singlePeriod = refs.periods.length === 1 ? refs.periods[0] : null;
 
   return (
     <Card>
@@ -77,16 +85,30 @@ export function AssessmentForm({
               )}
             </Field>
             <Field label="Classe" htmlFor="classId" required errors={err.classId}>
-              <Select id="classId" name="classId" defaultValue={val('classId')} required>
-                <option value="">—</option>
-                {refs.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </Select>
+              {singleClass ? (
+                <>
+                  <Input id="classId-display" value={singleClass.name} disabled />
+                  <input type="hidden" name="classId" value={singleClass.id} />
+                </>
+              ) : (
+                <Select id="classId" name="classId" defaultValue={val('classId')} required>
+                  <option value="">—</option>
+                  {refs.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </Select>
+              )}
             </Field>
             <Field label="Période" htmlFor="periodId" required errors={err.periodId}>
-              <Select id="periodId" name="periodId" defaultValue={val('periodId')} required>
-                <option value="">—</option>
-                {refs.periods.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </Select>
+              {singlePeriod ? (
+                <>
+                  <Input id="periodId-display" value={singlePeriod.name} disabled />
+                  <input type="hidden" name="periodId" value={singlePeriod.id} />
+                </>
+              ) : (
+                <Select id="periodId" name="periodId" defaultValue={val('periodId')} required>
+                  <option value="">—</option>
+                  {refs.periods.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </Select>
+              )}
             </Field>
             <Field label="Type" htmlFor="assessmentTypeId" required errors={err.assessmentTypeId}>
               <Select id="assessmentTypeId" name="assessmentTypeId" defaultValue={val('assessmentTypeId')} required>

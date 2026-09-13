@@ -6,10 +6,10 @@ import { audit } from '@/lib/audit';
 import { AuthorizationError, NotFoundError, ValidationError } from '@/lib/errors';
 import type { TablesInsert } from '@/types/database';
 import { getAppliedSyncResult, recordAppliedSyncOperation } from '@/services/sync-ledger';
-import { canActOnOccurrence } from './registers';
+import { canActOnOccurrence, submitRegister } from './registers';
 import type { AttendanceEntry } from './schemas';
 
-export type SaveResult = { registerId: string; deduped: boolean; savedCount: number };
+export type SaveResult = { registerId: string; deduped: boolean; savedCount: number; submitted: boolean };
 
 /**
  * Applique un appel de façon IDEMPOTENTE (ADR-009, docs/OFFLINE_SYNC.md).
@@ -25,14 +25,24 @@ export type SaveResult = { registerId: string; deduped: boolean; savedCount: num
  */
 export async function applyAttendanceSave(
   ctx: TenantContext,
-  input: { clientOperationId: string; occurrenceId: string; entries: AttendanceEntry[]; source: 'ONLINE' | 'OFFLINE_SYNC' },
+  input: {
+    clientOperationId: string;
+    occurrenceId: string;
+    entries: AttendanceEntry[];
+    source: 'ONLINE' | 'OFFLINE_SYNC';
+    /** Enchaine le verrouillage (submitRegister) juste apres l'enregistrement. */
+    alsoSubmit?: boolean;
+  },
 ): Promise<SaveResult> {
   const supabase = await createClient();
 
-  // 1. Opération déjà vue ? Renvoyer son résultat mémorisé (idempotence).
+  // 1. Opération déjà vue ? Renvoyer son résultat mémorisé (idempotence). Le
+  // ledger n'est écrit qu'une fois l'operation ENTIEREMENT terminee (y
+  // compris le verrouillage demandé) : le retrouver garantit que tout est
+  // fait, pas seulement l'enregistrement.
   const seen = await getAppliedSyncResult(ctx.school.id, input.clientOperationId);
   if (seen?.registerId) {
-    return { registerId: seen.registerId, deduped: true, savedCount: seen.savedCount ?? 0 };
+    return { registerId: seen.registerId, deduped: true, savedCount: seen.savedCount ?? 0, submitted: seen.submitted ?? false };
   }
 
   // 2. L'occurrence existe-t-elle dans cet établissement ?
@@ -113,14 +123,31 @@ export async function applyAttendanceSave(
     if (error) throw error;
   }
 
-  // 5. Journaliser l'opération dans le registre d'idempotence (service_role).
+  // 5. Verrouillage enchaine (« Valider l'appel » du tableau de bord
+  // enseignant) : deja soumis/valide entre-temps (ex. rejeu apres une
+  // premiere tentative interrompue) -> rien a refaire, ce n'est pas une erreur.
+  let submitted = false;
+  if (input.alsoSubmit) {
+    const { data: reg } = await supabase
+      .from('attendance_registers')
+      .select('status')
+      .eq('school_id', ctx.school.id)
+      .eq('id', registerId)
+      .maybeSingle();
+    if (reg?.status === 'OPEN') {
+      await submitRegister(ctx, registerId);
+    }
+    submitted = true;
+  }
+
+  // 6. Journaliser l'opération dans le registre d'idempotence (service_role).
   await recordAppliedSyncOperation({
     schoolId: ctx.school.id,
     userId: ctx.user.id,
     clientOperationId: input.clientOperationId,
     operationType: 'attendance.save',
-    payload: { occurrenceId: input.occurrenceId, count: rows.length },
-    result: { registerId, savedCount: rows.length },
+    payload: { occurrenceId: input.occurrenceId, count: rows.length, alsoSubmit: input.alsoSubmit ?? false },
+    result: { registerId, savedCount: rows.length, submitted },
   });
 
   await audit(ctx, {
@@ -128,8 +155,8 @@ export async function applyAttendanceSave(
     module: 'attendance',
     entityType: 'attendance_register',
     entityId: registerId,
-    after: { count: rows.length, source: input.source },
+    after: { count: rows.length, source: input.source, submitted },
   });
 
-  return { registerId, deduped: false, savedCount: rows.length };
+  return { registerId, deduped: false, savedCount: rows.length, submitted };
 }

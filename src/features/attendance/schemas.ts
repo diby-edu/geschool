@@ -17,6 +17,11 @@ export const attendanceSaveSchema = z.object({
   clientOperationId: z.uuid(),
   occurrenceId: z.uuid(),
   entries: z.array(attendanceEntrySchema),
+  // Enchaine le verrouillage (submit) juste apres l'enregistrement, en UNE
+  // seule operation reseau : le bouton « Valider l'appel » (tableau de bord
+  // enseignant) n'a ainsi qu'une seule chose a mettre en file hors ligne,
+  // pas deux appels a coordonner separement.
+  alsoSubmit: z.coerce.boolean().default(false),
 });
 
 export type AttendanceSaveInput = z.infer<typeof attendanceSaveSchema>;

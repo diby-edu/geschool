@@ -27,6 +27,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       clientOperationId: parsed.data.clientOperationId,
       occurrenceId: parsed.data.occurrenceId,
       entries: parsed.data.entries,
+      alsoSubmit: parsed.data.alsoSubmit,
       source,
     });
     return NextResponse.json(result);
