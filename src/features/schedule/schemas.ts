@@ -1,16 +1,35 @@
 import { z } from 'zod';
 
 /** Configuration de la grille horaire (docs/SCHEDULE_ENGINE.md §3). */
+/**
+ * Un horaire par jour travaille, pas un seul horaire pour toute la semaine :
+ * la grille de creneaux (time_slots, migration 0016) l'a toujours permis
+ * ("un mercredi a trois creneaux matinaux et un lundi a six cohabitent"),
+ * seul ce formulaire l'ignorait jusqu'ici.
+ */
+const dayHourSchema = z.object({
+  day: z.coerce.number().int().min(1).max(7),
+  start: z.string().regex(/^\d{2}:\d{2}$/, 'Heure invalide.'),
+  end: z.string().regex(/^\d{2}:\d{2}$/, 'Heure invalide.'),
+});
+
 export const scheduleConfigSchema = z
   .object({
     workingDays: z.array(z.coerce.number().int().min(1).max(7)).min(1, 'Choisissez au moins un jour.'),
-    dayStart: z.string().regex(/^\d{2}:\d{2}$/, 'Heure invalide.'),
-    dayEnd: z.string().regex(/^\d{2}:\d{2}$/, 'Heure invalide.'),
     slotMinutes: z.coerce.number().int().min(15, 'Minimum 15 min.').max(240),
+    dayHours: z.array(dayHourSchema),
   })
-  .refine((v) => v.dayEnd > v.dayStart, { message: 'La fin doit suivre le debut.', path: ['dayEnd'] });
+  .refine((v) => v.dayHours.every((h) => h.end > h.start), {
+    message: 'Pour chaque jour, la fin doit suivre le début.',
+    path: ['dayHours'],
+  })
+  .refine((v) => v.workingDays.every((d) => v.dayHours.some((h) => h.day === d)), {
+    message: 'Chaque jour travaillé doit avoir un horaire de début et de fin.',
+    path: ['workingDays'],
+  });
 
 export type ScheduleConfigInput = z.infer<typeof scheduleConfigSchema>;
+export type DayHour = z.infer<typeof dayHourSchema>;
 
 /**
  * Ajout d'une seance (cible : une classe). Le jour est deduit du creneau de

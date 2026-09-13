@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess } from '@/lib/permissions/guard';
-import { getConfig } from '@/features/schedule/config';
+import { getConfig, getDayHours } from '@/features/schedule/config';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { ConfigForm } from '@/features/schedule/components/ConfigForm';
 import { saveConfigAction } from '@/features/schedule/actions';
@@ -24,14 +24,14 @@ export default async function ScheduleConfigPage({ params }: { params: Promise<{
   }
 
   const config = await getConfig(ctx, ctx.academicYear.id);
+  const dayHours = config ? await getDayHours(ctx, config.id) : [];
   const defaults = config
     ? {
         workingDays: config.working_days as number[],
-        dayStart: (config.day_starts_at as string).slice(0, 5),
-        dayEnd: (config.day_ends_at as string).slice(0, 5),
+        dayHours,
         slotMinutes: config.default_session_minutes as number,
       }
-    : { workingDays: [1, 2, 3, 4, 5], dayStart: '07:30', dayEnd: '18:00', slotMinutes: 55 };
+    : { workingDays: [1, 2, 3, 4, 5], dayHours: [], slotMinutes: 55 };
 
   return (
     <div className="mx-auto max-w-2xl">

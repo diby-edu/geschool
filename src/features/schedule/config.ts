@@ -38,6 +38,37 @@ export async function getConfig(ctx: TenantContext, yearId: string) {
   return data;
 }
 
+export type DayHours = { day: number; start: string; end: string };
+
+/**
+ * Horaire REEL de chaque jour, reconstruit a partir de la grille de creneaux
+ * deja generee (min/max des time_slots de ce jour) — jamais stocke a part,
+ * pour ne jamais avoir deux sources de verite sur « l'horaire du mercredi ».
+ */
+export async function getDayHours(ctx: TenantContext, configId: string): Promise<DayHours[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('time_slots')
+    .select('day_of_week, starts_at, ends_at')
+    .eq('school_id', ctx.school.id)
+    .eq('schedule_configuration_id', configId)
+    .eq('kind', 'TEACHING');
+
+  const byDay = new Map<number, { start: string; end: string }>();
+  for (const row of (data ?? []) as { day_of_week: number; starts_at: string; ends_at: string }[]) {
+    const cur = byDay.get(row.day_of_week);
+    if (!cur) {
+      byDay.set(row.day_of_week, { start: row.starts_at, end: row.ends_at });
+    } else {
+      if (row.starts_at < cur.start) cur.start = row.starts_at;
+      if (row.ends_at > cur.end) cur.end = row.ends_at;
+    }
+  }
+  return Array.from(byDay.entries())
+    .map(([day, h]) => ({ day, start: h.start.slice(0, 5), end: h.end.slice(0, 5) }))
+    .sort((a, b) => a.day - b.day);
+}
+
 export async function listSlots(ctx: TenantContext, configId: string): Promise<TimeSlot[]> {
   const supabase = await createClient();
   const { data } = await supabase
@@ -77,6 +108,13 @@ export async function saveConfig(ctx: TenantContext, input: ScheduleConfigInput)
     await supabase.from('schedule_configurations').delete().eq('id', existing.id);
   }
 
+  // day_starts_at/day_ends_at ne pilotent plus la generation (chaque jour a
+  // desormais son propre horaire, cf. input.dayHours) : ils ne servent plus
+  // qu'a resumer la plage globale de l'etablissement (le plus tot, le plus
+  // tard), pour l'affichage et les colonnes NOT NULL existantes.
+  const globalStart = input.dayHours.reduce((min, h) => (h.start < min ? h.start : min), input.dayHours[0]!.start);
+  const globalEnd = input.dayHours.reduce((max, h) => (h.end > max ? h.end : max), input.dayHours[0]!.end);
+
   const { data: config, error } = await supabase
     .from('schedule_configurations')
     .insert({
@@ -84,8 +122,8 @@ export async function saveConfig(ctx: TenantContext, input: ScheduleConfigInput)
       academic_year_id: yearId,
       name: 'Grille par defaut',
       working_days: input.workingDays,
-      day_starts_at: `${input.dayStart}:00`,
-      day_ends_at: `${input.dayEnd}:00`,
+      day_starts_at: `${globalStart}:00`,
+      day_ends_at: `${globalEnd}:00`,
       default_session_minutes: input.slotMinutes,
       slot_granularity_minutes: 5,
       is_default: true,
@@ -95,11 +133,15 @@ export async function saveConfig(ctx: TenantContext, input: ScheduleConfigInput)
     .single();
   if (error) throw error;
 
-  // Generation des creneaux : pour chaque jour ouvre, du debut a la fin, par pas
-  const start = toMinutes(input.dayStart);
-  const end = toMinutes(input.dayEnd);
+  // Generation des creneaux : CHAQUE jour utilise SON PROPRE debut/fin — un
+  // mercredi ecourte et un lundi complet cohabitent sans traitement
+  // particulier (c'est ce que la grille a toujours permis, migration 0016).
   const slots: TablesInsert<'time_slots'>[] = [];
   for (const day of input.workingDays) {
+    const hours = input.dayHours.find((h) => h.day === day);
+    if (!hours) continue; // deja rejete par le schema, garde-fou
+    const start = toMinutes(hours.start);
+    const end = toMinutes(hours.end);
     let position = 0;
     for (let t = start; t + input.slotMinutes <= end; t += input.slotMinutes) {
       slots.push({

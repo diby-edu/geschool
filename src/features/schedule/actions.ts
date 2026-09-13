@@ -14,11 +14,18 @@ import { isAppError, ValidationError } from '@/lib/errors';
 export async function saveConfigAction(slug: string, _p: FormState, fd: FormData): Promise<FormState> {
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
+    const workingDays = fd.getAll('workingDays').map(Number);
+    // Un couple debut/fin PAR JOUR travaille (start_1, end_1, start_2, end_2...) :
+    // c'est ce qui permet a un mercredi de finir plus tot qu'un lundi.
+    const dayHours = workingDays.map((day) => ({
+      day,
+      start: String(fd.get(`start_${day}`) ?? ''),
+      end: String(fd.get(`end_${day}`) ?? ''),
+    }));
     await saveConfig(ctx, scheduleConfigSchema.parse({
-      workingDays: fd.getAll('workingDays'),
-      dayStart: fd.get('dayStart'),
-      dayEnd: fd.get('dayEnd'),
+      workingDays,
       slotMinutes: fd.get('slotMinutes'),
+      dayHours,
     }));
     redirect(`/e/${slug}/schedule?configured=1`);
   }).then((s) => (s.error || s.fieldErrors ? { ...s, values: formValues(fd) } : s));
