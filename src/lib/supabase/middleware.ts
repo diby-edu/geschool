@@ -14,7 +14,7 @@ import type { Database } from '@/types/database';
  */
 
 // Prefixes accessibles sans session
-const PUBLIC_PREFIXES = ['/login', '/first-login', '/mot-de-passe-oublie', '/api/health', '/auth'];
+const PUBLIC_PREFIXES = ['/login', '/first-login', '/mot-de-passe-oublie', '/api/health', '/auth', '/hors-ligne'];
 
 function isPublicPath(pathname: string): boolean {
   // La racine est la vitrine publique (marketing) : elle-meme decide, cote
