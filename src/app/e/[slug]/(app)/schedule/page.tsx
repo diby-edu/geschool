@@ -5,7 +5,9 @@ import { requirePageAccess } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { getConfig } from '@/features/schedule/config';
 import { listVersions } from '@/features/schedule/versions';
+import { getMyWeeklySchedule } from '@/features/schedule/my-schedule';
 import { createVersionAction, deleteVersionAction } from '@/features/schedule/actions';
+import { MyWeekSchedule } from '@/features/schedule/components/MyWeekSchedule';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Flash } from '@/components/ui/flash';
 import { Alert } from '@/components/ui/alert';
@@ -30,6 +32,24 @@ export default async function SchedulePage({
   const ctx = await getTenantContext(slug);
   requirePageAccess(ctx, 'schedule.view');
   const base = `/e/${slug}/schedule`;
+
+  // Enseignant sans droit de gestion : une vue globale, hebdomadaire, sans
+  // selection de classe (cahier des charges tableau de bord enseignant §2) —
+  // jamais l'ecran de gestion des versions, reserve a qui peut le configurer.
+  const isPlainTeacher =
+    !hasPermission(ctx, 'schedule.manage_configuration') &&
+    !hasPermission(ctx, 'schedule.create') &&
+    (ctx.membership?.roles ?? []).includes('TEACHER');
+
+  if (isPlainTeacher) {
+    const slots = await getMyWeeklySchedule(ctx);
+    return (
+      <div className="mx-auto max-w-3xl space-y-6">
+        <PageHeader title="Mon emploi du temps" {...(ctx.academicYear ? { description: `Annee ${ctx.academicYear.name}` } : {})} />
+        <MyWeekSchedule slots={slots} />
+      </div>
+    );
+  }
 
   if (!ctx.academicYear) {
     return (
