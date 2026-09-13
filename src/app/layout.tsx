@@ -5,6 +5,7 @@ import { locale } from '@/i18n/request';
 import { publicEnv } from '@/lib/env';
 import { ServiceWorkerRegister } from '@/components/pwa/ServiceWorkerRegister';
 import { OfflineBanner } from '@/components/pwa/OfflineBanner';
+import { ChunkErrorReload } from '@/components/pwa/ChunkErrorReload';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -36,6 +37,7 @@ export default async function RootLayout({
     <html lang={locale} suppressHydrationWarning>
       <body>
         <ServiceWorkerRegister />
+        <ChunkErrorReload />
         <OfflineBanner />
         <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>
       </body>

@@ -17,9 +17,18 @@
  * A la deconnexion explicite, la page envoie CLEAR_CACHE : sur un poste
  * partage (ordinateur de salle des profs), l'utilisateur suivant ne doit
  * jamais retrouver les pages du precedent.
+ *
+ * CACHE_VERSION : un onglet reste ouvert pendant qu'un nouveau deploiement
+ * change les noms de fichiers JS (hash de build) -> ChunkLoadError des que ce
+ * cache sert une page HTML perimee referencant des fragments qui n'existent
+ * plus. `activate` purge tout cache d'une version differente ; incrementer
+ * CACHE_VERSION force ce nettoyage. Le filet de securite reel reste cote page
+ * (src/components/pwa/ChunkErrorReload.tsx), qui recharge une seule fois sur
+ * ce type d'erreur : ne pas compter uniquement sur la memoire de penser a
+ * incrementer ce numero a chaque deploiement.
  */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const RUNTIME_CACHE = `geschool-runtime-${CACHE_VERSION}`;
 const OFFLINE_URL = '/hors-ligne';
 const MAX_ENTRIES = 150;
