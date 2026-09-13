@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Field } from '@/components/ui/field';
@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { SubmitButton } from '@/features/auth/components/SubmitButton';
 import type { FormState } from '@/lib/forms';
 import type { Ref } from '@/features/evaluations/refs';
+import { coefficientFromMaxScore } from '@/features/evaluations/schemas';
 
 type Defaults = {
   title?: string;
@@ -20,7 +21,6 @@ type Defaults = {
   teacherId?: string;
   assessmentDate?: string;
   maxScore?: number;
-  coefficient?: number;
 };
 
 export function AssessmentForm({
@@ -28,17 +28,29 @@ export function AssessmentForm({
   refs,
   defaults = {},
   submitLabel = 'Créer l’évaluation',
+  /**
+   * Verrouille le champ Discipline sur l'unique matière fournie (tableau de
+   * bord enseignant : un professeur qui n'enseigne qu'une matière dans cette
+   * classe n'a pas à la choisir — RBAC.md, affectation réelle via
+   * teaching_assignments). Ignoré si `refs.subjects` contient plusieurs
+   * options : le champ reste alors un choix explicite.
+   */
+  lockSubjectIfSingle = false,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   refs: { subjects: Ref[]; classes: Ref[]; periods: Ref[]; types: Ref[]; scales: Ref[]; teachers: Ref[] };
   defaults?: Defaults;
   submitLabel?: string;
+  lockSubjectIfSingle?: boolean;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const err = state.fieldErrors ?? {};
   const v = { ...defaults, ...(state.values ?? {}) } as Record<string, string | number | undefined>;
   const val = (k: string) => (v[k] === undefined || v[k] === null ? '' : String(v[k]));
   const today = new Date().toISOString().slice(0, 10);
+  const [maxScore, setMaxScore] = useState<string>(val('maxScore') || '20');
+  const coefficient = coefficientFromMaxScore(Number(maxScore) || 0);
+  const singleSubject = lockSubjectIfSingle && refs.subjects.length === 1 ? refs.subjects[0] : null;
 
   return (
     <Card>
@@ -52,10 +64,17 @@ export function AssessmentForm({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Matière" htmlFor="subjectId" required errors={err.subjectId}>
-              <Select id="subjectId" name="subjectId" defaultValue={val('subjectId')} required>
-                <option value="">—</option>
-                {refs.subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </Select>
+              {singleSubject ? (
+                <>
+                  <Input id="subjectId-display" value={singleSubject.name} disabled />
+                  <input type="hidden" name="subjectId" value={singleSubject.id} />
+                </>
+              ) : (
+                <Select id="subjectId" name="subjectId" defaultValue={val('subjectId')} required>
+                  <option value="">—</option>
+                  {refs.subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </Select>
+              )}
             </Field>
             <Field label="Classe" htmlFor="classId" required errors={err.classId}>
               <Select id="classId" name="classId" defaultValue={val('classId')} required>
@@ -93,11 +112,20 @@ export function AssessmentForm({
             <Field label="Date" htmlFor="assessmentDate" required errors={err.assessmentDate}>
               <Input id="assessmentDate" name="assessmentDate" type="date" defaultValue={val('assessmentDate') || today} required />
             </Field>
-            <Field label="Note maximale" htmlFor="maxScore" required errors={err.maxScore}>
-              <Input id="maxScore" name="maxScore" type="number" min="0.5" step="0.5" defaultValue={val('maxScore') || '20'} required />
+            <Field label="Noté sur" htmlFor="maxScore" required errors={err.maxScore}>
+              <Input
+                id="maxScore"
+                name="maxScore"
+                type="number"
+                min="0.5"
+                step="0.5"
+                value={maxScore}
+                onChange={(e) => setMaxScore(e.target.value)}
+                required
+              />
             </Field>
-            <Field label="Coefficient" htmlFor="coefficient" required errors={err.coefficient}>
-              <Input id="coefficient" name="coefficient" type="number" min="0.01" step="0.01" defaultValue={val('coefficient') || '1'} required />
+            <Field label="Coefficient (automatique)" htmlFor="coefficient-display">
+              <Input id="coefficient-display" value={coefficient} disabled title="Coefficient = barème / 20, calculé automatiquement." />
             </Field>
           </div>
 

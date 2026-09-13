@@ -82,7 +82,6 @@ function parseAssessment(fd: FormData) {
     teacherId: fd.get('teacherId') ?? '',
     assessmentDate: fd.get('assessmentDate'),
     maxScore: fd.get('maxScore'),
-    coefficient: fd.get('coefficient'),
     isEliminatory: fd.get('isEliminatory') === 'on' || fd.get('isEliminatory') === 'true',
     eliminatoryThreshold: fd.get('eliminatoryThreshold') ?? '',
   });

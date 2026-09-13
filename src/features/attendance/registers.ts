@@ -4,8 +4,33 @@ import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
 import { requireWritable, hasPermission } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
-import { ConflictError, NotFoundError } from '@/lib/errors';
+import { AuthorizationError, ConflictError, NotFoundError } from '@/lib/errors';
 import { getOccurrence } from './occurrences';
+
+/**
+ * Un enseignant fait l'appel de SES SEANCES sans porter la permission
+ * generale 'attendance.create' (reservee aux roles a perimetre etablissement
+ * — censeur, surveillant, direction) : son droit est DERIVE de l'emploi du
+ * temps (app.can_take_attendance, migration 0015), deja ce que verifie la
+ * RLS sur attendance_registers/attendance_records. Sans cet appel, la
+ * couche applicative bloquait a tort un enseignant simple avant meme que la
+ * RLS n'ait son mot a dire.
+ */
+export async function canActOnOccurrence(ctx: TenantContext, occurrenceId: string): Promise<boolean> {
+  if (hasPermission(ctx, 'attendance.create')) return true;
+  const supabase = await createClient();
+  const { data } = await supabase.rpc('can_take_attendance' as never, {
+    p_school: ctx.school.id,
+    p_occurrence: occurrenceId,
+  } as never);
+  return data === true;
+}
+
+async function requireCanAct(ctx: TenantContext, occurrenceId: string): Promise<void> {
+  if (!(await canActOnOccurrence(ctx, occurrenceId))) {
+    throw new AuthorizationError("Vous n'êtes pas habilité à faire l'appel de cette séance.");
+  }
+}
 
 export type AppelStudent = {
   studentId: string;
@@ -89,15 +114,15 @@ export async function loadAppel(ctx: TenantContext, occurrenceId: string): Promi
 }
 
 export async function submitRegister(ctx: TenantContext, registerId: string): Promise<void> {
-  requireWritable(ctx, 'attendance.create');
   const supabase = await createClient();
   const { data: reg } = await supabase
     .from('attendance_registers')
-    .select('id, status')
+    .select('id, status, session_occurrence_id')
     .eq('school_id', ctx.school.id)
     .eq('id', registerId)
     .maybeSingle();
   if (!reg) throw new NotFoundError('Appel introuvable.');
+  await requireCanAct(ctx, reg.session_occurrence_id);
   if (reg.status !== 'OPEN') throw new ConflictError('Cet appel a déjà été soumis.');
   const { error } = await supabase
     .from('attendance_registers')

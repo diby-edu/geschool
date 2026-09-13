@@ -5,7 +5,7 @@ import type { TenantContext } from '@/lib/tenant/context';
 import { requireWritable } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
-import type { AssessmentInput } from './schemas';
+import { coefficientFromMaxScore, type AssessmentInput } from './schemas';
 
 export type AssessmentRow = {
   id: string;
@@ -141,7 +141,9 @@ function toRow(ctx: TenantContext, yearId: string, input: AssessmentInput) {
     title: input.title,
     assessment_date: input.assessmentDate,
     max_score: input.maxScore,
-    coefficient: input.coefficient,
+    // Jamais saisi : coefficient = barème / 20, recalculé ici quel que soit ce
+    // qu'un client aurait pu envoyer (règle unique, appliquée partout).
+    coefficient: coefficientFromMaxScore(input.maxScore),
     is_eliminatory: input.isEliminatory,
     eliminatory_threshold: input.isEliminatory && input.eliminatoryThreshold !== '' ? Number(input.eliminatoryThreshold) : null,
   };

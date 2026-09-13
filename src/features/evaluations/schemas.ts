@@ -38,6 +38,16 @@ export const assessmentTypeSchema = z.object({
 
 export type AssessmentTypeInput = z.infer<typeof assessmentTypeSchema>;
 
+/**
+ * Coefficient = barème / 20 (§ tableau de bord enseignant, verrouillé le
+ * 2026-09) : jamais saisi à la main, calculé et réappliqué systématiquement
+ * côté serveur (toRow, dans assessments.ts) quel que soit ce que le client
+ * envoie. Un devoir sur 40 pèse 2, sur 100 pèse 5.
+ */
+export function coefficientFromMaxScore(maxScore: number): number {
+  return Math.round((maxScore / 20) * 100) / 100;
+}
+
 export const assessmentSchema = z
   .object({
     title: z.string().trim().min(1, 'Titre requis.').max(160),
@@ -49,7 +59,6 @@ export const assessmentSchema = z
     teacherId: z.union([z.uuid(), z.literal('')]).optional(),
     assessmentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date invalide.'),
     maxScore: z.coerce.number().min(0.5, 'Barème maximum invalide.').max(1000),
-    coefficient: z.coerce.number().min(0.01, 'Coefficient positif requis.').max(100),
     isEliminatory: z.coerce.boolean().default(false),
     eliminatoryThreshold: z.union([z.coerce.number().min(0).max(1000), z.literal('')]).optional(),
   })

@@ -69,7 +69,6 @@ export default async function EditAssessmentPage({ params }: { params: Promise<{
           teacherId: rec.teacher_id ?? '',
           assessmentDate: rec.assessment_date,
           maxScore: rec.max_score,
-          coefficient: rec.coefficient,
         }}
       />
     </div>

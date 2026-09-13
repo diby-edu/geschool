@@ -2,11 +2,11 @@ import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
-import { requireWritable } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
-import { NotFoundError, ValidationError } from '@/lib/errors';
+import { AuthorizationError, NotFoundError, ValidationError } from '@/lib/errors';
 import type { TablesInsert } from '@/types/database';
 import { getAppliedSyncResult, recordAppliedSyncOperation } from '@/services/sync-ledger';
+import { canActOnOccurrence } from './registers';
 import type { AttendanceEntry } from './schemas';
 
 export type SaveResult = { registerId: string; deduped: boolean; savedCount: number };
@@ -27,7 +27,6 @@ export async function applyAttendanceSave(
   ctx: TenantContext,
   input: { clientOperationId: string; occurrenceId: string; entries: AttendanceEntry[]; source: 'ONLINE' | 'OFFLINE_SYNC' },
 ): Promise<SaveResult> {
-  requireWritable(ctx, 'attendance.create');
   const supabase = await createClient();
 
   // 1. Opération déjà vue ? Renvoyer son résultat mémorisé (idempotence).
@@ -44,6 +43,13 @@ export async function applyAttendanceSave(
     .eq('id', input.occurrenceId)
     .maybeSingle();
   if (!occ) throw new NotFoundError('Séance introuvable.');
+
+  // Droit d'agir : permission générale (censeur/direction) OU enseignant de
+  // cette séance précise (perimètre dérivé, RLS 0015 — jamais accordé en
+  // permission générale au rôle TEACHER par conception).
+  if (!(await canActOnOccurrence(ctx, input.occurrenceId))) {
+    throw new AuthorizationError("Vous n'êtes pas habilité à faire l'appel de cette séance.");
+  }
 
   // 3. Registre : réutiliser celui de l'occurrence, ou le créer (statut OPEN).
   let registerId: string;

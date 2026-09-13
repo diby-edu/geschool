@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
-import { loadAppel } from '@/features/attendance/registers';
+import { loadAppel, canActOnOccurrence } from '@/features/attendance/registers';
 import { submitRegisterAction, validateRegisterAction } from '@/features/attendance/actions';
 import { AppelGrid } from '@/features/attendance/components/AppelGrid';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -39,7 +39,10 @@ export default async function AppelPage({
   }
 
   const canValidate = hasPermission(ctx, 'attendance.validate');
-  const canTake = hasPermission(ctx, 'attendance.create') || hasPermission(ctx, 'attendance.update');
+  const canTake =
+    hasPermission(ctx, 'attendance.create') ||
+    hasPermission(ctx, 'attendance.update') ||
+    (await canActOnOccurrence(ctx, occurrenceId));
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
