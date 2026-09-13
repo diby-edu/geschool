@@ -38,7 +38,7 @@ export default async function SchoolBillingPage({
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       {sp.assigned === '1' ? <Alert tone="success">Abonnement mis à jour.</Alert> : null}
-      <PageHeader title={`Facturation — ${school.name}`} action={<Link href="/admin"><Button variant="ghost">Retour</Button></Link>} />
+      <PageHeader title={`Facturation — ${school.name}`} action={<Link href="/admin/etablissements"><Button variant="ghost">Retour</Button></Link>} />
 
       <Card>
         <CardContent className="space-y-1 py-3 text-sm">

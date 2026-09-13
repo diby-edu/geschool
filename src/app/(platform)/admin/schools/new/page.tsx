@@ -20,7 +20,7 @@ export default async function NewSchoolPage() {
         title="Nouvel etablissement"
         description="Vous serez redirige vers son espace pour le configurer."
         action={
-          <Link href="/admin" className="text-sm text-[color:var(--muted-foreground)] hover:underline">
+          <Link href="/admin/etablissements" className="text-sm text-[color:var(--muted-foreground)] hover:underline">
             Retour
           </Link>
         }

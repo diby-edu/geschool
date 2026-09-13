@@ -14,17 +14,28 @@ export function AppShell({
   subtitle,
   nav,
   user,
+  back,
   children,
 }: {
   brand: string;
   subtitle: string;
   nav: NavItem[];
   user: { displayName: string; roleLabel: string };
+  /** Lien de sortie vers l'espace parent (ex. un Super Admin entré dans une école). */
+  back?: { href: string; label: string };
   children: React.ReactNode;
 }) {
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[15rem_1fr]">
       <aside className="border-b md:border-b-0 md:border-r" style={{ backgroundColor: 'var(--surface)' }}>
+        {back ? (
+          <Link
+            href={back.href}
+            className="flex items-center gap-1.5 px-4 pt-3 text-xs font-medium text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]"
+          >
+            <span aria-hidden="true">&larr;</span> {back.label}
+          </Link>
+        ) : null}
         <div className="p-4">
           <p className="truncate font-semibold tracking-tight">{brand}</p>
           <p className="truncate text-xs text-[color:var(--muted-foreground)]">{subtitle}</p>

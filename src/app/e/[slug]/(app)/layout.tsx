@@ -40,6 +40,10 @@ export default async function SchoolAppLayout({
       brand={ctx.school.shortName ?? ctx.school.name}
       subtitle={ctx.academicYear?.name ?? 'Aucune annee active'}
       nav={buildSchoolNav(ctx)}
+      // Un Super Admin arrive ici depuis /admin : sans ce lien, il resterait
+      // captif de l'espace etablissement (aucune entree du menu ne pointe vers
+      // la plateforme).
+      {...(ctx.isPlatformAdmin ? { back: { href: '/admin', label: 'Retour a la plateforme' } } : {})}
       user={{
         displayName: ctx.user.displayName,
         roleLabel: ctx.isPlatformAdmin

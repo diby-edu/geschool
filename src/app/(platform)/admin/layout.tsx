@@ -23,7 +23,8 @@ export default async function PlatformLayout({ children }: { children: React.Rea
       brand="Plateforme"
       subtitle="Administration globale"
       nav={[
-        { href: '/admin', label: 'Etablissements' },
+        { href: '/admin', label: 'Tableau de bord' },
+        { href: '/admin/etablissements', label: 'Etablissements' },
         { href: '/admin/plans', label: 'Plans' },
       ]}
       user={{ displayName, roleLabel: 'Super Admin' }}
