@@ -10,11 +10,36 @@ import { submitOrQueue, flushAttendanceQueue, queueLength } from '@/features/att
 type Status = 'PRESENT' | 'ABSENT' | 'LATE';
 
 const NEXT_STATUS: Record<Status, Status> = { PRESENT: 'ABSENT', ABSENT: 'LATE', LATE: 'PRESENT' };
-const PILL: Record<Status, { label: string; className: string }> = {
-  PRESENT: { label: '🟢 Présent', className: 'text-[color:var(--color-success)]' },
-  ABSENT: { label: '🔴 ABS', className: 'text-[color:var(--color-danger)]' },
-  LATE: { label: '🟡 RET', className: 'text-[color:var(--color-warning)]' },
+const BADGE_COLOR: Record<'ABSENT' | 'LATE', string> = {
+  ABSENT: 'var(--color-danger)',
+  LATE: 'var(--color-warning)',
 };
+const BADGE_LABEL: Record<'ABSENT' | 'LATE', string> = { ABSENT: 'ABS', LATE: 'RET' };
+
+// Present : un simple point vert, sans texte (etat par defaut, le moins
+// bruyant). Absent/Retard : badge plein colore, pour attirer l'oeil sur les
+// exceptions — reprend la maquette fournie par l'etablissement (image 2).
+function StatusIndicator({ status }: { status: Status }) {
+  if (status === 'PRESENT') {
+    return (
+      <span
+        aria-label="Présent"
+        title="Présent"
+        className="size-2.5 shrink-0 rounded-full"
+        style={{ backgroundColor: 'var(--color-success)' }}
+      />
+    );
+  }
+  const color = BADGE_COLOR[status];
+  return (
+    <span
+      className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold"
+      style={{ backgroundColor: `color-mix(in oklch, ${color} 15%, transparent)`, color }}
+    >
+      {BADGE_LABEL[status]}
+    </span>
+  );
+}
 
 // Une minute de retard par defaut : aucune saisie de duree dans ce parcours
 // rapide (une seule pression change l'etat). Le detail (duree exacte,
@@ -141,7 +166,6 @@ export function CurrentAppelCard({
       ) : (
         <ul className="divide-y overflow-hidden rounded-[--radius-card] border" style={{ borderColor: 'var(--border)' }}>
           {students.map((s) => {
-            const pill = PILL[normalize(s.status)];
             return (
               <li key={s.studentId}>
                 <button
@@ -166,7 +190,7 @@ export function CurrentAppelCard({
                     <span className="block truncate font-medium">{s.name}</span>
                     <span className="block truncate font-mono text-xs text-[color:var(--muted-foreground)]">{s.matricule}</span>
                   </span>
-                  <span className={`shrink-0 text-sm font-semibold ${pill.className}`}>{pill.label}</span>
+                  <StatusIndicator status={normalize(s.status)} />
                 </button>
               </li>
             );

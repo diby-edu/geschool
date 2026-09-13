@@ -90,6 +90,29 @@ export async function listAssessments(
   }));
 }
 
+/**
+ * Nombre d'évaluations déjà créées dans ce périmètre (matière + classe +
+ * période) : sert uniquement à suggérer le prochain numéro au tableau de bord
+ * enseignant (§ formulaire simplifié), aucune colonne dédiée en base.
+ */
+export async function countAssessments(
+  ctx: TenantContext,
+  yearId: string,
+  filters: { classId: string; periodId: string; subjectId: string },
+): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from('assessments')
+    .select('id', { count: 'exact', head: true })
+    .eq('school_id', ctx.school.id)
+    .eq('academic_year_id', yearId)
+    .eq('class_id', filters.classId)
+    .eq('academic_period_id', filters.periodId)
+    .eq('subject_id', filters.subjectId);
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export type AssessmentDetail = {
   id: string;
   title: string;

@@ -4,9 +4,10 @@ import { notFound } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
 import { getMyTaughtClasses, getMySubjectsForClass, getMyTeacherId } from '@/features/teachers/my-scope';
 import { listPeriods } from '@/features/evaluations/refs';
-import { listScales, listTypes } from '@/features/evaluations/config';
+import { listScales, listTypes, getDefaultScale } from '@/features/evaluations/config';
+import { countAssessments } from '@/features/evaluations/assessments';
 import { createAssessmentAction } from '@/features/evaluations/actions';
-import { AssessmentForm } from '@/features/evaluations/components/AssessmentForm';
+import { SimpleAssessmentForm } from '@/features/evaluations/components/SimpleAssessmentForm';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -31,13 +32,17 @@ export default async function NewMyAssessmentPage({
   const klass = classes.find((c) => c.id === classId);
   if (!klass) notFound();
 
-  const [subjects, allPeriods, types, scales, myTeacherId] = await Promise.all([
+  const [subjects, allPeriods, types, scales, defaultScale, myTeacherId] = await Promise.all([
     getMySubjectsForClass(ctx, classId),
     listPeriods(ctx, yearId),
     listTypes(ctx),
     listScales(ctx),
+    getDefaultScale(ctx),
     getMyTeacherId(ctx),
   ]);
+  // Barème résolu automatiquement (pas de champ dans ce formulaire réduit) :
+  // celui marqué par défaut, sinon le premier existant.
+  const gradingScaleId = defaultScale?.id ?? scales[0]?.id;
 
   const periodId = typeof sp.period === 'string' ? sp.period : undefined;
   const period = periodId ? allPeriods.find((p) => p.id === periodId) : undefined;
@@ -48,6 +53,14 @@ export default async function NewMyAssessmentPage({
   if (scales.length === 0) missing.push('un barème (Barèmes & types)');
   if (types.length === 0) missing.push('un type d’évaluation (Barèmes & types)');
 
+  // Numéro suggéré : seulement calculable quand la matière est déjà connue
+  // (cas courant, un seul enseignement dans cette classe) — avec plusieurs
+  // matières, le numéro dépend d'un choix pas encore fait par l'enseignant.
+  const nextNumber =
+    period && subjects.length === 1
+      ? (await countAssessments(ctx, yearId, { classId, periodId: period.id, subjectId: subjects[0]!.id })) + 1
+      : undefined;
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
@@ -57,22 +70,16 @@ export default async function NewMyAssessmentPage({
 
       {missing.length > 0 ? (
         <Alert tone="info">Impossible de créer une évaluation : {missing.join(', ')}.</Alert>
-      ) : period ? (
-        <AssessmentForm
+      ) : period && gradingScaleId ? (
+        <SimpleAssessmentForm
           action={createAssessmentAction.bind(null, slug)}
-          lockSubjectIfSingle
-          refs={{
-            subjects,
-            classes: [{ id: klass.id, name: klass.name }],
-            periods: [{ id: period.id, name: period.name }],
-            types: types.map((t) => ({ id: t.id, name: t.name })),
-            scales: scales.map((s) => ({ id: s.id, name: s.name })),
-            // Attribue l'evaluation a l'enseignant connecte : c'est ce champ
-            // (assessments.teacher_id) qui alimente ensuite « Evaluations »
-            // au tableau de bord et le perimetre owns_assessment().
-            teachers: myTeacherId ? [{ id: myTeacherId, name: ctx.user.displayName }] : [],
-          }}
-          defaults={{ classId: klass.id, periodId: period.id, ...(myTeacherId ? { teacherId: myTeacherId } : {}) }}
+          subjects={subjects}
+          types={types.map((t) => ({ id: t.id, name: t.name }))}
+          classId={klass.id}
+          periodId={period.id}
+          gradingScaleId={gradingScaleId}
+          {...(myTeacherId ? { teacherId: myTeacherId } : {})}
+          {...(nextNumber ? { nextNumber } : {})}
         />
       ) : (
         <EmptyState title="Période manquante" hint="Revenez à l'onglet de la période concernée." />

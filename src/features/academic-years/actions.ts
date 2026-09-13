@@ -24,8 +24,11 @@ function parseYear(fd: FormData) {
 export async function createYearAction(slug: string, _p: FormState, fd: FormData): Promise<FormState> {
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
-    await createYear(ctx, parseYear(fd));
-    redirect(`/e/${slug}/academic-years?created=1`);
+    const id = await createYear(ctx, parseYear(fd));
+    // Direction directe vers la fiche de l'annee : creer une annee sans
+    // enchainer sur ses periodes et ses horaires ne servirait a rien (les
+    // deux sont obligatoires avant de generer un emploi du temps).
+    redirect(`/e/${slug}/academic-years/${id}?created=1`);
   }).then(withValues(fd));
 }
 
