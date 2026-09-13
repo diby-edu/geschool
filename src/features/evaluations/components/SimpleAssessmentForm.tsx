@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Field } from '@/components/ui/field';
@@ -11,6 +11,16 @@ import type { FormState } from '@/lib/forms';
 import type { Ref } from '@/features/evaluations/refs';
 
 const MAX_SCORE_OPTIONS = [10, 20, 40, 50, 100];
+
+/** Les `count` premiers numéros pas encore pris (jamais un numéro déjà utilisé pour ce type). */
+function nextAvailableNumbers(used: number[], count = 6): number[] {
+  const usedSet = new Set(used);
+  const out: number[] = [];
+  for (let n = 1; out.length < count; n++) {
+    if (!usedSet.has(n)) out.push(n);
+  }
+  return out;
+}
 
 /**
  * Formulaire "nouvelle évaluation" du tableau de bord enseignant : classe,
@@ -24,21 +34,22 @@ export function SimpleAssessmentForm({
   action,
   subjects,
   types,
+  usedNumbersByType,
   classId,
   periodId,
   gradingScaleId,
   teacherId,
-  nextNumber,
   submitLabel = 'Créer l’évaluation',
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   subjects: Ref[];
   types: Ref[];
+  /** Numéros déjà pris par type d'évaluation (assessment_type_id -> numéros utilisés). */
+  usedNumbersByType: Record<string, number[]>;
   classId: string;
   periodId: string;
   gradingScaleId: string;
   teacherId?: string;
-  nextNumber?: number;
   submitLabel?: string;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
@@ -47,6 +58,15 @@ export function SimpleAssessmentForm({
   const val = (k: string) => v[k] ?? '';
   const today = new Date().toISOString().slice(0, 10);
   const singleSubject = subjects.length === 1 ? subjects[0] : null;
+
+  const [typeId, setTypeId] = useState(val('assessmentTypeId') || types[0]?.id || '');
+  const availableNumbers = nextAvailableNumbers(usedNumbersByType[typeId] ?? []);
+  const [number, setNumber] = useState(availableNumbers[0] ?? 1);
+
+  function changeType(id: string) {
+    setTypeId(id);
+    setNumber(nextAvailableNumbers(usedNumbersByType[id] ?? [])[0] ?? 1);
+  }
 
   return (
     <Card>
@@ -60,18 +80,37 @@ export function SimpleAssessmentForm({
           {teacherId ? <input type="hidden" name="teacherId" value={teacherId} /> : null}
           {singleSubject ? <input type="hidden" name="subjectId" value={singleSubject.id} /> : null}
 
-          {nextNumber ? (
-            <Field label="Évaluation n°" htmlFor="eval-number-display">
-              <Input id="eval-number-display" value={nextNumber} disabled />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Type" htmlFor="assessmentTypeId" required errors={err.assessmentTypeId}>
+              <Select
+                id="assessmentTypeId"
+                name="assessmentTypeId"
+                value={typeId}
+                onChange={(e) => changeType(e.target.value)}
+                required
+              >
+                <option value="">—</option>
+                {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </Select>
             </Field>
-          ) : null}
+            <Field label="Évaluation n°" htmlFor="sequenceNumber">
+              <Select
+                id="sequenceNumber"
+                name="sequenceNumber"
+                value={number}
+                onChange={(e) => setNumber(Number(e.target.value))}
+              >
+                {availableNumbers.map((n) => <option key={n} value={n}>{n}</option>)}
+              </Select>
+            </Field>
+          </div>
 
           <Field label="Titre" htmlFor="title" required errors={err.title}>
             <Input
               id="title"
               name="title"
               defaultValue={val('title')}
-              placeholder={`Ex. Devoir n°${nextNumber ?? 1} — sujet du devoir`}
+              placeholder={`Ex. Devoir n°${number} — sujet du devoir`}
               required
               maxLength={160}
             />
@@ -87,22 +126,15 @@ export function SimpleAssessmentForm({
           ) : null}
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Type" htmlFor="assessmentTypeId" required errors={err.assessmentTypeId}>
-              <Select id="assessmentTypeId" name="assessmentTypeId" defaultValue={val('assessmentTypeId')} required>
-                <option value="">—</option>
-                {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </Select>
-            </Field>
             <Field label="Date" htmlFor="assessmentDate" required errors={err.assessmentDate}>
               <Input id="assessmentDate" name="assessmentDate" type="date" defaultValue={val('assessmentDate') || today} required />
             </Field>
+            <Field label="Noté sur" htmlFor="maxScore" required errors={err.maxScore}>
+              <Select id="maxScore" name="maxScore" defaultValue={val('maxScore') || '20'} required>
+                {MAX_SCORE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+              </Select>
+            </Field>
           </div>
-
-          <Field label="Noté sur" htmlFor="maxScore" required errors={err.maxScore}>
-            <Select id="maxScore" name="maxScore" defaultValue={val('maxScore') || '20'} required>
-              {MAX_SCORE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
-            </Select>
-          </Field>
 
           <SubmitButton>{submitLabel}</SubmitButton>
         </form>

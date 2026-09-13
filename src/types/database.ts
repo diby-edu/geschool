@@ -396,6 +396,7 @@ export type Database = {
           created_at: string
           updated_at: string
           created_by: string | null
+          sequence_number: number
         }
         Insert: {
           id?: string
@@ -419,6 +420,7 @@ export type Database = {
           created_at?: string
           updated_at?: string
           created_by?: string | null
+          sequence_number?: number
         }
         Update: {
           id?: string
@@ -442,6 +444,7 @@ export type Database = {
           created_at?: string
           updated_at?: string
           created_by?: string | null
+          sequence_number?: number
         }
         Relationships: []
       }

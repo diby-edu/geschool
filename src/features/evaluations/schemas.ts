@@ -61,6 +61,10 @@ export const assessmentSchema = z
     maxScore: z.coerce.number().min(0.5, 'Barème maximum invalide.').max(1000),
     isEliminatory: z.coerce.boolean().default(false),
     eliminatoryThreshold: z.union([z.coerce.number().min(0).max(1000), z.literal('')]).optional(),
+    // « Devoir n°2 »… choisi par l'enseignant (formulaire simplifie) parmi les
+    // numeros pas encore pris pour la meme matiere+classe+periode+type.
+    // Absent du formulaire admin classique : 1 par defaut (toRow, assessments.ts).
+    sequenceNumber: z.coerce.number().int().min(1).max(999).optional(),
   })
   .refine((v) => !v.isEliminatory || (v.eliminatoryThreshold !== '' && v.eliminatoryThreshold !== undefined), {
     message: 'Un seuil est requis pour une note éliminatoire.',

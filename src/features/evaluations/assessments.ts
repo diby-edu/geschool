@@ -91,26 +91,33 @@ export async function listAssessments(
 }
 
 /**
- * Nombre d'évaluations déjà créées dans ce périmètre (matière + classe +
- * période) : sert uniquement à suggérer le prochain numéro au tableau de bord
- * enseignant (§ formulaire simplifié), aucune colonne dédiée en base.
+ * Numéros déjà pris dans ce périmètre (matière + classe + période), par type
+ * d'évaluation — sert au formulaire simplifié du tableau de bord enseignant
+ * pour proposer « Évaluation n° » sans jamais reproposer un numéro déjà
+ * utilisé pour le même type (§ decision : liste deroulante, pas un simple
+ * compteur).
  */
-export async function countAssessments(
+export async function getUsedSequenceNumbers(
   ctx: TenantContext,
   yearId: string,
   filters: { classId: string; periodId: string; subjectId: string },
-): Promise<number> {
+): Promise<Record<string, number[]>> {
   const supabase = await createClient();
-  const { count, error } = await supabase
+  const { data, error } = await supabase
     .from('assessments')
-    .select('id', { count: 'exact', head: true })
+    .select('assessment_type_id, sequence_number')
     .eq('school_id', ctx.school.id)
     .eq('academic_year_id', yearId)
     .eq('class_id', filters.classId)
     .eq('academic_period_id', filters.periodId)
     .eq('subject_id', filters.subjectId);
   if (error) throw error;
-  return count ?? 0;
+
+  const byType: Record<string, number[]> = {};
+  for (const row of data ?? []) {
+    (byType[row.assessment_type_id] ??= []).push(row.sequence_number);
+  }
+  return byType;
 }
 
 export type AssessmentDetail = {
@@ -169,6 +176,7 @@ function toRow(ctx: TenantContext, yearId: string, input: AssessmentInput) {
     coefficient: coefficientFromMaxScore(input.maxScore),
     is_eliminatory: input.isEliminatory,
     eliminatory_threshold: input.isEliminatory && input.eliminatoryThreshold !== '' ? Number(input.eliminatoryThreshold) : null,
+    sequence_number: input.sequenceNumber ?? 1,
   };
 }
 

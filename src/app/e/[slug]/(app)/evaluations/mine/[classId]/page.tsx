@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
 import { getMyTaughtClasses, getMySubjectsForClass } from '@/features/teachers/my-scope';
 import { listPeriods } from '@/features/evaluations/refs';
-import { listAssessments, statusLabel } from '@/features/evaluations/assessments';
+import { listAssessments } from '@/features/evaluations/assessments';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Flash } from '@/components/ui/flash';
 import { Button } from '@/components/ui/button';
@@ -118,7 +118,6 @@ export default async function MyClassEvaluationsPage({
                     <th className="px-3 py-2">Type</th>
                     <th className="px-3 py-2">Date</th>
                     <th className="px-3 py-2 text-center">Notes</th>
-                    <th className="px-3 py-2">État</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -131,7 +130,6 @@ export default async function MyClassEvaluationsPage({
                       <td className="px-3 py-2">{a.type}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{a.assessment_date}</td>
                       <td className="px-3 py-2 text-center">{a.graded}</td>
-                      <td className="px-3 py-2">{statusLabel(a.status)}</td>
                     </tr>
                   ))}
                 </tbody>

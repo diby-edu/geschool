@@ -81,7 +81,10 @@ export default async function AssessmentDetailPage({
             <span>Coefficient : <strong className="text-[color:var(--foreground)]">{rel.coefficient}</strong></span>
             <span>Date : <strong className="text-[color:var(--foreground)]">{rel.assessment_date}</strong></span>
             {rel.is_eliminatory ? <span>Éliminatoire &lt; <strong className="text-[color:var(--foreground)]">{rel.eliminatory_threshold}</strong></span> : null}
-            <span>État : <strong className="text-[color:var(--foreground)]">{statusLabel(rel.status)}</strong></span>
+            {/* Brouillon est l'etat par defaut (avant toute action admin) : le
+                signaler n'apporte rien, seuls les etats qui resultent d'une
+                action reelle (cloture, publication) sont montres. */}
+            {rel.status !== 'DRAFT' ? <span>État : <strong className="text-[color:var(--foreground)]">{statusLabel(rel.status)}</strong></span> : null}
           </div>
           <div className="flex items-center gap-2">
             {canEdit && rel.status !== 'PUBLISHED' ? (
