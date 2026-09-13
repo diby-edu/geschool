@@ -198,13 +198,23 @@ l'unique vCPU plusieurs minutes (ADR-014).
 pnpm build
 ```
 
-Le déploiement est ensuite assuré par `scripts/deploy.sh`, qui envoie l'artefact
-`.next/standalone`, bascule le lien symbolique `current`, recharge PM2, vérifie la sonde de
-santé et **revient automatiquement en arrière** si elle ne répond pas.
+`pnpm build` produit **deux** artefacts dans `.next/standalone` : le serveur web (`server.js`)
+et le worker compilé (`worker.js`, via `build:worker`/esbuild).
+
+Le déploiement est ensuite assuré par `scripts/deploy.sh` (transfert par `tar | ssh`, donc
+utilisable depuis Windows Git Bash comme depuis Linux — pas besoin de `rsync`). Il envoie
+l'artefact **sans `node_modules`** (les liens symboliques pnpm ne sont pas portables), puis
+installe les dépendances de PROD **sur le serveur** en mode *hoisted* (plat), bascule le lien
+`current`, recharge PM2 (web + worker), vérifie la sonde de santé et **revient automatiquement
+en arrière** si elle ne répond pas.
 
 ```bash
-bash scripts/deploy.sh
+VPS_HOST=root@<ip> pnpm build && VPS_HOST=root@<ip> bash scripts/deploy.sh
 ```
+
+Pour que l'URL de production soit gelée dans le bundle client, définir avant le build (fichier
+`.env.production.local`, non versionné, ou variable de CI) :
+`NEXT_PUBLIC_APP_URL=https://geschool.numerik360.com`.
 
 Arborescence créée sur le serveur :
 
@@ -220,31 +230,45 @@ Le fichier `shared/.env.local` est à créer **une seule fois** sur le serveur, 
 
 ### 4.4 Service solveur
 
+Le conteneur écoute sur le port **8110** (voir `solver-service/Dockerfile`), d'où le mapping
+`8110:8110`. Créer d'abord `solver-service/.env` avec `SOLVER_SHARED_SECRET=<secret>` (le même
+que dans `shared/.env.local`).
+
 ```bash
-cd solver-service
+cd /var/www/geschool/solver-service
 docker build -t geschool-solver:latest .
 docker run -d --name gs-solver --restart unless-stopped \
-  -p 127.0.0.1:8110:8000 \
+  -p 127.0.0.1:8110:8110 \
   --cpus=0.5 --memory=1g --cpu-shares=512 \
   --read-only --tmpfs /tmp \
-  --env-file .env \
+  --env-file ./.env \
   geschool-solver:latest
+curl -s http://127.0.0.1:8110/health   # {"status":"ok",...}
 ```
 
-`-p 127.0.0.1:8110:8000` est essentiel : sans le préfixe `127.0.0.1`, Docker écrit
+`-p 127.0.0.1:8110:8110` est essentiel : sans le préfixe `127.0.0.1`, Docker écrit
 directement dans iptables et **contourne UFW**, exposant le solveur à Internet.
 
 Vérification : `curl -s http://127.0.0.1:8110/health`
 
 ### 4.5 PM2
 
+Deux processus : `geschool` (web, port 3110) et `geschool-worker` (jobs pg-boss ;
+`worker.js` lancé par `node --env-file=.env.local`). Après la première release,
+`scripts/deploy.sh` s'occupe de les (re)démarrer tout seul (reload s'ils tournent, start
+sinon). Démarrage manuel si besoin :
+
 ```bash
 cd /var/www/geschool
-pm2 start ecosystem.config.cjs
+pm2 start ecosystem.config.cjs      # ou --only geschool / --only geschool-worker
 pm2 save
 ```
 
 `pm2 startup` est déjà configuré sur ce serveur : ne pas le relancer.
+
+> Le worker démarre, se connecte à pg-boss et **attend** : aucune file n'est encore
+> enregistrée (les traitements lourds — génération d'EDT, PDF — sont faits en synchrone ou
+> côté navigateur pour l'instant). C'est son état normal tant qu'aucun job n'est ajouté.
 
 ### 4.6 nginx
 

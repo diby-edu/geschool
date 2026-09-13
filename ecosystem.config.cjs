@@ -18,7 +18,9 @@ module.exports = {
   apps: [
     {
       name: 'geschool',
-      script: '.next/standalone/server.js',
+      // L'artefact `.next/standalone` est deploye DECOMPRESSE a la racine de
+      // `current` (server.js, .next/, node_modules...) — cf. scripts/deploy.sh.
+      script: 'server.js',
       interpreter: NODE_22,
       cwd: '/var/www/geschool/current',
 
@@ -51,9 +53,12 @@ module.exports = {
 
     {
       name: 'geschool-worker',
-      script: 'node_modules/tsx/dist/cli.mjs',
-      args: 'src/workers/index.ts',
+      // Worker compile en un seul fichier par esbuild (pnpm build:worker),
+      // execute par Node avec chargement du .env.local (les secrets ne sont pas
+      // dans l'env PM2). Aucune dependance a tsx en production.
+      script: 'worker.js',
       interpreter: NODE_22,
+      interpreter_args: '--env-file=.env.local',
       cwd: '/var/www/geschool/current',
 
       instances: 1,

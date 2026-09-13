@@ -9,7 +9,8 @@
   "packageManager": "pnpm@11.1.1",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && pnpm run build:worker",
+    "build:worker": "esbuild src/workers/index.ts --bundle --platform=node --target=node22 --format=cjs --packages=external --tsconfig=tsconfig.json --outfile=.next/standalone/worker.js",
     "start": "next start",
     "worker": "tsx src/workers/index.ts",
     "typecheck": "tsc --noEmit",
@@ -56,6 +57,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "esbuild": "^0.28.2",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.3.4",
     "tailwindcss": "^4.3.3",
