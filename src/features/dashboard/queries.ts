@@ -6,9 +6,9 @@ import { hasPermission } from '@/lib/permissions';
 import { getSchoolSubscription } from '@/features/billing/platform';
 import { unreadCount } from '@/features/communication/inbox';
 import { activityLabel } from '@/lib/audit/labels';
-import type { ActivityItem, TodoItem, StaffOverview, TeacherOverview, FamilyOverview, DashboardData } from './types';
+import type { ActivityItem, TodoItem, StaffOverview, TeacherOverview, TeacherStats, FamilyOverview, DashboardData } from './types';
 
-export type { Sparkline, ActivityItem, TodoItem, StaffOverview, TeacherOverview, FamilyOverview, DashboardData } from './types';
+export type { Sparkline, ActivityItem, TodoItem, StaffOverview, TeacherOverview, TeacherStats, FamilyOverview, DashboardData } from './types';
 
 /**
  * Donnees du tableau de bord, adaptees au role et TOUJOURS filtrees par la RLS.
@@ -381,7 +381,22 @@ async function loadTeacherOverview(ctx: TenantContext): Promise<TeacherOverview>
 
   if (!teacherRow || !yearId) {
     const unread = await unreadCount(ctx);
-    return { kind: 'teacher', classes: [], unreadNotifications: unread };
+    return {
+      kind: 'teacher',
+      classes: [],
+      stats: {
+        classesCount: 0,
+        studentsCount: 0,
+        weeklyMinutes: 0,
+        evaluationsCount: 0,
+        callsDoneYear: 0,
+        callsExpectedYear: 0,
+        callsDonePeriod: 0,
+        callsExpectedPeriod: 0,
+        periodName: null,
+      },
+      unreadNotifications: unread,
+    };
   }
 
   const [{ data: assigned }, { data: headOf }, unread] = await Promise.all([
@@ -431,7 +446,99 @@ async function loadTeacherOverview(ctx: TenantContext): Promise<TeacherOverview>
     .map((c) => ({ id: c.id, name: c.name, level: c.levels?.name ?? null, students: counts.get(c.id) ?? 0 }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return { kind: 'teacher', classes, unreadNotifications: unread };
+  const stats = await loadTeacherStats(ctx, teacherRow.id, yearId, classes.length, classes.reduce((sum, c) => sum + c.students, 0));
+
+  return { kind: 'teacher', classes, stats, unreadNotifications: unread };
+}
+
+async function loadTeacherStats(
+  ctx: TenantContext,
+  teacherId: string,
+  yearId: string,
+  classesCount: number,
+  studentsCount: number,
+): Promise<TeacherStats> {
+  const supabase = await createClient();
+  const schoolId = ctx.school.id;
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [{ data: assignRows }, { count: evaluationsCount }, period, { data: version }] = await Promise.all([
+    supabase
+      .from('teaching_assignments')
+      .select('weekly_minutes')
+      .eq('school_id', schoolId)
+      .eq('academic_year_id', yearId)
+      .eq('teacher_id', teacherId)
+      .eq('status', 'ACTIVE'),
+    supabase
+      .from('assessments')
+      .select('id', { count: 'exact', head: true })
+      .eq('school_id', schoolId)
+      .eq('academic_year_id', yearId)
+      .eq('teacher_id', teacherId),
+    loadCurrentPeriod(supabase, schoolId, yearId),
+    supabase
+      .from('schedule_versions')
+      .select('id')
+      .eq('school_id', schoolId)
+      .eq('academic_year_id', yearId)
+      .eq('status', 'PUBLISHED')
+      .maybeSingle(),
+  ]);
+
+  const weeklyMinutes = ((assignRows ?? []) as { weekly_minutes: number }[]).reduce((sum, r) => sum + r.weekly_minutes, 0);
+
+  let callsDoneYear = 0;
+  let callsExpectedYear = 0;
+  let callsDonePeriod = 0;
+  let callsExpectedPeriod = 0;
+
+  if (version) {
+    const { data: sessionRows } = await supabase
+      .from('schedule_session_teachers')
+      .select('session_id, schedule_sessions!inner(id, schedule_version_id)')
+      .eq('teacher_id', teacherId)
+      .eq('schedule_sessions.schedule_version_id', version.id);
+    const sessionIds = ((sessionRows ?? []) as unknown as { session_id: string }[]).map((r) => r.session_id);
+
+    if (sessionIds.length > 0) {
+      const { data: occRows } = await supabase
+        .from('session_occurrences')
+        .select('id, occurs_on')
+        .in('schedule_session_id', sessionIds)
+        .eq('status', 'SCHEDULED')
+        .lte('occurs_on', today);
+      const occurrences = (occRows ?? []) as { id: string; occurs_on: string }[];
+      callsExpectedYear = occurrences.length;
+      const periodStart = period.current?.starts_on ?? null;
+      const periodOccurrences = periodStart ? occurrences.filter((o) => o.occurs_on >= periodStart) : occurrences;
+      callsExpectedPeriod = periodOccurrences.length;
+
+      const occIds = occurrences.map((o) => o.id);
+      if (occIds.length > 0) {
+        const { data: regRows } = await supabase
+          .from('attendance_registers')
+          .select('session_occurrence_id')
+          .in('session_occurrence_id', occIds)
+          .in('status', ['SUBMITTED', 'VALIDATED']);
+        const done = new Set(((regRows ?? []) as { session_occurrence_id: string }[]).map((r) => r.session_occurrence_id));
+        callsDoneYear = occurrences.filter((o) => done.has(o.id)).length;
+        callsDonePeriod = periodOccurrences.filter((o) => done.has(o.id)).length;
+      }
+    }
+  }
+
+  return {
+    classesCount,
+    studentsCount,
+    weeklyMinutes,
+    evaluationsCount: evaluationsCount ?? 0,
+    callsDoneYear,
+    callsExpectedYear,
+    callsDonePeriod,
+    callsExpectedPeriod,
+    periodName: period.current?.name ?? null,
+  };
 }
 
 async function loadFamilyOverview(ctx: TenantContext): Promise<FamilyOverview> {

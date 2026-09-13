@@ -12,6 +12,12 @@ import { TodoPanel } from '@/features/dashboard/components/TodoPanel';
 
 export const metadata: Metadata = { title: 'Tableau de bord' };
 
+function formatMinutes(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h} h` : `${h} h ${m}`;
+}
+
 function SectionCard({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <Card>
@@ -148,6 +154,21 @@ export default async function DashboardPage({ params }: { params: Promise<{ slug
               </CardContent>
             </Card>
           ) : null}
+
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+            <KpiCard label="Classes" value={data.stats.classesCount.toLocaleString('fr-FR')} />
+            <KpiCard label="Apprenants" value={data.stats.studentsCount.toLocaleString('fr-FR')} />
+            <KpiCard label="Volume horaire" value={formatMinutes(data.stats.weeklyMinutes)} unit="/ semaine" />
+            <KpiCard label="Evaluations" value={data.stats.evaluationsCount.toLocaleString('fr-FR')} />
+            <KpiCard
+              label={`Appels effectues (${data.stats.periodName ?? 'periode en cours'})`}
+              value={`${data.stats.callsDonePeriod} / ${data.stats.callsExpectedPeriod}`}
+            />
+            <KpiCard
+              label="Appels effectues (annee)"
+              value={`${data.stats.callsDoneYear} / ${data.stats.callsExpectedYear}`}
+            />
+          </div>
 
           <section className="space-y-3">
             <h2 className="text-sm font-medium uppercase tracking-wide text-[color:var(--muted-foreground)]">

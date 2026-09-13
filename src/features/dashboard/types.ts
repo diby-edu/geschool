@@ -38,9 +38,24 @@ export type StaffOverview = {
   todos: TodoItem[];
 };
 
+export type TeacherStats = {
+  classesCount: number;
+  studentsCount: number;
+  weeklyMinutes: number;
+  evaluationsCount: number;
+  /** Depuis le debut de l'annee scolaire. */
+  callsDoneYear: number;
+  callsExpectedYear: number;
+  /** Periode courante (trimestre/semestre) uniquement. */
+  callsDonePeriod: number;
+  callsExpectedPeriod: number;
+  periodName: string | null;
+};
+
 export type TeacherOverview = {
   kind: 'teacher';
   classes: { id: string; name: string; level: string | null; students: number }[];
+  stats: TeacherStats;
   unreadNotifications: number;
 };
 
