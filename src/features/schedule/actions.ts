@@ -4,14 +4,22 @@ import { redirect } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
 import { runFormAction, formValues, type FormState } from '@/lib/forms';
 import { scheduleConfigSchema, sessionSchema, requirementSchema } from './schemas';
-import { saveConfig } from './config';
+import { saveConfig, deleteConfig } from './config';
 import { createVersion, publishVersion, deleteVersion } from './versions';
 import { addSession, deleteSession } from './sessions';
 import { syncRequirementsFromAssignments, updateRequirement, deleteRequirement } from './requirements';
 import { generateSchedule } from './generation';
 import { isAppError, ValidationError } from '@/lib/errors';
 
-export async function saveConfigAction(slug: string, yearId: string, _p: FormState, fd: FormData): Promise<FormState> {
+const BREAK_KEYS = ['break1', 'break2'] as const;
+
+export async function saveConfigAction(
+  slug: string,
+  yearId: string,
+  cycleId: string | null,
+  _p: FormState,
+  fd: FormData,
+): Promise<FormState> {
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
     const workingDays = fd.getAll('workingDays').map(Number);
@@ -22,13 +30,43 @@ export async function saveConfigAction(slug: string, yearId: string, _p: FormSta
       start: String(fd.get(`start_${day}`) ?? ''),
       end: String(fd.get(`end_${day}`) ?? ''),
     }));
-    await saveConfig(ctx, yearId, scheduleConfigSchema.parse({
-      workingDays,
-      slotMinutes: fd.get('slotMinutes'),
-      dayHours,
+    const breaks = BREAK_KEYS.filter((k) => fd.get(`${k}_on`) === '1').map((k) => ({
+      start: String(fd.get(`${k}_start`) ?? ''),
+      end: String(fd.get(`${k}_end`) ?? ''),
+      label: String(fd.get(`${k}_label`) ?? ''),
     }));
-    redirect(`/e/${slug}/academic-years/${yearId}?configured=1`);
+    await saveConfig(
+      ctx,
+      yearId,
+      scheduleConfigSchema.parse({
+        workingDays,
+        slotMinutes: fd.get('slotMinutes'),
+        dayHours,
+        breaks,
+      }),
+      cycleId,
+    );
+    redirect(
+      cycleId
+        ? `/e/${slug}/academic-years/${yearId}/hours/${cycleId}?configured=1`
+        : `/e/${slug}/academic-years/${yearId}?configured=1`,
+    );
   }).then((s) => (s.error || s.fieldErrors ? { ...s, values: formValues(fd) } : s));
+}
+
+export async function deleteConfigAction(
+  slug: string,
+  yearId: string,
+  cycleId: string,
+  configId: string,
+  _p: FormState,
+  _fd: FormData,
+): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    await deleteConfig(ctx, configId);
+    redirect(`/e/${slug}/academic-years/${yearId}/hours/${cycleId}?deleted=1`);
+  });
 }
 
 export async function createVersionAction(slug: string, _p: FormState, _fd: FormData): Promise<FormState> {

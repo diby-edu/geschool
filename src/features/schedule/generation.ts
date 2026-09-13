@@ -7,7 +7,7 @@ import { audit } from '@/lib/audit';
 import { ConflictError, ValidationError } from '@/lib/errors';
 import type { TablesInsert } from '@/types/database';
 import { detectConflicts, type ValidatorSession } from '@/lib/schedule/validator';
-import { getConfig } from './config';
+import { getConfig, listCyclesOverview } from './config';
 import { loadValidatorSessions } from './sessions';
 import { getSolver, SolverError, type ScheduleInput, type ScheduleSolution, type SolverTask } from './solver';
 
@@ -162,6 +162,32 @@ export async function generateSchedule(ctx: TenantContext, yearId: string): Prom
     groupToClasses.set(gc.group_id, list);
   }
 
+  // --- classes dont le cycle a SA PROPRE grille (differente de celle utilisee
+  // ici, celle par defaut) : cette generation ne sait traiter qu'une seule
+  // grille a la fois (§ decision "pause par cycle"), donc leurs exigences sont
+  // signalees plutot que placees a tort sur des creneaux qui ne sont pas les
+  // leurs.
+  const cyclesOverview = await listCyclesOverview(ctx, yearId);
+  const cyclesWithOwnGrid = new Set(cyclesOverview.filter((c) => c.configId).map((c) => c.id));
+  const { data: classCycleRows } = await supabase
+    .from('classes')
+    .select('id, levels(cycle_id)')
+    .eq('school_id', ctx.school.id)
+    .eq('academic_year_id', yearId);
+  const classToCycle = new Map(
+    ((classCycleRows ?? []) as unknown as { id: string; levels: { cycle_id: string } | null }[]).map((row) => [
+      row.id,
+      row.levels?.cycle_id ?? null,
+    ]),
+  );
+  function usesOtherGrid(classIds: string[], groupIds: string[]): boolean {
+    const allClassIds = [...classIds, ...groupIds.flatMap((g) => groupToClasses.get(g) ?? [])];
+    return allClassIds.some((cid) => {
+      const cycleId = classToCycle.get(cid);
+      return cycleId != null && cyclesWithOwnGrid.has(cycleId);
+    });
+  }
+
   // --- construction des taches ---
   const tasks: SolverTask[] = [];
   const taskMeta: TaskMeta[] = [];
@@ -176,6 +202,11 @@ export async function generateSchedule(ctx: TenantContext, yearId: string): Prom
     const classIds = r.teaching_requirement_targets.filter((t) => t.target_type === 'CLASS' && t.class_id).map((t) => t.class_id!);
     const groupIds = r.teaching_requirement_targets.filter((t) => t.target_type === 'GROUP' && t.group_id).map((t) => t.group_id!);
 
+    if (usesOtherGrid(classIds, groupIds)) {
+      problems.push(`« ${label} » : cible une classe dont le cycle a ses propres horaires — la generation automatique ne gere pas encore les grilles de cycle, construisez son emploi du temps en saisie manuelle.`);
+      continue;
+    }
+
     // candidats salle selon le mode
     const roomResult = resolveRooms(r, rooms);
     if (roomResult.error) {
@@ -183,12 +214,18 @@ export async function generateSchedule(ctx: TenantContext, yearId: string): Prom
       continue;
     }
 
-    // creneaux de depart candidats : tenue dans la journee + disponibilite de
-    // TOUS les enseignants de la seance sur toute la duree.
+    // creneaux de depart candidats : tenue dans la journee (span REELLEMENT
+    // contigu, sans pause entre deux creneaux — cf. dayToIndexes) et
+    // disponibilite de TOUS les enseignants de la seance sur toute la duree.
     const candidateStartSlots: number[] = [];
     for (const [, dayIndexes] of dayToIndexes) {
       for (let k = 0; k + durationSlots <= dayIndexes.length; k++) {
         const span = dayIndexes.slice(k, k + durationSlots);
+        let contiguous = true;
+        for (let j = 0; j < span.length - 1; j++) {
+          if (slots[span[j]!]!.ends_at !== slots[span[j + 1]!]!.starts_at) { contiguous = false; break; }
+        }
+        if (!contiguous) continue;
         const first = slots[span[0]!]!;
         const last = slots[span[span.length - 1]!]!;
         const ok = teacherIds.every((tid) => {

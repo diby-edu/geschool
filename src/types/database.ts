@@ -1977,6 +1977,7 @@ export type Database = {
           status: Database['public']['Enums']["schedule_config_status"]
           created_at: string
           updated_at: string
+          cycle_id: string | null
         }
         Insert: {
           id?: string
@@ -1994,6 +1995,7 @@ export type Database = {
           status?: Database['public']['Enums']["schedule_config_status"]
           created_at?: string
           updated_at?: string
+          cycle_id?: string | null
         }
         Update: {
           id?: string
@@ -2011,6 +2013,7 @@ export type Database = {
           status?: Database['public']['Enums']["schedule_config_status"]
           created_at?: string
           updated_at?: string
+          cycle_id?: string | null
         }
         Relationships: []
       }

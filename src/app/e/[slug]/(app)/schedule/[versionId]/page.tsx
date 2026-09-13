@@ -6,7 +6,7 @@ import { requirePageAccess } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { getVersion } from '@/features/schedule/versions';
-import { getConfig, listSlots } from '@/features/schedule/config';
+import { getConfig, getConfigForClass, listSlots } from '@/features/schedule/config';
 import { listSessions, loadValidatorSessions } from '@/features/schedule/sessions';
 import { listYearClasses, listActiveSubjects } from '@/features/assignments/queries';
 import { listActiveTeachers } from '@/features/teachers/queries';
@@ -41,15 +41,22 @@ export default async function ScheduleEditorPage({
   const version = await getVersion(ctx, versionId);
   if (!version) notFound();
 
-  const config = await getConfig(ctx, version.academic_year_id);
-  const [sessions, validatorSessions, classes, subjects, teachers, slots] = await Promise.all([
+  const [sessions, validatorSessions, classes, subjects, teachers] = await Promise.all([
     listSessions(ctx, versionId),
     loadValidatorSessions(ctx, versionId),
     listYearClasses(ctx, version.academic_year_id),
     listActiveSubjects(ctx),
     listActiveTeachers(ctx),
-    config ? listSlots(ctx, config.id) : Promise.resolve([]),
   ]);
+
+  const selectedClassId = (Array.isArray(sp.class) ? sp.class[0] : sp.class) ?? classes[0]?.id ?? null;
+  // Grille de la classe affichee : sa grille de cycle si son cycle en a une
+  // (recreation propre, horaires propres…), sinon la grille par defaut de
+  // l'annee — jamais un melange des deux dans le meme ecran.
+  const config = selectedClassId
+    ? await getConfigForClass(ctx, version.academic_year_id, selectedClassId)
+    : await getConfig(ctx, version.academic_year_id);
+  const slots = config ? await listSlots(ctx, config.id) : [];
 
   // Salles
   const supabase = await createClient();
@@ -63,7 +70,7 @@ export default async function ScheduleEditorPage({
 
   const conflicts = detectConflicts(validatorSessions);
   const workingDays = (config?.working_days as number[] | undefined) ?? [];
-  const selectedClass = (Array.isArray(sp.class) ? sp.class[0] : sp.class) ?? classes[0]?.id ?? null;
+  const selectedClass = selectedClassId;
   const editable = version.status === 'DRAFT' || version.status === 'VALIDATED';
   const canEdit = hasPermission(ctx, 'schedule.create') && editable;
   const canPublish = hasPermission(ctx, 'schedule.publish') && editable;

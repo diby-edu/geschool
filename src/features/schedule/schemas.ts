@@ -13,11 +13,26 @@ const dayHourSchema = z.object({
   end: z.string().regex(/^\d{2}:\d{2}$/, 'Heure invalide.'),
 });
 
+/**
+ * Pause (recreation, dejeuner…) appliquee chaque jour travaille, a la meme
+ * heure — c'est ainsi que les etablissements fonctionnent en pratique (pas
+ * une recreation a 10h le lundi et a 11h le mardi). Un jour raccourci qui ne
+ * couvre pas l'heure de la pause l'ignore simplement (cf. saveConfig).
+ */
+const breakSchema = z
+  .object({
+    start: z.string().regex(/^\d{2}:\d{2}$/, 'Heure invalide.'),
+    end: z.string().regex(/^\d{2}:\d{2}$/, 'Heure invalide.'),
+    label: z.string().trim().min(1, 'Nom requis.').max(60),
+  })
+  .refine((v) => v.end > v.start, { message: 'La fin doit suivre le début.', path: ['end'] });
+
 export const scheduleConfigSchema = z
   .object({
     workingDays: z.array(z.coerce.number().int().min(1).max(7)).min(1, 'Choisissez au moins un jour.'),
     slotMinutes: z.coerce.number().int().min(15, 'Minimum 15 min.').max(240),
     dayHours: z.array(dayHourSchema),
+    breaks: z.array(breakSchema).max(3, 'Trois pauses au maximum.').default([]),
   })
   .refine((v) => v.dayHours.every((h) => h.end > h.start), {
     message: 'Pour chaque jour, la fin doit suivre le début.',
@@ -26,10 +41,15 @@ export const scheduleConfigSchema = z
   .refine((v) => v.workingDays.every((d) => v.dayHours.some((h) => h.day === d)), {
     message: 'Chaque jour travaillé doit avoir un horaire de début et de fin.',
     path: ['workingDays'],
-  });
+  })
+  .refine(
+    (v) => v.breaks.every((b, i) => v.breaks.every((b2, j) => i === j || b.end <= b2.start || b2.end <= b.start)),
+    { message: 'Les pauses ne doivent pas se chevaucher.', path: ['breaks'] },
+  );
 
 export type ScheduleConfigInput = z.infer<typeof scheduleConfigSchema>;
 export type DayHour = z.infer<typeof dayHourSchema>;
+export type BreakInput = z.infer<typeof breakSchema>;
 
 /**
  * Ajout d'une seance (cible : une classe). Le jour est deduit du creneau de

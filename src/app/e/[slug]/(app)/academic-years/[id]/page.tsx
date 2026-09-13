@@ -7,7 +7,7 @@ import { hasPermission } from '@/lib/permissions';
 import { getYear, listPeriods } from '@/features/academic-years/queries';
 import { YEAR_STATUS_LABEL, PERIOD_KIND_LABEL, formatDate } from '@/features/academic-years/labels';
 import { updateYearAction, createPeriodAction, deletePeriodAction } from '@/features/academic-years/actions';
-import { getConfig, getDayHours } from '@/features/schedule/config';
+import { getConfig, getDayHours, getBreaks, listCyclesOverview } from '@/features/schedule/config';
 import { saveConfigAction } from '@/features/schedule/actions';
 import { YearForm } from '@/features/academic-years/components/YearForm';
 import { PeriodCreateForm } from '@/features/academic-years/components/PeriodCreateForm';
@@ -46,10 +46,16 @@ export default async function YearDetailPage({
   // pouvoir renommer l'annee ou en creer une nouvelle.
   const canManageHours = hasPermission(ctx, 'schedule.manage_configuration');
   const config = canManageHours ? await getConfig(ctx, id) : null;
-  const dayHours = config ? await getDayHours(ctx, config.id) : [];
+  const [dayHours, breaks, cycles] = canManageHours
+    ? await Promise.all([
+        config ? getDayHours(ctx, config.id) : Promise.resolve([]),
+        config ? getBreaks(ctx, config.id) : Promise.resolve([]),
+        listCyclesOverview(ctx, id),
+      ])
+    : [[], [], []];
   const hoursDefaults = config
-    ? { workingDays: config.working_days as number[], dayHours, slotMinutes: config.default_session_minutes as number }
-    : { workingDays: [1, 2, 3, 4, 5], dayHours: [], slotMinutes: 55 };
+    ? { workingDays: config.working_days as number[], dayHours, slotMinutes: config.default_session_minutes as number, breaks }
+    : { workingDays: [1, 2, 3, 4, 5], dayHours: [], slotMinutes: 55, breaks: [] };
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -127,7 +133,27 @@ export default async function YearDetailPage({
               Jours d&apos;ouverture de cette année et horaire de chacun — utilisés pour construire l&apos;emploi du temps.
             </p>
           </div>
-          <ConfigForm action={saveConfigAction.bind(null, slug, id)} defaults={hoursDefaults} />
+          <ConfigForm action={saveConfigAction.bind(null, slug, id, null)} defaults={hoursDefaults} />
+
+          {cycles.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Horaires par cycle (optionnel)</p>
+              <p className="text-xs text-[color:var(--muted-foreground)]">
+                Un cycle (primaire, collège…) dont les horaires ou les pauses diffèrent peut avoir sa propre grille,
+                qui prime alors sur celle ci-dessus pour ses classes.
+              </p>
+              <ul className="space-y-1">
+                {cycles.map((c) => (
+                  <li key={c.id} className="flex items-center justify-between rounded-[--radius-card] border px-3 py-2 text-sm">
+                    <span>{c.name}</span>
+                    <Link href={`/e/${slug}/academic-years/${id}/hours/${c.id}`} className="text-[color:var(--color-brand)] hover:underline">
+                      {c.configId ? 'Modifier sa grille' : 'Configurer une grille propre'}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </section>
       ) : null}
     </div>

@@ -5,7 +5,7 @@ import type { TenantContext } from '@/lib/tenant/context';
 import { requireWritable } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
 import { NotFoundError, ValidationError } from '@/lib/errors';
-import { getConfig } from './config';
+import { getConfig, getConfigForClass } from './config';
 import type { RequirementInput } from './schemas';
 
 export type RequirementRow = {
@@ -86,7 +86,7 @@ export async function syncRequirementsFromAssignments(
 
   const config = await getConfig(ctx, yearId);
   if (!config) throw new ValidationError('Configurez d\'abord la grille horaire.');
-  const slotMinutes = config.default_session_minutes;
+  const defaultSlotMinutes = config.default_session_minutes;
 
   const { data: assignments, error } = await supabase
     .from('teaching_assignments')
@@ -117,6 +117,13 @@ export async function syncRequirementsFromAssignments(
       skipped++;
       continue;
     }
+    // Un enseignement dont la classe releve d'un cycle a grille propre (§
+    // decision "pause par cycle") se decoupe selon la duree de creneau de
+    // CETTE grille, pas celle de l'annee — sinon un cycle a creneaux de 45 min
+    // recevrait des exigences taillees pour des creneaux de 55.
+    const slotMinutes = a.class_id
+      ? (await getConfigForClass(ctx, yearId, a.class_id))?.default_session_minutes ?? defaultSlotMinutes
+      : defaultSlotMinutes;
     const sessions = Math.max(1, Math.round(a.weekly_minutes / slotMinutes));
     const duration = Math.max(slotMinutes, Math.round(a.weekly_minutes / sessions / slotMinutes) * slotMinutes);
 
