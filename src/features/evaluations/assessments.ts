@@ -17,6 +17,7 @@ export type AssessmentRow = {
   assessment_date: string;
   max_score: number;
   coefficient: number;
+  sequence_number: number;
   status: string;
   graded: number;
   total: number;
@@ -36,7 +37,7 @@ export async function listAssessments(
   let query = supabase
     .from('assessments')
     .select(
-      'id, title, assessment_date, max_score, coefficient, status, ' +
+      'id, title, assessment_date, max_score, coefficient, sequence_number, status, ' +
         'subjects(name), classes(name), assessment_types(name), academic_periods(name)',
     )
     .eq('school_id', ctx.school.id)
@@ -55,6 +56,7 @@ export async function listAssessments(
     assessment_date: string;
     max_score: number;
     coefficient: number;
+    sequence_number: number;
     status: string;
     subjects: { name: string } | null;
     classes: { name: string } | null;
@@ -84,6 +86,7 @@ export async function listAssessments(
     assessment_date: r.assessment_date,
     max_score: r.max_score,
     coefficient: r.coefficient,
+    sequence_number: r.sequence_number,
     status: r.status,
     graded: counts.get(r.id) ?? 0,
     total: 0,

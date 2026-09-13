@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { StudentAvatar } from '@/components/ui/student-avatar';
 import type { AppelStudent } from '@/features/attendance/registers';
 import { submitOrQueue, flushAttendanceQueue, queueLength } from '@/features/attendance/offline-queue';
 
@@ -49,11 +50,6 @@ const DEFAULT_LATE_MINUTES = 5;
 
 function normalize(status: string): Status {
   return status === 'ABSENT' || status === 'LATE' ? status : 'PRESENT';
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  return parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('');
 }
 
 export function CurrentAppelCard({
@@ -174,18 +170,7 @@ export function CurrentAppelCard({
                   disabled={locked || busy}
                   className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition disabled:cursor-default hover:not-disabled:bg-[color:var(--color-brand-muted)]"
                 >
-                  {s.photoUrl ? (
-                    // Photo de l'apprenant si elle existe (students.photo_url).
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={s.photoUrl} alt="" className="size-9 shrink-0 rounded-full object-cover" />
-                  ) : (
-                    <span
-                      className="grid size-9 shrink-0 place-items-center rounded-full text-xs font-semibold"
-                      style={{ backgroundColor: 'var(--color-brand-muted)', color: 'var(--color-brand)' }}
-                    >
-                      {initials(s.name)}
-                    </span>
-                  )}
+                  <StudentAvatar name={s.name} photoUrl={s.photoUrl} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{s.name}</span>
                     <span className="block truncate font-mono text-xs text-[color:var(--muted-foreground)]">{s.matricule}</span>

@@ -7,7 +7,7 @@ import { audit } from '@/lib/audit';
 import { ConflictError, ValidationError } from '@/lib/errors';
 import type { TablesInsert } from '@/types/database';
 import { detectConflicts, type ValidatorSession } from '@/lib/schedule/validator';
-import { getConfig, listCyclesOverview } from './config';
+import { getConfig, getConfigForCycle, listCyclesOverview } from './config';
 import { loadValidatorSessions } from './sessions';
 import { getSolver, SolverError, type ScheduleInput, type ScheduleSolution, type SolverTask } from './solver';
 
@@ -73,11 +73,16 @@ function teacherFreeAt(
  * post-validation par le validateur INDEPENDANT (docs/SCHEDULE_ENGINE.md §9).
  * Une generation ne touche JAMAIS la version publiee (additif §61).
  */
-export async function generateSchedule(ctx: TenantContext, yearId: string): Promise<GenerationResult> {
+export async function generateSchedule(
+  ctx: TenantContext,
+  yearId: string,
+  cycleId?: string,
+  targetVersionId?: string,
+): Promise<GenerationResult> {
   requireWritable(ctx, 'schedule.generate');
   const supabase = await createClient();
 
-  const config = await getConfig(ctx, yearId);
+  const config = cycleId ? await getConfigForCycle(ctx, yearId, cycleId) : await getConfig(ctx, yearId);
   if (!config) throw new ValidationError('Configurez d\'abord la grille horaire.');
   const slotMinutes = config.default_session_minutes;
 
@@ -162,11 +167,12 @@ export async function generateSchedule(ctx: TenantContext, yearId: string): Prom
     groupToClasses.set(gc.group_id, list);
   }
 
-  // --- classes dont le cycle a SA PROPRE grille (differente de celle utilisee
-  // ici, celle par defaut) : cette generation ne sait traiter qu'une seule
-  // grille a la fois (§ decision "pause par cycle"), donc leurs exigences sont
-  // signalees plutot que placees a tort sur des creneaux qui ne sont pas les
-  // leurs.
+  // --- portee cycle : cette generation ne sait traiter qu'une seule grille a
+  // la fois (§ decision "pause par cycle"). Sans cycle precise, on exclut les
+  // classes dont le cycle a SA PROPRE grille (traitees a part, dans un
+  // lancement dedie) ; avec un cycle precise, on exclut au contraire tout ce
+  // qui n'appartient PAS a ce cycle. Dans les deux cas, l'exigence hors
+  // perimetre est signalee plutot que placee a tort sur la mauvaise grille.
   const cyclesOverview = await listCyclesOverview(ctx, yearId);
   const cyclesWithOwnGrid = new Set(cyclesOverview.filter((c) => c.configId).map((c) => c.id));
   const { data: classCycleRows } = await supabase
@@ -182,9 +188,10 @@ export async function generateSchedule(ctx: TenantContext, yearId: string): Prom
   );
   function usesOtherGrid(classIds: string[], groupIds: string[]): boolean {
     const allClassIds = [...classIds, ...groupIds.flatMap((g) => groupToClasses.get(g) ?? [])];
+    if (cycleId) return allClassIds.some((cid) => classToCycle.get(cid) !== cycleId);
     return allClassIds.some((cid) => {
-      const cycleId = classToCycle.get(cid);
-      return cycleId != null && cyclesWithOwnGrid.has(cycleId);
+      const cid2 = classToCycle.get(cid);
+      return cid2 != null && cyclesWithOwnGrid.has(cid2);
     });
   }
 
@@ -203,7 +210,11 @@ export async function generateSchedule(ctx: TenantContext, yearId: string): Prom
     const groupIds = r.teaching_requirement_targets.filter((t) => t.target_type === 'GROUP' && t.group_id).map((t) => t.group_id!);
 
     if (usesOtherGrid(classIds, groupIds)) {
-      problems.push(`« ${label} » : cible une classe dont le cycle a ses propres horaires — la generation automatique ne gere pas encore les grilles de cycle, construisez son emploi du temps en saisie manuelle.`);
+      problems.push(
+        cycleId
+          ? `« ${label} » : ne cible pas une classe de ce cycle — ignoree dans ce lancement.`
+          : `« ${label} » : cible une classe dont le cycle a ses propres horaires — generez-la depuis ce cycle (page de generation, selecteur de cycle).`,
+      );
       continue;
     }
 
@@ -349,7 +360,7 @@ export async function generateSchedule(ctx: TenantContext, yearId: string): Prom
 
   // --- materialisation : version BROUILLON + seances ---
   try {
-    const versionId = await materializeDraft(ctx, yearId, jobId, solution, taskMeta, slots, slotMinutes, roomIdByIndex);
+    const versionId = await materializeDraft(ctx, yearId, jobId, solution, taskMeta, slots, slotMinutes, roomIdByIndex, targetVersionId);
 
     // Post-validation INDEPENDANTE : le validateur pur doit confirmer 0 conflit
     // dur. S'il en trouve, le solveur et le validateur divergent : incoherence
@@ -461,35 +472,58 @@ async function materializeDraft(
   slots: Slot[],
   slotMinutes: number,
   roomIdByIndex: Map<number, string>,
+  targetVersionId?: string,
 ): Promise<string> {
   const supabase = await createClient();
 
-  const { data: last } = await supabase
-    .from('schedule_versions')
-    .select('number')
-    .eq('school_id', ctx.school.id)
-    .eq('academic_year_id', yearId)
-    .order('number', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const number = (last?.number ?? 0) + 1;
+  // Ajout a une version brouillon existante (generation par cycle, en
+  // plusieurs passes) : une generation par cycle qui creerait a chaque fois
+  // sa propre version obligerait a publier plusieurs fois, et publier
+  // ARCHIVE la version publiee precedente (versions.ts) — la seconde passe
+  // effacerait la premiere du planning publie. On verifie qu'elle est bien a
+  // nous et encore en brouillon avant d'y ecrire.
+  let versionId: string;
+  if (targetVersionId) {
+    const { data: existing } = await supabase
+      .from('schedule_versions')
+      .select('id, status')
+      .eq('school_id', ctx.school.id)
+      .eq('academic_year_id', yearId)
+      .eq('id', targetVersionId)
+      .maybeSingle();
+    if (!existing || existing.status !== 'DRAFT') {
+      throw new ValidationError('La version ciblée est introuvable ou déjà publiée.');
+    }
+    versionId = existing.id;
+    await supabase.from('schedule_versions').update({ generation_job_id: jobId }).eq('id', versionId);
+  } else {
+    const { data: last } = await supabase
+      .from('schedule_versions')
+      .select('number')
+      .eq('school_id', ctx.school.id)
+      .eq('academic_year_id', yearId)
+      .order('number', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const number = (last?.number ?? 0) + 1;
 
-  const { data: version, error: vErr } = await supabase
-    .from('schedule_versions')
-    .insert({
-      school_id: ctx.school.id,
-      academic_year_id: yearId,
-      number,
-      name: `Generation ${number}`,
-      status: 'DRAFT',
-      source: 'GENERATED',
-      generation_job_id: jobId,
-      created_by: ctx.user.id,
-    })
-    .select('id')
-    .single();
-  if (vErr) throw vErr;
-  const versionId = version.id;
+    const { data: version, error: vErr } = await supabase
+      .from('schedule_versions')
+      .insert({
+        school_id: ctx.school.id,
+        academic_year_id: yearId,
+        number,
+        name: `Generation ${number}`,
+        status: 'DRAFT',
+        source: 'GENERATED',
+        generation_job_id: jobId,
+        created_by: ctx.user.id,
+      })
+      .select('id')
+      .single();
+    if (vErr) throw vErr;
+    versionId = version.id;
+  }
 
   for (const a of solution.assignments) {
     const meta = taskMeta[a.taskIndex];

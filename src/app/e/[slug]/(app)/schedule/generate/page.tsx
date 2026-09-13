@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
-import { getConfig } from '@/features/schedule/config';
+import { getConfig, listCyclesOverview } from '@/features/schedule/config';
 import { listRequirements } from '@/features/schedule/requirements';
 import { listGenerationJobs } from '@/features/schedule/generation';
 import {
@@ -56,6 +56,9 @@ export default async function GeneratePage({
   const requirements = config ? await listRequirements(ctx, yearId) : [];
   const jobs = config ? await listGenerationJobs(ctx, yearId, 5) : [];
   const activeCount = requirements.filter((r) => r.status === 'ACTIVE').length;
+  const cyclesOverview = await listCyclesOverview(ctx, yearId);
+  const cyclesWithOwnGrid = cyclesOverview.filter((c) => c.configId).map((c) => ({ id: c.id, name: c.name }));
+  const targetVersionId = typeof sp.version === 'string' ? sp.version : undefined;
 
   const canSync = hasPermission(ctx, 'schedule.create');
   const canEdit = hasPermission(ctx, 'schedule.update');
@@ -114,7 +117,12 @@ export default async function GeneratePage({
             )}
           </section>
 
-          <GenerateForm action={generateScheduleAction.bind(null, slug)} requirementCount={activeCount} />
+          <GenerateForm
+            action={generateScheduleAction.bind(null, slug)}
+            requirementCount={activeCount}
+            cycles={cyclesWithOwnGrid}
+            {...(targetVersionId ? { targetVersionId } : {})}
+          />
 
           {jobs.length > 0 ? (
             <section className="space-y-2">

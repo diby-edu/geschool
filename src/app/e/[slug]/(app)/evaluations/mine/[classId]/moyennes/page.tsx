@@ -9,12 +9,15 @@ import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/alert';
+import { StudentAvatar } from '@/components/ui/student-avatar';
 
 export const metadata: Metadata = { title: 'Moyennes et classement' };
 
-function ordinal(n: number): string {
-  return n === 1 ? '1er' : `${n}e`;
-}
+const MEDAL_COLOR: Record<number, string> = {
+  1: 'oklch(0.75 0.15 85)',
+  2: 'oklch(0.75 0.01 250)',
+  3: 'oklch(0.62 0.13 55)',
+};
 
 export default async function MyClassRankingPage({
   params,
@@ -88,39 +91,30 @@ export default async function MyClassRankingPage({
       {ranking.rows.length === 0 ? (
         <EmptyState title="Aucun élève inscrit" />
       ) : (
-        <div className="overflow-x-auto rounded-[--radius-card] border">
-          <table className="w-full text-sm">
-            <thead className="bg-[color:var(--muted)] text-left text-xs uppercase tracking-wide text-[color:var(--muted-foreground)]">
-              <tr>
-                <th className="px-3 py-2">Élève</th>
-                {ranking.assessments.map((a) => (
-                  <th key={a.id} className="px-3 py-2 text-center whitespace-nowrap" title={`Sur ${a.maxScore}`}>
-                    {a.title}
-                  </th>
-                ))}
-                <th className="px-3 py-2 text-center">Moyenne</th>
-                <th className="px-3 py-2 text-center">Rang</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ranking.rows.map((r) => (
-                <tr key={r.studentId} className="border-t">
-                  <td className="px-3 py-2">
-                    <span className="font-medium">{r.name}</span>{' '}
-                    <span className="font-mono text-xs text-[color:var(--muted-foreground)]">{r.matricule}</span>
-                  </td>
-                  {r.scores.map((sc, i) => (
-                    <td key={ranking.assessments[i]!.id} className="px-3 py-2 text-center tabular-nums">
-                      {sc === null ? '—' : sc}
-                    </td>
-                  ))}
-                  <td className="px-3 py-2 text-center font-semibold tabular-nums">{r.average === null ? '—' : r.average.toLocaleString('fr-FR')}</td>
-                  <td className="px-3 py-2 text-center font-semibold">{r.rank === null ? '—' : ordinal(r.rank)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        // Meme ecran que la saisie des notes (meme avatar, meme ordre
+        // alphabetique, meme ligne par eleve) : seule la note editable devient
+        // Moyenne + Rang, en lecture seule.
+        <ul className="divide-y overflow-hidden rounded-[--radius-card] border" style={{ borderColor: 'var(--border)' }}>
+          {ranking.rows.map((r) => (
+            <li key={r.studentId} className="flex items-center gap-3 px-3 py-2.5">
+              <StudentAvatar name={r.name} photoUrl={r.photoUrl} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">{r.name}</span>
+                <span className="block truncate font-mono text-xs text-[color:var(--muted-foreground)]">{r.matricule}</span>
+              </span>
+              <span className="shrink-0 text-right">
+                <span className="block text-sm font-bold tabular-nums">{r.average === null ? '—' : r.average.toLocaleString('fr-FR')}</span>
+                <span className="block text-xs text-[color:var(--muted-foreground)]">/ 20</span>
+              </span>
+              <span
+                className="grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
+                style={{ backgroundColor: r.rank && MEDAL_COLOR[r.rank] ? MEDAL_COLOR[r.rank] : 'var(--muted-foreground)' }}
+              >
+                {r.rank ?? '—'}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
 
       <Card>

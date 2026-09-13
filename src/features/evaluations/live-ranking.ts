@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
+import { signAvatarUrls } from '@/lib/storage/avatars';
 
 /**
  * Moyenne et classement d'UNE matiere sur une classe, calcules A TOUT MOMENT
@@ -19,6 +20,7 @@ export type LiveRankingRow = {
   studentId: string;
   matricule: string;
   name: string;
+  photoUrl: string | null;
   scores: (number | null)[];
   average: number | null;
   rank: number | null;
@@ -49,7 +51,7 @@ export async function computeLiveRanking(
       .order('assessment_date'),
     supabase
       .from('student_enrollments')
-      .select('student_id, students(matricule, first_name, last_name)')
+      .select('student_id, students(matricule, first_name, last_name, photo_url)')
       .eq('school_id', schoolId)
       .eq('class_id', classId)
       .eq('status', 'ENROLLED'),
@@ -69,8 +71,9 @@ export async function computeLiveRanking(
 
   const students = (enrRows ?? []) as unknown as {
     student_id: string;
-    students: { matricule: string; first_name: string; last_name: string } | null;
+    students: { matricule: string; first_name: string; last_name: string; photo_url: string | null } | null;
   }[];
+  const signedByPath = await signAvatarUrls(students.map((s) => s.students?.photo_url));
 
   const gradesByStudent = new Map<string, Map<string, number | null>>();
   if (assessments.length > 0 && students.length > 0) {
@@ -109,19 +112,23 @@ export async function computeLiveRanking(
     rankByStudent.set(s.studentId, prev && prev.average === s.average ? (prevRank ?? i + 1) : i + 1);
   });
 
+  // Toujours par ordre alphabetique — comme la saisie des notes, jamais retrie
+  // par performance (le rang, calcule a part, s'affiche en simple colonne).
   const rows: LiveRankingRow[] = students
     .map((s) => {
       const g = gradesByStudent.get(s.student_id);
+      const path = s.students?.photo_url ?? null;
       return {
         studentId: s.student_id,
         matricule: s.students?.matricule ?? '',
         name: s.students ? `${s.students.last_name.toUpperCase()} ${s.students.first_name}` : '—',
+        photoUrl: path ? (signedByPath.get(path) ?? null) : null,
         scores: assessments.map((a) => g?.get(a.id) ?? null),
         average: averageByStudent.get(s.student_id) ?? null,
         rank: rankByStudent.get(s.student_id) ?? null,
       };
     })
-    .sort((a, b) => (a.rank ?? 9999) - (b.rank ?? 9999) || a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return { assessments, rows };
 }

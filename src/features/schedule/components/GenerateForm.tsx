@@ -3,6 +3,8 @@
 import { useActionState } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
+import { Select } from '@/components/ui/select';
 import { SubmitButton } from '@/features/auth/components/SubmitButton';
 import type { FormState } from '@/lib/forms';
 
@@ -10,13 +12,24 @@ import type { FormState } from '@/lib/forms';
  * Lancement d'une generation. Le resultat infaisable revient dans l'etat du
  * formulaire (liste de diagnostics deja traduits) et s'affiche ici ; un succes
  * redirige vers la version brouillon produite.
+ *
+ * `cycles` : uniquement les cycles ayant leur propre grille (§ generation par
+ * cycle) — un etablissement sans grille de cycle ne voit jamais ce selecteur.
+ * `targetVersionId`, quand fourni (retour depuis l'editeur d'une version deja
+ * generee), ajoute cette generation A la meme version brouillon au lieu d'en
+ * creer une nouvelle : publier reste un geste unique, sans quoi la seconde
+ * publication archiverait la premiere (versions.ts).
  */
 export function GenerateForm({
   action,
   requirementCount,
+  cycles = [],
+  targetVersionId,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   requirementCount: number;
+  cycles?: { id: string; name: string }[];
+  targetVersionId?: string;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
 
@@ -59,7 +72,20 @@ export function GenerateForm({
           </div>
         ) : null}
 
-        <form action={formAction}>
+        {targetVersionId ? (
+          <Alert tone="info">Cette génération s&apos;ajoutera à la version brouillon déjà ouverte (pas une nouvelle version).</Alert>
+        ) : null}
+
+        <form action={formAction} className="space-y-3">
+          {targetVersionId ? <input type="hidden" name="targetVersionId" value={targetVersionId} /> : null}
+          {cycles.length > 0 ? (
+            <Field label="Cycle" htmlFor="cycleId" hint="Laisser vide pour la grille par défaut de l'année.">
+              <Select id="cycleId" name="cycleId" defaultValue="">
+                <option value="">Grille par défaut</option>
+                {cycles.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </Select>
+            </Field>
+          ) : null}
           <SubmitButton disabled={requirementCount === 0}>Lancer la generation</SubmitButton>
         </form>
       </CardContent>

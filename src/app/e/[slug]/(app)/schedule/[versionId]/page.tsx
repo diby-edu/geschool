@@ -103,6 +103,16 @@ export default async function ScheduleEditorPage({
         }
       />
 
+      {version.status === 'DRAFT' && version.source === 'GENERATED' && hasPermission(ctx, 'schedule.generate') ? (
+        <Alert tone="info">
+          Généré automatiquement. Si l&apos;établissement a plusieurs cycles avec leur propre grille, vous pouvez{' '}
+          <Link href={`/e/${slug}/schedule/generate?version=${versionId}`} className="font-medium underline">
+            générer un autre cycle dans cette même version
+          </Link>{' '}
+          avant de publier.
+        </Alert>
+      ) : null}
+
       {conflicts.length > 0 ? (
         <Card>
           <CardContent>

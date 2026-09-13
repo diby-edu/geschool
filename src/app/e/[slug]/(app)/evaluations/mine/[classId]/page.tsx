@@ -109,32 +109,34 @@ export default async function MyClassEvaluationsPage({
           {assessments.length === 0 ? (
             <EmptyState title="Aucune évaluation" hint="Créez la première évaluation de cette période." />
           ) : (
-            <div className="overflow-x-auto rounded-[--radius-card] border">
-              <table className="w-full text-sm">
-                <thead className="bg-[color:var(--muted)] text-left text-xs uppercase tracking-wide text-[color:var(--muted-foreground)]">
-                  <tr>
-                    <th className="px-3 py-2">Titre</th>
-                    <th className="px-3 py-2">Matière</th>
-                    <th className="px-3 py-2">Type</th>
-                    <th className="px-3 py-2">Date</th>
-                    <th className="px-3 py-2 text-center">Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {assessments.map((a) => (
-                    <tr key={a.id} className="border-t hover:bg-[color:var(--muted)]/40">
-                      <td className="px-3 py-2">
-                        <Link href={`/e/${slug}/evaluations/${a.id}`} className="font-medium hover:underline">{a.title}</Link>
-                      </td>
-                      <td className="px-3 py-2">{a.subject}</td>
-                      <td className="px-3 py-2">{a.type}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{a.assessment_date}</td>
-                      <td className="px-3 py-2 text-center">{a.graded}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ul className="space-y-2">
+              {assessments.map((a) => (
+                <li key={a.id}>
+                  <Link
+                    href={`/e/${slug}/evaluations/${a.id}`}
+                    className="flex items-center gap-3 rounded-[--radius-card] border px-3 py-2.5 transition hover:bg-[color:var(--muted)]/40"
+                    style={{ borderColor: 'var(--border)' }}
+                  >
+                    <span
+                      className="grid size-9 shrink-0 place-items-center rounded-full text-sm font-bold"
+                      style={{ backgroundColor: 'var(--color-brand-muted)', color: 'var(--color-brand)' }}
+                    >
+                      {a.sequence_number}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{a.title}</span>
+                      <span className="block truncate text-xs text-[color:var(--muted-foreground)]">
+                        {a.type} · {a.assessment_date}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right text-xs text-[color:var(--muted-foreground)]">
+                      Notée
+                      <span className="block text-sm font-semibold text-[color:var(--foreground)]">/{a.max_score}</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           )}
         </>
       )}

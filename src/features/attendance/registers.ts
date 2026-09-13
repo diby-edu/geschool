@@ -5,6 +5,7 @@ import type { TenantContext } from '@/lib/tenant/context';
 import { requireWritable, hasPermission } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
 import { AuthorizationError, ConflictError, NotFoundError } from '@/lib/errors';
+import { signAvatarUrls } from '@/lib/storage/avatars';
 import { getOccurrence } from './occurrences';
 
 /**
@@ -83,16 +84,19 @@ export async function loadAppel(ctx: TenantContext, occurrenceId: string): Promi
       .eq('school_id', ctx.school.id)
       .eq('class_id', occ.class_id)
       .eq('status', 'ENROLLED');
-    for (const e of (enr ?? []) as unknown as {
+    const rows = (enr ?? []) as unknown as {
       student_id: string;
       students: { matricule: string; first_name: string; last_name: string; photo_url: string | null } | null;
-    }[]) {
+    }[];
+    const signedByPath = await signAvatarUrls(rows.map((e) => e.students?.photo_url));
+    for (const e of rows) {
       const rec = records.get(e.student_id);
+      const path = e.students?.photo_url ?? null;
       students.push({
         studentId: e.student_id,
         matricule: e.students?.matricule ?? '',
         name: e.students ? `${e.students.last_name.toUpperCase()} ${e.students.first_name}` : '—',
-        photoUrl: e.students?.photo_url ?? null,
+        photoUrl: path ? (signedByPath.get(path) ?? null) : null,
         status: rec?.status ?? 'PRESENT',
         minutesLate: rec?.minutes_late ?? 0,
         comment: rec?.comment ?? '',

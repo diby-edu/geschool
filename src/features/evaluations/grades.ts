@@ -6,12 +6,14 @@ import { requireWritable, hasPermission } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import type { TablesInsert } from '@/types/database';
+import { signAvatarUrls } from '@/lib/storage/avatars';
 import { getAssessment } from './assessments';
 
 export type GradeGridStudent = {
   studentId: string;
   matricule: string;
   name: string;
+  photoUrl: string | null;
   score: number | null;
   isAbsent: boolean;
   isExcused: boolean;
@@ -35,7 +37,7 @@ export async function loadGradeGrid(ctx: TenantContext, assessmentId: string): P
 
   const { data: enr } = await supabase
     .from('student_enrollments')
-    .select('student_id, students(matricule, first_name, last_name)')
+    .select('student_id, students(matricule, first_name, last_name, photo_url)')
     .eq('school_id', ctx.school.id)
     .eq('class_id', assessment.class_id)
     .eq('status', 'ENROLLED');
@@ -47,16 +49,21 @@ export async function loadGradeGrid(ctx: TenantContext, assessmentId: string): P
     .eq('assessment_id', assessmentId);
   const byStudent = new Map((grades ?? []).map((g) => [g.student_id, g]));
 
-  const students = ((enr ?? []) as unknown as {
+  const enrRows = (enr ?? []) as unknown as {
     student_id: string;
-    students: { matricule: string; first_name: string; last_name: string } | null;
-  }[])
+    students: { matricule: string; first_name: string; last_name: string; photo_url: string | null } | null;
+  }[];
+  const signedByPath = await signAvatarUrls(enrRows.map((e) => e.students?.photo_url));
+
+  const students = enrRows
     .map((e) => {
       const g = byStudent.get(e.student_id);
+      const path = e.students?.photo_url ?? null;
       return {
         studentId: e.student_id,
         matricule: e.students?.matricule ?? '',
         name: e.students ? `${e.students.last_name.toUpperCase()} ${e.students.first_name}` : '—',
+        photoUrl: path ? (signedByPath.get(path) ?? null) : null,
         score: g?.score ?? null,
         isAbsent: g?.is_absent ?? false,
         isExcused: g?.is_excused ?? false,

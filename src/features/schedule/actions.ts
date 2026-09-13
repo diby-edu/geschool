@@ -156,12 +156,14 @@ export async function deleteRequirementAction(slug: string, id: string, _p: Form
  * N'utilise pas runFormAction : le cas infaisable doit RENVOYER un etat riche
  * (liste de diagnostics), que runFormAction ne propagerait pas.
  */
-export async function generateScheduleAction(slug: string, _p: FormState, _fd: FormData): Promise<FormState> {
+export async function generateScheduleAction(slug: string, _p: FormState, fd: FormData): Promise<FormState> {
   try {
     const ctx = await getTenantContext(slug);
     if (!ctx.academicYear) return { error: "Activez une annee scolaire d'abord." };
 
-    const result = await generateSchedule(ctx, ctx.academicYear.id);
+    const cycleId = String(fd.get('cycleId') ?? '').trim() || undefined;
+    const targetVersionId = String(fd.get('targetVersionId') ?? '').trim() || undefined;
+    const result = await generateSchedule(ctx, ctx.academicYear.id, cycleId, targetVersionId);
     if (result.status === 'SUCCEEDED' && result.versionId) {
       redirect(`/e/${slug}/schedule/${result.versionId}?generated=${result.assignedCount}`);
     }

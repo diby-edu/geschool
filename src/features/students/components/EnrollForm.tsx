@@ -96,6 +96,15 @@ export function EnrollForm({
                   </Select>
                 </Field>
               </div>
+              <Field label="Photo" htmlFor="photo" hint="Facultatif — apparaît alors dans l'appel et les notes." errors={err.photo}>
+                <input
+                  id="photo"
+                  name="photo"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="block w-full text-sm text-[color:var(--muted-foreground)] file:mr-3 file:rounded-[--radius-card] file:border-0 file:bg-[color:var(--color-brand-muted)] file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-[color:var(--color-brand)]"
+                />
+              </Field>
             </div>
           </div>
 

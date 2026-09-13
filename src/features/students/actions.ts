@@ -7,6 +7,8 @@ import { runFormAction, formValues, type FormState } from '@/lib/forms';
 import { enrollSchema } from './schemas';
 import { enrollStudent, type GuardianInput } from '@/services/enrollment';
 import { audit } from '@/lib/audit';
+import { uploadAvatar } from '@/lib/storage/avatars';
+import { createClient } from '@/lib/supabase/server';
 
 /** Extrait jusqu'a 2 responsables des champs g1_* / g2_* (pere / mere). */
 function parseGuardians(fd: FormData): GuardianInput[] {
@@ -55,6 +57,19 @@ export async function enrollAction(slug: string, _p: FormState, fd: FormData): P
       entityId: result.studentId,
       after: { matricule: result.matricule, guardians: result.guardians.length },
     });
+
+    // Photo facultative : un echec ici (droit manquant, etc.) ne doit jamais
+    // faire echouer l'inscription elle-meme, deja actee.
+    const photo = fd.get('photo');
+    if (photo instanceof File && photo.size > 0) {
+      try {
+        const path = await uploadAvatar(ctx, 'students', result.studentId, photo);
+        const supabase = await createClient();
+        await supabase.from('students').update({ photo_url: path }).eq('school_id', ctx.school.id).eq('id', result.studentId);
+      } catch (err) {
+        console.error('[enrollAction] photo upload failed', err);
+      }
+    }
 
     redirect(`/e/${slug}/students/${result.studentId}?enrolled=1`);
   }).then((s) => (s.error || s.fieldErrors ? { ...s, values: formValues(fd) } : s));
