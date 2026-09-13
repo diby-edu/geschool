@@ -84,8 +84,8 @@ export default async function GeneratePage({
 
       {!config ? (
         <EmptyState
-          title="Grille horaire non configuree"
-          hint="Definissez d'abord les jours et les creneaux avant de generer."
+          title="Horaires non configures"
+          hint="Definissez d'abord les jours et horaires de cette annee, depuis Annees scolaires."
         />
       ) : (
         <>

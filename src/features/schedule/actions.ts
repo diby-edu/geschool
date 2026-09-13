@@ -11,7 +11,7 @@ import { syncRequirementsFromAssignments, updateRequirement, deleteRequirement }
 import { generateSchedule } from './generation';
 import { isAppError, ValidationError } from '@/lib/errors';
 
-export async function saveConfigAction(slug: string, _p: FormState, fd: FormData): Promise<FormState> {
+export async function saveConfigAction(slug: string, yearId: string, _p: FormState, fd: FormData): Promise<FormState> {
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
     const workingDays = fd.getAll('workingDays').map(Number);
@@ -22,12 +22,12 @@ export async function saveConfigAction(slug: string, _p: FormState, fd: FormData
       start: String(fd.get(`start_${day}`) ?? ''),
       end: String(fd.get(`end_${day}`) ?? ''),
     }));
-    await saveConfig(ctx, scheduleConfigSchema.parse({
+    await saveConfig(ctx, yearId, scheduleConfigSchema.parse({
       workingDays,
       slotMinutes: fd.get('slotMinutes'),
       dayHours,
     }));
-    redirect(`/e/${slug}/schedule?configured=1`);
+    redirect(`/e/${slug}/academic-years/${yearId}?configured=1`);
   }).then((s) => (s.error || s.fieldErrors ? { ...s, values: formValues(fd) } : s));
 }
 

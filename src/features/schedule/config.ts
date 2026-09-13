@@ -83,15 +83,16 @@ export async function listSlots(ctx: TenantContext, configId: string): Promise<T
 }
 
 /**
- * Cree (ou remplace) la configuration horaire par defaut de l'annee et genere
- * la grille de creneaux. Remplacer suppose qu'aucun emploi du temps n'y
- * reference encore les creneaux ; on refuse si des seances existent deja.
+ * Cree (ou remplace) la configuration horaire par defaut d'UNE annee (celle
+ * consultee sur sa page de gestion, pas necessairement l'annee active — un
+ * etablissement peut preparer les horaires de l'annee suivante pendant que la
+ * courante tourne encore) et genere la grille de creneaux. Remplacer suppose
+ * qu'aucun emploi du temps n'y reference encore les creneaux ; on refuse si
+ * des seances existent deja.
  */
-export async function saveConfig(ctx: TenantContext, input: ScheduleConfigInput): Promise<void> {
+export async function saveConfig(ctx: TenantContext, yearId: string, input: ScheduleConfigInput): Promise<void> {
   requireWritable(ctx, 'schedule.manage_configuration');
-  if (!ctx.academicYear) throw new ValidationError("Activez une annee scolaire d'abord.");
   const supabase = await createClient();
-  const yearId = ctx.academicYear.id;
 
   const existing = await getConfig(ctx, yearId);
   if (existing) {

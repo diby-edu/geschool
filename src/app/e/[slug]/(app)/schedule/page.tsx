@@ -81,8 +81,8 @@ export default async function SchedulePage({
               </Link>
             ) : null}
             {canConfig ? (
-              <Link href={`${base}/config`}>
-                <Button variant="secondary">{config ? 'Modifier la grille' : 'Configurer la grille'}</Button>
+              <Link href={`/e/${slug}/academic-years/${ctx.academicYear.id}`}>
+                <Button variant="secondary">{config ? 'Modifier les horaires' : 'Configurer les horaires'}</Button>
               </Link>
             ) : null}
           </div>
@@ -91,8 +91,8 @@ export default async function SchedulePage({
 
       {!config ? (
         <EmptyState
-          title="Grille horaire non configuree"
-          hint="Definissez d'abord les jours travailles et les creneaux."
+          title="Horaires non configures"
+          hint="Definissez d'abord les jours et horaires de cette annee, depuis Annees scolaires."
         />
       ) : (
         <section className="space-y-3">
