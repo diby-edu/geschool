@@ -1,14 +1,24 @@
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient, getAuthenticatedUser } from '@/lib/supabase/server';
 import { Card, CardContent } from '@/components/ui/card';
 import { LogoutButton } from '@/features/auth/components/LogoutButton';
+import { Landing } from '@/features/marketing/Landing';
 
 export const dynamic = 'force-dynamic';
 
+// La racine est la vitrine publique : contrairement au reste de l'app (jamais
+// indexe, cf. layout.tsx), elle doit etre trouvable par les moteurs de
+// recherche. Aucune donnee d'etablissement n'y transite.
+export const metadata: Metadata = { robots: { index: true, follow: true } };
+
 /**
- * Aiguillage apres connexion. Le middleware garantit deja une session active et
- * une premiere connexion effectuee. Ici on choisit la destination :
+ * Visiteur non connecte -> vitrine publique.
+ *
+ * Visiteur connecte : aiguillage post-connexion. Le middleware garantit deja
+ * une session active et une premiere connexion effectuee. Ici on choisit la
+ * destination :
  *   Super Admin              -> /admin
  *   un seul etablissement    -> /e/{slug}
  *   plusieurs etablissements -> choix explicite (comptes multi-appartenance)
@@ -16,7 +26,7 @@ export const dynamic = 'force-dynamic';
  */
 export default async function RootPage() {
   const user = await getAuthenticatedUser();
-  if (!user) redirect('/login');
+  if (!user) return <Landing />;
 
   const supabase = await createClient();
 

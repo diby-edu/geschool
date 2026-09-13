@@ -17,6 +17,11 @@ import type { Database } from '@/types/database';
 const PUBLIC_PREFIXES = ['/login', '/first-login', '/mot-de-passe-oublie', '/api/health', '/auth'];
 
 function isPublicPath(pathname: string): boolean {
+  // La racine est la vitrine publique (marketing) : elle-meme decide, cote
+  // page, d'afficher la landing (visiteur anonyme) ou d'aiguiller (session
+  // active). Correspondance exacte uniquement : ne rend public aucune page
+  // sous /quoi-que-ce-soit.
+  if (pathname === '/') return true;
   if (PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return true;
   // Page de connexion propre a un etablissement : /e/{slug}/login
   if (/^\/e\/[^/]+\/login$/.test(pathname)) return true;
