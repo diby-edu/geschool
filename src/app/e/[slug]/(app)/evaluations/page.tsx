@@ -4,11 +4,13 @@ import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { listAssessments, statusLabel } from '@/features/evaluations/assessments';
+import { getMyTaughtClasses } from '@/features/teachers/my-scope';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Flash } from '@/components/ui/flash';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
-export const metadata: Metadata = { title: 'Évaluations' };
+export const metadata: Metadata = { title: 'Notes & Évaluations' };
 
 const STATUS_TONE: Record<string, string> = {
   DRAFT: 'text-[color:var(--muted-foreground)]',
@@ -30,10 +32,41 @@ export default async function EvaluationsPage({
   requirePageAccess(ctx, 'assessments.view');
   const base = `/e/${slug}/evaluations`;
 
+  // Enseignant sans vision d'ensemble (censeur/direction — grades.view_all) :
+  // il choisit d'abord SA classe, jamais la liste plate de tout
+  // l'etablissement (cahier des charges §3.1).
+  const isPlainTeacher = !hasPermission(ctx, 'grades.view_all') && (ctx.membership?.roles ?? []).includes('TEACHER');
+  if (isPlainTeacher) {
+    const classes = await getMyTaughtClasses(ctx);
+    return (
+      <div className="mx-auto max-w-4xl space-y-6">
+        <PageHeader title="Notes & Évaluations" {...(ctx.academicYear ? { description: `Année ${ctx.academicYear.name}` } : {})} />
+        {classes.length === 0 ? (
+          <EmptyState title="Aucune classe" hint="Aucune classe ne vous est encore affectée." />
+        ) : (
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {classes.map((c) => (
+              <li key={c.id}>
+                <Link href={`${base}/mine/${c.id}`}>
+                  <Card className="transition hover:border-[color:var(--color-brand)]">
+                    <CardContent className="py-4">
+                      <p className="font-semibold">{c.name}</p>
+                      {c.level ? <p className="text-xs text-[color:var(--muted-foreground)]">{c.level}</p> : null}
+                    </CardContent>
+                  </Card>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
+
   if (!ctx.academicYear) {
     return (
       <div className="mx-auto max-w-4xl">
-        <PageHeader title="Évaluations" />
+        <PageHeader title="Notes & Évaluations" />
         <EmptyState title="Aucune année active" hint="Activez une année scolaire d'abord." />
       </div>
     );
@@ -48,7 +81,7 @@ export default async function EvaluationsPage({
     <div className="mx-auto max-w-5xl space-y-6">
       <Flash searchParams={sp} />
       <PageHeader
-        title="Évaluations"
+        title="Notes & Évaluations"
         description={`Année ${ctx.academicYear.name}`}
         action={
           <div className="flex items-center gap-2">
