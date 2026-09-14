@@ -9,7 +9,7 @@ import type { TablesInsert } from '@/types/database';
 import { detectConflicts, type ValidatorSession } from '@/lib/schedule/validator';
 import { getConfig, getConfigForCycle, listCyclesOverview } from './config';
 import { loadValidatorSessions } from './sessions';
-import { getSolver, SolverError, type ScheduleInput, type ScheduleSolution, type SolverTask } from './solver';
+import { getSolver, SolverError, type FixedOccupation, type ScheduleInput, type ScheduleSolution, type SolverTask } from './solver';
 
 // ---------------------------------------------------------------------------
 // Types de resultat, exposes a l'UI
@@ -300,6 +300,36 @@ export async function generateSchedule(
   const roomIdByIndex = new Map<number, string>();
   for (const [rid, ri] of roomIx.entries()) roomIdByIndex.set(ri, rid);
 
+  // --- occupations fixes issues d'un cycle deja materialise dans la meme
+  // version (generation par cycle en plusieurs passes, § "pause par cycle") :
+  // un enseignant (ou une salle partagee, ex. EPS) peut intervenir dans deux
+  // cycles a la fois reelle qui se chevauche, meme si chaque cycle a sa
+  // propre grille de creneaux. Le solveur de CE lancement ne connait que ses
+  // propres taches ; sans ceci, rien ne l'empeche de re-placer un enseignant
+  // (ou une salle) deja occupe par l'autre cycle au meme moment reel — d'ou
+  // le controle uniquement detecte APRES coup par le validateur independant.
+  const fixedOccupations: FixedOccupation[] = [];
+  if (targetVersionId) {
+    const existingSessions = await loadValidatorSessions(ctx, targetVersionId);
+    for (const s of existingSessions) {
+      const relevantTeachers = s.teacherIds.filter((tid) => teacherIx.has(tid)).map((tid) => teacherIx.get(tid));
+      const relevantRooms = s.roomIds.filter((rid) => roomIx.has(rid)).map((rid) => roomIx.get(rid));
+      if (relevantTeachers.length === 0 && relevantRooms.length === 0) continue;
+      for (const idx of dayToIndexes.get(s.dayOfWeek) ?? []) {
+        const slot = slots[idx]!;
+        const slotStart = hmToMin(slot.starts_at);
+        const slotEnd = hmToMin(slot.ends_at);
+        if (slotStart >= s.endMin || s.startMin >= slotEnd) continue; // pas de chevauchement reel
+        for (const t of relevantTeachers) {
+          fixedOccupations.push({ startSlot: idx, durationSlots: 1, teacherIndexes: [t], classIndexes: [], groupIndexes: [], roomIndex: null });
+        }
+        for (const r of relevantRooms) {
+          fixedOccupations.push({ startSlot: idx, durationSlots: 1, teacherIndexes: [], classIndexes: [], groupIndexes: [], roomIndex: r });
+        }
+      }
+    }
+  }
+
   // --- verification arithmetique (rapide, avant tout appel solveur) ---
   const totalSlots = slots.length;
   const preCheck = arithmeticPrecheck(tasks, taskMeta, teacherIx, classIx, availByTeacher, slots, dayToIndexes, slotMinutes, totalSlots);
@@ -349,6 +379,7 @@ export async function generateSchedule(
     timeoutSeconds: timeout,
     workers: 1,
     tasks,
+    fixedOccupations,
   };
 
   let solution;
@@ -367,16 +398,29 @@ export async function generateSchedule(
 
   // --- materialisation : version BROUILLON + seances ---
   try {
-    const versionId = await materializeDraft(ctx, yearId, jobId, solution, taskMeta, slots, slotMinutes, roomIdByIndex, targetVersionId);
+    const { versionId, sessionIds } = await materializeDraft(
+      ctx, yearId, jobId, solution, taskMeta, slots, slotMinutes, roomIdByIndex, targetVersionId,
+    );
 
     // Post-validation INDEPENDANTE : le validateur pur doit confirmer 0 conflit
-    // dur. S'il en trouve, le solveur et le validateur divergent : incoherence
-    // bloquante (docs/SOLVER_API.md §5) — on annule la version.
+    // dur, sur la version ENTIERE (les deux cycles deja materialises compris —
+    // c'est justement ce qui permet de detecter un enseignant/une salle
+    // partage(e) entre cycles a un moment qui se chevauche reellement, ce que
+    // les `fixedOccupations` ci-dessus visent a prevenir en amont). S'il en
+    // trouve, le solveur et le validateur divergent : incoherence bloquante
+    // (docs/SOLVER_API.md §5).
     const vsessions = await loadValidatorSessions(ctx, versionId);
     const map = buildGroupClassMap(vsessions, groupToClasses);
     const conflicts = detectConflicts(vsessions, map);
     if (conflicts.length > 0) {
-      await supabase.from('schedule_versions').delete().eq('school_id', ctx.school.id).eq('id', versionId);
+      // N'annuler QUE ce que CE lancement a insere : une version ciblee
+      // (targetVersionId) peut deja contenir les seances, validees, d'un
+      // cycle precedent — les effacer aussi romprait ce travail deja bon.
+      if (targetVersionId) {
+        await supabase.from('schedule_sessions').delete().eq('school_id', ctx.school.id).in('id', sessionIds);
+      } else {
+        await supabase.from('schedule_versions').delete().eq('school_id', ctx.school.id).eq('id', versionId);
+      }
       const message = `Incoherence : le solveur a rendu une solution que le validateur rejette (${conflicts[0]!.message}).`;
       await failJob(ctx, jobId, message);
       return { jobId, status: 'FAILED', taskCount: tasks.length, assignedCount: solution.assignments.length, diagnostics: [], message };
@@ -484,7 +528,7 @@ async function materializeDraft(
   slotMinutes: number,
   roomIdByIndex: Map<number, string>,
   targetVersionId?: string,
-): Promise<string> {
+): Promise<{ versionId: string; sessionIds: string[] }> {
   const supabase = await createClient();
 
   // Ajout a une version brouillon existante (generation par cycle, en
@@ -536,6 +580,7 @@ async function materializeDraft(
     versionId = version.id;
   }
 
+  const sessionIds: string[] = [];
   for (const a of solution.assignments) {
     const meta = taskMeta[a.taskIndex];
     if (!meta) continue;
@@ -562,6 +607,7 @@ async function materializeDraft(
       .select('id')
       .single();
     if (sErr) throw sErr;
+    sessionIds.push(session.id);
 
     const targets: TablesInsert<'schedule_session_targets'>[] = [
       ...meta.classIds.map((cid) => ({ school_id: ctx.school.id, session_id: session.id, target_type: 'CLASS' as const, class_id: cid })),
@@ -586,7 +632,7 @@ async function materializeDraft(
     }
   }
 
-  return versionId;
+  return { versionId, sessionIds };
 }
 
 // ---------------------------------------------------------------------------
