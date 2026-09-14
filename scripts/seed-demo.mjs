@@ -439,9 +439,15 @@ async function buildTeachers(built, schoolIndex) {
     const classMinutes = subject.hours * 60;
 
     let teacherIndexForSubject = 0;
-    let current = null; // { teacherId, remaining }
+    let current = null; // { teacherId, remaining, cycle }
     for (const c of classesForSubject) {
-      if (!current || current.remaining < classMinutes) {
+      // Jamais un enseignant a cheval sur College/Lycee : chaque cycle a son
+      // propre horaire (grilles distinctes pour l'Ecole 1) ; un enseignant
+      // partage entre les deux peut se retrouver reellement occupe par ses
+      // seances de l'un au moment ou le solveur voudrait placer l'autre — un
+      // etablissement de cette taille a de toute facon des corps enseignants
+      // distincts par cycle.
+      if (!current || current.remaining < classMinutes || current.cycle !== c.cycle) {
         teacherIndexForSubject++;
         const isFullTime = teacherIndexForSubject % 2 === 1;
         const capacity = isFullTime ? FULL_MIN : HALF_MIN;
@@ -465,7 +471,7 @@ async function buildTeachers(built, schoolIndex) {
         }).select('id').single();
         if (error) throw new Error(`teacher ${staffNumber}: ${error.message}`);
 
-        current = { teacherId: teacher.id, remaining: capacity };
+        current = { teacherId: teacher.id, remaining: capacity, cycle: c.cycle };
       }
 
       await db.from('teaching_assignments').insert({
