@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
+import { fetchAllRows } from '@/lib/supabase/pagination';
 import type { TablesInsert } from '@/types/database';
 
 /**
@@ -46,13 +47,18 @@ export async function materializeOccurrences(
     return (blocks ?? []).some((b) => iso >= b.starts_on && iso <= b.ends_on);
   };
 
-  // Seances de la version
-  const { data: sessions } = await supabase
-    .from('schedule_sessions')
-    .select('id, day_of_week, starts_at, ends_at')
-    .eq('school_id', ctx.school.id)
-    .eq('schedule_version_id', versionId);
-  if (!sessions || sessions.length === 0) return 0;
+  // Seances de la version (paginee : un grand etablissement peut depasser le
+  // plafond de lignes par reponse de PostgREST, cf. lib/supabase/pagination).
+  const sessions = await fetchAllRows((from, to) =>
+    supabase
+      .from('schedule_sessions')
+      .select('id, day_of_week, starts_at, ends_at')
+      .eq('school_id', ctx.school.id)
+      .eq('schedule_version_id', versionId)
+      .order('id')
+      .range(from, to),
+  );
+  if (sessions.length === 0) return 0;
 
   const byDay = new Map<number, typeof sessions>();
   for (const s of sessions) {

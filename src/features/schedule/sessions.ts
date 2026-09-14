@@ -6,6 +6,7 @@ import { requireWritable } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { conflictsFor, type ValidatorSession } from '@/lib/schedule/validator';
+import { fetchAllRows } from '@/lib/supabase/pagination';
 import type { SessionInput } from './schemas';
 
 export type SessionRow = {
@@ -29,16 +30,20 @@ export type SessionRow = {
  */
 export async function loadValidatorSessions(ctx: TenantContext, versionId: string): Promise<ValidatorSession[]> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from('schedule_sessions')
-    .select(
-      'id, day_of_week, starts_at, ends_at, subjects(name), ' +
-        'schedule_session_teachers(teacher_id), schedule_session_targets(class_id, group_id), schedule_session_rooms(room_id)',
-    )
-    .eq('school_id', ctx.school.id)
-    .eq('schedule_version_id', versionId);
+  const data = await fetchAllRows((from, to) =>
+    supabase
+      .from('schedule_sessions')
+      .select(
+        'id, day_of_week, starts_at, ends_at, subjects(name), ' +
+          'schedule_session_teachers(teacher_id), schedule_session_targets(class_id, group_id), schedule_session_rooms(room_id)',
+      )
+      .eq('school_id', ctx.school.id)
+      .eq('schedule_version_id', versionId)
+      .order('id') // tri stable requis : la pagination par pages depend d'un ordre deterministe
+      .range(from, to),
+  );
 
-  return ((data ?? []) as unknown as {
+  return (data as unknown as {
     id: string;
     day_of_week: number;
     starts_at: string;
@@ -67,20 +72,24 @@ function hmToMin(t: string): number {
 
 export async function listSessions(ctx: TenantContext, versionId: string): Promise<SessionRow[]> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from('schedule_sessions')
-    .select(
-      'id, day_of_week, starts_at, ends_at, duration_minutes, is_locked, subjects(name), ' +
-        'schedule_session_teachers(teachers(first_name, last_name)), ' +
-        'schedule_session_targets(class_id, classes(name)), ' +
-        'schedule_session_rooms(rooms(code))',
-    )
-    .eq('school_id', ctx.school.id)
-    .eq('schedule_version_id', versionId)
-    .order('day_of_week')
-    .order('starts_at');
+  const data = await fetchAllRows((from, to) =>
+    supabase
+      .from('schedule_sessions')
+      .select(
+        'id, day_of_week, starts_at, ends_at, duration_minutes, is_locked, subjects(name), ' +
+          'schedule_session_teachers(teachers(first_name, last_name)), ' +
+          'schedule_session_targets(class_id, classes(name)), ' +
+          'schedule_session_rooms(rooms(code))',
+      )
+      .eq('school_id', ctx.school.id)
+      .eq('schedule_version_id', versionId)
+      .order('day_of_week')
+      .order('starts_at')
+      .order('id') // tri stable requis : la pagination par pages depend d'un ordre deterministe
+      .range(from, to),
+  );
 
-  return ((data ?? []) as unknown as {
+  return (data as unknown as {
     id: string;
     day_of_week: number;
     starts_at: string;
