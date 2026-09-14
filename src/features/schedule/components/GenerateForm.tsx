@@ -24,11 +24,14 @@ export function GenerateForm({
   action,
   requirementCount,
   cycles = [],
+  hasDefaultGrid = true,
   targetVersionId,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   requirementCount: number;
   cycles?: { id: string; name: string }[];
+  /** Un etablissement entierement decoupe en cycles n'a pas de grille par defaut a proposer. */
+  hasDefaultGrid?: boolean;
   targetVersionId?: string;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
@@ -79,9 +82,13 @@ export function GenerateForm({
         <form action={formAction} className="space-y-3">
           {targetVersionId ? <input type="hidden" name="targetVersionId" value={targetVersionId} /> : null}
           {cycles.length > 0 ? (
-            <Field label="Cycle" htmlFor="cycleId" hint="Laisser vide pour la grille par défaut de l'année.">
-              <Select id="cycleId" name="cycleId" defaultValue="">
-                <option value="">Grille par défaut</option>
+            <Field
+              label="Cycle"
+              htmlFor="cycleId"
+              hint={hasDefaultGrid ? "Laisser vide pour la grille par défaut de l'année." : 'Cet établissement ne fonctionne qu\'avec des grilles par cycle.'}
+            >
+              <Select id="cycleId" name="cycleId" defaultValue={hasDefaultGrid ? '' : cycles[0]!.id}>
+                {hasDefaultGrid ? <option value="">Grille par défaut</option> : null}
                 {cycles.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </Select>
             </Field>

@@ -25,6 +25,7 @@
     "db:status": "node scripts/migrate.mjs --status",
     "db:types": "node scripts/gen-types.mjs",
     "bootstrap": "node scripts/bootstrap.mjs",
+    "seed:demo": "node scripts/seed-demo.mjs",
     "verify": "pnpm typecheck && pnpm lint && pnpm test"
   },
   "dependencies": {

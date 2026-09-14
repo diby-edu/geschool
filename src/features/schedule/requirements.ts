@@ -5,7 +5,7 @@ import type { TenantContext } from '@/lib/tenant/context';
 import { requireWritable } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
 import { NotFoundError, ValidationError } from '@/lib/errors';
-import { getConfig, getConfigForClass } from './config';
+import { getConfig, getConfigForClass, listCyclesOverview } from './config';
 import type { RequirementInput } from './schemas';
 
 export type RequirementRow = {
@@ -84,9 +84,16 @@ export async function syncRequirementsFromAssignments(
   requireWritable(ctx, 'schedule.create');
   const supabase = await createClient();
 
+  // Pas de grille par defaut exigee : un etablissement entierement decoupe en
+  // cycles (§ decision "pause par cycle") n'en a jamais — chaque classe
+  // resout la sienne plus bas (getConfigForClass). On ne bloque que si
+  // AUCUNE grille n'existe nulle part.
   const config = await getConfig(ctx, yearId);
-  if (!config) throw new ValidationError('Configurez d\'abord la grille horaire.');
-  const defaultSlotMinutes = config.default_session_minutes;
+  const defaultSlotMinutes = config?.default_session_minutes;
+  if (!config) {
+    const cycles = await listCyclesOverview(ctx, yearId);
+    if (!cycles.some((c) => c.configId)) throw new ValidationError('Configurez d\'abord la grille horaire.');
+  }
 
   const { data: assignments, error } = await supabase
     .from('teaching_assignments')
@@ -124,6 +131,7 @@ export async function syncRequirementsFromAssignments(
     const slotMinutes = a.class_id
       ? (await getConfigForClass(ctx, yearId, a.class_id))?.default_session_minutes ?? defaultSlotMinutes
       : defaultSlotMinutes;
+    if (!slotMinutes) { skipped++; continue; } // ni grille de classe, ni grille par defaut : rien a convertir
     const sessions = Math.max(1, Math.round(a.weekly_minutes / slotMinutes));
     const duration = Math.max(slotMinutes, Math.round(a.weekly_minutes / sessions / slotMinutes) * slotMinutes);
 

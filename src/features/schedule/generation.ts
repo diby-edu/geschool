@@ -199,6 +199,11 @@ export async function generateSchedule(
   const tasks: SolverTask[] = [];
   const taskMeta: TaskMeta[] = [];
   const problems: string[] = [];
+  // Notices de portee (hors cycle vise) : purement informatives — une
+  // generation par cycle exclut TOUJOURS les exigences des autres cycles,
+  // ce n'est jamais un signe d'echec. Tenues a part de `problems` pour ne
+  // jamais faire avorter le lancement avant meme d'appeler le solveur.
+  const excluded: string[] = [];
 
   for (const r of requirements) {
     const label = `${r.subjects?.name ?? 'Cours'} — ${targetLabel(r)}`;
@@ -210,7 +215,7 @@ export async function generateSchedule(
     const groupIds = r.teaching_requirement_targets.filter((t) => t.target_type === 'GROUP' && t.group_id).map((t) => t.group_id!);
 
     if (usesOtherGrid(classIds, groupIds)) {
-      problems.push(
+      excluded.push(
         cycleId
           ? `« ${label} » : ne cible pas une classe de ce cycle — ignoree dans ce lancement.`
           : `« ${label} » : cible une classe dont le cycle a ses propres horaires — generez-la depuis ce cycle (page de generation, selecteur de cycle).`,
@@ -280,7 +285,7 @@ export async function generateSchedule(
 
   if (tasks.length === 0) {
     throw new ValidationError(
-      `Impossible de constituer le probleme :\n- ${problems.join('\n- ') || 'aucune tache exploitable.'}`,
+      `Impossible de constituer le probleme :\n- ${[...problems, ...excluded].join('\n- ') || 'aucune tache exploitable.'}`,
     );
   }
 
@@ -329,8 +334,10 @@ export async function generateSchedule(
   }
 
   // Si l'arithmetique conclut deja a l'infaisabilite, ne pas lancer le solveur.
+  // (`excluded` — hors de la portee du cycle vise — n'est jamais un motif
+  // d'echec : c'est le fonctionnement normal d'une generation par cycle.)
   if (allProblems.length > 0) {
-    return finishInfeasible(ctx, jobId, tasks.length, allProblems, undefined);
+    return finishInfeasible(ctx, jobId, tasks.length, [...allProblems, ...excluded], undefined);
   }
 
   // --- resolution ---
@@ -375,6 +382,9 @@ export async function generateSchedule(
       return { jobId, status: 'FAILED', taskCount: tasks.length, assignedCount: solution.assignments.length, diagnostics: [], message };
     }
 
+    const successDiagnostics =
+      excluded.length > 0 ? [`${excluded.length} exigence(s) hors de ce cycle — ignoree(s) dans ce lancement.`] : [];
+
     await supabase
       .from('schedule_generation_jobs')
       .update({
@@ -385,6 +395,7 @@ export async function generateSchedule(
         variables_count: solution.statistics.variables,
         constraints_count: solution.statistics.constraints,
         duration_ms: solution.statistics.wallTimeMs,
+        diagnostics: { problems: successDiagnostics },
         current_step: 'done',
         finished_at: new Date().toISOString(),
       })
@@ -406,7 +417,7 @@ export async function generateSchedule(
       versionId,
       taskCount: tasks.length,
       assignedCount: solution.assignments.length,
-      diagnostics: [],
+      diagnostics: successDiagnostics,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erreur lors de la creation de la version.';

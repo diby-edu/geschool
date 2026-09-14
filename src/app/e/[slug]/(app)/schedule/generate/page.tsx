@@ -53,11 +53,15 @@ export default async function GeneratePage({
 
   const yearId = ctx.academicYear.id;
   const config = await getConfig(ctx, yearId);
-  const requirements = config ? await listRequirements(ctx, yearId) : [];
-  const jobs = config ? await listGenerationJobs(ctx, yearId, 5) : [];
-  const activeCount = requirements.filter((r) => r.status === 'ACTIVE').length;
   const cyclesOverview = await listCyclesOverview(ctx, yearId);
   const cyclesWithOwnGrid = cyclesOverview.filter((c) => c.configId).map((c) => ({ id: c.id, name: c.name }));
+  // Une grille existe des qu'il y a soit la grille par defaut, soit au moins
+  // une grille de cycle — un etablissement entierement decoupe en cycles
+  // (§ decision "pause par cycle") n'a jamais de grille par defaut du tout.
+  const hasAnyGrid = config !== null || cyclesWithOwnGrid.length > 0;
+  const requirements = hasAnyGrid ? await listRequirements(ctx, yearId) : [];
+  const jobs = hasAnyGrid ? await listGenerationJobs(ctx, yearId, 5) : [];
+  const activeCount = requirements.filter((r) => r.status === 'ACTIVE').length;
   const targetVersionId = typeof sp.version === 'string' ? sp.version : undefined;
 
   const canSync = hasPermission(ctx, 'schedule.create');
@@ -85,7 +89,7 @@ export default async function GeneratePage({
         }
       />
 
-      {!config ? (
+      {!hasAnyGrid ? (
         <EmptyState
           title="Horaires non configures"
           hint="Definissez d'abord les jours et horaires de cette annee, depuis Annees scolaires."
@@ -121,6 +125,7 @@ export default async function GeneratePage({
             action={generateScheduleAction.bind(null, slug)}
             requirementCount={activeCount}
             cycles={cyclesWithOwnGrid}
+            hasDefaultGrid={config !== null}
             {...(targetVersionId ? { targetVersionId } : {})}
           />
 
