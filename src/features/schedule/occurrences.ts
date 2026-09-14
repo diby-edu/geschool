@@ -49,17 +49,21 @@ export async function materializeOccurrences(
 
   // Seances de la version (paginee : un grand etablissement peut depasser le
   // plafond de lignes par reponse de PostgREST — et la policy RLS de
-  // schedule_sessions est assez couteuse par ligne pour qu'une page de 1000
-  // risque le statement_timeout a elle seule, cf. lib/supabase/pagination).
+  // schedule_sessions est assez couteuse par ligne pour qu'une lecture
+  // profonde par decalage risque le statement_timeout, cf.
+  // lib/supabase/pagination : curseur par id, jamais .range()).
   const sessions = await fetchAllRows(
-    (from, to) =>
-      supabase
+    (cursor) => {
+      let q = supabase
         .from('schedule_sessions')
         .select('id, day_of_week, starts_at, ends_at')
         .eq('school_id', ctx.school.id)
         .eq('schedule_version_id', versionId)
         .order('id')
-        .range(from, to),
+        .limit(500);
+      if (cursor) q = q.gt('id', cursor);
+      return q;
+    },
     500,
   );
   if (sessions.length === 0) return 0;

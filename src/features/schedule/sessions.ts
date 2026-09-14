@@ -34,10 +34,21 @@ export type SessionRow = {
  * Une meme seance peut avoir plusieurs enseignants / cibles / salles ; on les
  * agrege par seance.
  */
+type ValidatorSessionRaw = {
+  id: string;
+  day_of_week: number;
+  starts_at: string;
+  ends_at: string;
+  subjects: { name: string } | null;
+  schedule_session_teachers: { teacher_id: string }[];
+  schedule_session_targets: { class_id: string | null; group_id: string | null }[];
+  schedule_session_rooms: { room_id: string }[];
+};
+
 export async function loadValidatorSessions(ctx: TenantContext, versionId: string): Promise<ValidatorSession[]> {
   const supabase = await createClient();
-  const data = await fetchAllRows((from, to) =>
-    supabase
+  const data = await fetchAllRows<ValidatorSessionRaw>((cursor) => {
+    let q = supabase
       .from('schedule_sessions')
       .select(
         'id, day_of_week, starts_at, ends_at, subjects(name), ' +
@@ -45,21 +56,13 @@ export async function loadValidatorSessions(ctx: TenantContext, versionId: strin
       )
       .eq('school_id', ctx.school.id)
       .eq('schedule_version_id', versionId)
-      .order('id') // tri stable requis : la pagination par pages depend d'un ordre deterministe
-      .range(from, to),
-    SCHEDULE_SESSIONS_PAGE_SIZE,
-  );
+      .order('id') // curseur : tri total requis (cf. lib/supabase/pagination)
+      .limit(SCHEDULE_SESSIONS_PAGE_SIZE);
+    if (cursor) q = q.gt('id', cursor);
+    return q as unknown as PromiseLike<{ data: ValidatorSessionRaw[] | null; error: { message: string } | null }>;
+  }, SCHEDULE_SESSIONS_PAGE_SIZE);
 
-  return (data as unknown as {
-    id: string;
-    day_of_week: number;
-    starts_at: string;
-    ends_at: string;
-    subjects: { name: string } | null;
-    schedule_session_teachers: { teacher_id: string }[];
-    schedule_session_targets: { class_id: string | null; group_id: string | null }[];
-    schedule_session_rooms: { room_id: string }[];
-  }[]).map((s) => ({
+  return data.map((s) => ({
     id: s.id,
     label: s.subjects?.name ?? 'Cours',
     dayOfWeek: s.day_of_week,
@@ -77,10 +80,26 @@ function hmToMin(t: string): number {
   return (h ?? 0) * 60 + (m ?? 0);
 }
 
+type SessionRowRaw = {
+  id: string;
+  day_of_week: number;
+  starts_at: string;
+  ends_at: string;
+  duration_minutes: number;
+  is_locked: boolean;
+  subjects: { name: string } | null;
+  schedule_session_teachers: { teachers: { first_name: string; last_name: string } | null }[];
+  schedule_session_targets: { class_id: string | null; classes: { name: string } | null }[];
+  schedule_session_rooms: { rooms: { code: string } | null }[];
+};
+
 export async function listSessions(ctx: TenantContext, versionId: string): Promise<SessionRow[]> {
   const supabase = await createClient();
-  const data = await fetchAllRows((from, to) =>
-    supabase
+  // Curseur uniquement par id (cf. lib/supabase/pagination) : l'ordre
+  // d'affichage voulu (jour, heure) est applique cote client une fois la
+  // lecture complete, plutot qu'en tri compose cote base.
+  const data = await fetchAllRows<SessionRowRaw>((cursor) => {
+    let q = supabase
       .from('schedule_sessions')
       .select(
         'id, day_of_week, starts_at, ends_at, duration_minutes, is_locked, subjects(name), ' +
@@ -90,25 +109,14 @@ export async function listSessions(ctx: TenantContext, versionId: string): Promi
       )
       .eq('school_id', ctx.school.id)
       .eq('schedule_version_id', versionId)
-      .order('day_of_week')
-      .order('starts_at')
-      .order('id') // tri stable requis : la pagination par pages depend d'un ordre deterministe
-      .range(from, to),
-    SCHEDULE_SESSIONS_PAGE_SIZE,
-  );
+      .order('id')
+      .limit(SCHEDULE_SESSIONS_PAGE_SIZE);
+    if (cursor) q = q.gt('id', cursor);
+    return q as unknown as PromiseLike<{ data: SessionRowRaw[] | null; error: { message: string } | null }>;
+  }, SCHEDULE_SESSIONS_PAGE_SIZE);
+  data.sort((a, b) => a.day_of_week - b.day_of_week || a.starts_at.localeCompare(b.starts_at) || a.id.localeCompare(b.id));
 
-  return (data as unknown as {
-    id: string;
-    day_of_week: number;
-    starts_at: string;
-    ends_at: string;
-    duration_minutes: number;
-    is_locked: boolean;
-    subjects: { name: string } | null;
-    schedule_session_teachers: { teachers: { first_name: string; last_name: string } | null }[];
-    schedule_session_targets: { class_id: string | null; classes: { name: string } | null }[];
-    schedule_session_rooms: { rooms: { code: string } | null }[];
-  }[]).map((s) => {
+  return data.map((s) => {
     const t = s.schedule_session_teachers[0]?.teachers ?? null;
     const target = s.schedule_session_targets[0] ?? null;
     return {
