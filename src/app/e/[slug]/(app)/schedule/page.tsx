@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
-import { getConfig } from '@/features/schedule/config';
+import { getConfig, listCyclesOverview } from '@/features/schedule/config';
 import { listVersions } from '@/features/schedule/versions';
 import { getMyWeeklySchedule } from '@/features/schedule/my-schedule';
 import { createVersionAction, deleteVersionAction } from '@/features/schedule/actions';
@@ -61,7 +61,12 @@ export default async function SchedulePage({
   }
 
   const config = await getConfig(ctx, ctx.academicYear.id);
-  const versions = config ? await listVersions(ctx, ctx.academicYear.id) : [];
+  const cyclesOverview = await listCyclesOverview(ctx, ctx.academicYear.id);
+  // Un etablissement entierement decoupe en cycles (§ decision "pause par
+  // cycle") n'a jamais de grille par defaut : ne pas masquer les versions et
+  // la generation pour autant, cf. generate/page.tsx.
+  const hasAnyGrid = config !== null || cyclesOverview.some((c) => c.configId);
+  const versions = hasAnyGrid ? await listVersions(ctx, ctx.academicYear.id) : [];
   const canConfig = hasPermission(ctx, 'schedule.manage_configuration');
   const canCreate = hasPermission(ctx, 'schedule.create');
   const canGenerate = hasPermission(ctx, 'schedule.generate');
@@ -75,7 +80,7 @@ export default async function SchedulePage({
         description={`Annee ${ctx.academicYear.name}`}
         action={
           <div className="flex items-center gap-2">
-            {config && canGenerate ? (
+            {hasAnyGrid && canGenerate ? (
               <Link href={`${base}/generate`}>
                 <Button>Generer automatiquement</Button>
               </Link>
@@ -89,7 +94,7 @@ export default async function SchedulePage({
         }
       />
 
-      {!config ? (
+      {!hasAnyGrid ? (
         <EmptyState
           title="Horaires non configures"
           hint="Definissez d'abord les jours et horaires de cette annee, depuis Annees scolaires."
