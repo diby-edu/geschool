@@ -9,11 +9,14 @@
  *   pnpm seed:demo -- --school=2
  *   pnpm seed:demo -- --school=3
  *   pnpm seed:demo -- --all            (reset + les 3, dans l'ordre)
+ *   pnpm seed:demo -- --grades=1       (notes seules, ecole deja construite)
+ *   pnpm seed:demo -- --grades=2
  *
  * Ne cree PAS les emplois du temps (fait via l'application reelle, solveur
  * compris — voir scripts/README-seed.md) ni les identifiants pilotes par
  * l'application (Server Actions) : ecrit directement en base avec la cle de
- * service, comme scripts/bootstrap.mjs.
+ * service, comme scripts/bootstrap.mjs. Les notes (--grades) sont
+ * independantes de l'emploi du temps genere.
  */
 
 import { existsSync } from 'node:fs';
@@ -66,6 +69,30 @@ async function chunkedInsertReturning(table, rows, size = 500) {
     out.push(...data.map((d) => d.id));
   }
   return out;
+}
+
+/**
+ * PostgREST plafonne chaque reponse a 1000 lignes, quel que soit le nombre de
+ * lignes reellement en base — decouvert quand un fetch non pagine de
+ * student_enrollments (4000 lignes pour l'Ecole 1) n'en rendait que 1000,
+ * faisant sauter silencieusement 3/4 des classes lors du peuplement des
+ * notes. La cle de service ne fait pas exception (le plafond n'est pas lie a
+ * la RLS). `.range()` par decalage est sans risque ici (pas de RLS a
+ * reevaluer par ligne sautee, cf. src/lib/supabase/pagination.ts cote appli
+ * pour le cas RLS).
+ */
+async function fetchAllRows(table, select, applyFilters) {
+  const all = [];
+  let from = 0;
+  const PAGE = 1000;
+  for (;;) {
+    const { data, error } = await applyFilters(db.from(table).select(select)).range(from, from + PAGE - 1);
+    if (error) throw new Error(`fetch ${table} [${from}..${from + PAGE - 1}]: ${error.message}`);
+    all.push(...(data ?? []));
+    if (!data || data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
 }
 
 let userCache = null;
@@ -192,6 +219,12 @@ function subjectAppliesTo(subject, levelCode) {
   return subject.onlyLevels.includes(levelCode);
 }
 
+const PERIODS_SPEC = [
+  { name: 'Trimestre 1', sequence: 1, starts_on: '2026-09-02', ends_on: '2026-12-18' },
+  { name: 'Trimestre 2', sequence: 2, starts_on: '2027-01-05', ends_on: '2027-03-26' },
+  { name: 'Trimestre 3', sequence: 3, starts_on: '2027-04-06', ends_on: '2027-06-30' },
+];
+
 // ---------------------------------------------------------------------------
 // Suppression de l'ancien etablissement de demonstration
 // ---------------------------------------------------------------------------
@@ -245,13 +278,8 @@ async function buildSchool(spec) {
   }
   const yearId = year.id;
 
-  const periodsSpec = [
-    { name: 'Trimestre 1', sequence: 1, starts_on: '2026-09-02', ends_on: '2026-12-18' },
-    { name: 'Trimestre 2', sequence: 2, starts_on: '2027-01-05', ends_on: '2027-03-26' },
-    { name: 'Trimestre 3', sequence: 3, starts_on: '2027-04-06', ends_on: '2027-06-30' },
-  ];
   const periodIds = {};
-  for (const p of periodsSpec) {
+  for (const p of PERIODS_SPEC) {
     let { data: existing } = await db.from('academic_periods').select('id').eq('academic_year_id', yearId).eq('sequence', p.sequence).maybeSingle();
     if (!existing) {
       const ins = await db.from('academic_periods').insert({
@@ -622,6 +650,96 @@ async function seedScheduleGrid(built, spec) {
   console.log('Grilles par cycle prêtes : Collège (07:30-14:00, récré 10h-10h20) et Lycée (07:30-14:30, récré + pause déjeuner).');
 }
 
+// ---------------------------------------------------------------------------
+// Notes (evaluations + notes) — independant de l'emploi du temps genere : les
+// evaluations ne referencent pas schedule_sessions, seulement les affectations
+// d'enseignement et les periodes, deja en place apres buildTeachers/buildSchool.
+// ---------------------------------------------------------------------------
+
+const ASSESSMENT_TYPE_CYCLE = ['DEVOIR', 'INTERRO', 'DEVOIR', 'EXAMEN'];
+const TYPE_LABEL = { DEVOIR: 'Devoir', INTERRO: 'Interrogation', EXAMEN: 'Examen', PRATIQUE: 'Évaluation pratique' };
+const TYPE_COEFF = { DEVOIR: 2, INTERRO: 1, EXAMEN: 3, PRATIQUE: 1 };
+
+function randomScore() {
+  const base = 8 + Math.random() * 9; // 8..17
+  const jitter = (Math.random() - 0.5) * 4; // -2..2
+  const score = Math.max(2, Math.min(19.5, base + jitter));
+  return Math.round(score * 2) / 2; // pas de 0.5
+}
+
+function dateWithinPeriod(periodSeq, index, count) {
+  const p = PERIODS_SPEC.find((x) => x.sequence === periodSeq);
+  const start = new Date(`${p.starts_on}T00:00:00Z`).getTime();
+  const end = new Date(`${p.ends_on}T00:00:00Z`).getTime();
+  const t = start + ((end - start) * (index + 1)) / (count + 1);
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+/**
+ * `periodSeqs` : trimestres a couvrir (1..3). `evalCount` : evaluations par
+ * (classe, matiere, trimestre). `statusFor(seq)` : statut des evaluations de
+ * ce trimestre ('PUBLISHED' | 'CLOSED' | 'OPEN' | 'DRAFT').
+ */
+async function buildGrades(built, { periodSeqs, evalCount, statusFor }) {
+  const { schoolId, yearId, periodIds, typeIdByCode, scaleId } = built;
+
+  const tas = await fetchAllRows('teaching_assignments', 'class_id, subject_id, teacher_id', (q) =>
+    q.eq('school_id', schoolId).eq('academic_year_id', yearId).eq('status', 'ACTIVE').not('class_id', 'is', null),
+  );
+
+  const enrolls = await fetchAllRows('student_enrollments', 'class_id, student_id', (q) =>
+    q.eq('school_id', schoolId).eq('academic_year_id', yearId).eq('status', 'ENROLLED'),
+  );
+  const studentsByClass = new Map();
+  for (const e of enrolls) {
+    const list = studentsByClass.get(e.class_id) ?? [];
+    list.push(e.student_id);
+    studentsByClass.set(e.class_id, list);
+  }
+
+  const assessmentRows = [];
+  const studentsPerRow = [];
+  for (const ta of tas ?? []) {
+    const students = studentsByClass.get(ta.class_id) ?? [];
+    if (students.length === 0) continue;
+    for (const periodSeq of periodSeqs) {
+      const status = statusFor(periodSeq);
+      const period = PERIODS_SPEC.find((p) => p.sequence === periodSeq);
+      for (let i = 0; i < evalCount; i++) {
+        const typeCode = ASSESSMENT_TYPE_CYCLE[i % ASSESSMENT_TYPE_CYCLE.length];
+        assessmentRows.push({
+          school_id: schoolId, academic_year_id: yearId, academic_period_id: periodIds[periodSeq],
+          subject_id: ta.subject_id, class_id: ta.class_id, teacher_id: ta.teacher_id,
+          assessment_type_id: typeIdByCode.get(typeCode),
+          title: `${TYPE_LABEL[typeCode]} n°${i + 1}`,
+          assessment_date: dateWithinPeriod(periodSeq, i, evalCount),
+          grading_scale_id: scaleId, max_score: 20, coefficient: TYPE_COEFF[typeCode],
+          sequence_number: i + 1, status,
+          published_at: status === 'PUBLISHED' ? `${period.ends_on}T12:00:00Z` : null,
+        });
+        studentsPerRow.push(students);
+      }
+    }
+  }
+
+  console.log(`Insertion de ${assessmentRows.length} evaluation(s)...`);
+  const assessmentIds = await chunkedInsertReturning('assessments', assessmentRows);
+
+  const gradeRows = [];
+  assessmentIds.forEach((id, i) => {
+    for (const studentId of studentsPerRow[i]) {
+      const absent = Math.random() < 0.03;
+      gradeRows.push({
+        school_id: schoolId, assessment_id: id, student_id: studentId,
+        score: absent ? null : randomScore(), is_absent: absent,
+      });
+    }
+  });
+  console.log(`Insertion de ${gradeRows.length} note(s)...`);
+  await chunkedInsert('grades', gradeRows, 1000);
+  console.log(`${assessmentIds.length} evaluation(s), ${gradeRows.length} note(s) creees.`);
+}
+
 async function seedSchool(spec) {
   const credentials = {};
   const built = await buildSchool({ ...spec, credentials });
@@ -706,10 +824,39 @@ async function gridOnly(spec) {
   await seedScheduleGrid({ schoolId: school.id, yearId: year.id, cycleIds }, spec);
 }
 
+/**
+ * Recharge les identifiants deja crees par buildSchool, pour ajouter les
+ * notes apres coup (independant de l'emploi du temps — pas besoin qu'il ait
+ * ete genere). Ecole 1 : annee complete (3 trimestres, T3 CLOSED pour tester
+ * la publication). Ecole 2 : milieu de trimestre 1 seulement (OPEN). Ecole 3 :
+ * aucune (debut d'annee, pas d'emploi du temps).
+ */
+async function gradesOnly(spec) {
+  const { data: school } = await db.from('schools').select('id').eq('slug', spec.slug).single();
+  const { data: year } = await db.from('academic_years').select('id').eq('school_id', school.id).eq('name', '2026-2027').single();
+  const { data: periods } = await db.from('academic_periods').select('id, sequence').eq('academic_year_id', year.id);
+  const periodIds = Object.fromEntries(periods.map((p) => [p.sequence, p.id]));
+  const { data: types } = await db.from('assessment_types').select('id, code').eq('school_id', school.id);
+  const typeIdByCode = new Map(types.map((t) => [t.code, t.id]));
+  const { data: scale } = await db.from('grading_scales').select('id').eq('school_id', school.id).eq('code', 'SUR20').single();
+
+  const built = { schoolId: school.id, yearId: year.id, periodIds, typeIdByCode, scaleId: scale.id };
+
+  if (spec.index === 1) {
+    await buildGrades(built, { periodSeqs: [1, 2, 3], evalCount: 4, statusFor: (seq) => (seq === 3 ? 'CLOSED' : 'PUBLISHED') });
+  } else if (spec.index === 2) {
+    await buildGrades(built, { periodSeqs: [1], evalCount: 2, statusFor: () => 'OPEN' });
+  } else {
+    console.log('Pas de notes prevues pour cet etablissement (debut d\'annee, pas d\'emploi du temps).');
+  }
+}
+
 async function main() {
   const only = argVal('--school');
   const gridFor = argVal('--grid');
   if (gridFor) { await gridOnly(SCHOOL_SPECS.find((s) => String(s.index) === gridFor)); return; }
+  const gradesFor = argVal('--grades');
+  if (gradesFor) { await gradesOnly(SCHOOL_SPECS.find((s) => String(s.index) === gradesFor)); return; }
   const repairFor = argVal('--repair');
   if (repairFor) { await repairAccess(SCHOOL_SPECS.find((s) => String(s.index) === repairFor)); return; }
 
