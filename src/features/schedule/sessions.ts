@@ -9,6 +9,12 @@ import { conflictsFor, type ValidatorSession } from '@/lib/schedule/validator';
 import { fetchAllRows } from '@/lib/supabase/pagination';
 import type { SessionInput } from './schemas';
 
+// Page reduite (au lieu du plafond PostgREST de 1000) : la policy RLS de
+// schedule_sessions (app.can_see_session) est couteuse par ligne — mesure,
+// une page de 1000 lignes avec ses relations imbriquees peut depasser le
+// statement_timeout Postgres a elle seule (cf. lib/supabase/pagination).
+const SCHEDULE_SESSIONS_PAGE_SIZE = 200;
+
 export type SessionRow = {
   id: string;
   day_of_week: number;
@@ -41,6 +47,7 @@ export async function loadValidatorSessions(ctx: TenantContext, versionId: strin
       .eq('schedule_version_id', versionId)
       .order('id') // tri stable requis : la pagination par pages depend d'un ordre deterministe
       .range(from, to),
+    SCHEDULE_SESSIONS_PAGE_SIZE,
   );
 
   return (data as unknown as {
@@ -87,6 +94,7 @@ export async function listSessions(ctx: TenantContext, versionId: string): Promi
       .order('starts_at')
       .order('id') // tri stable requis : la pagination par pages depend d'un ordre deterministe
       .range(from, to),
+    SCHEDULE_SESSIONS_PAGE_SIZE,
   );
 
   return (data as unknown as {
