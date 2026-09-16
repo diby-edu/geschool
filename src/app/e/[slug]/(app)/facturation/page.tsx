@@ -43,12 +43,39 @@ export default async function FacturationPage({
           <h2 className="text-sm font-medium">Abonnement</h2>
           {sub ? (
             <>
-              <p className="text-lg font-semibold">{sub.plans?.name ?? '—'}</p>
-              <p className="text-[color:var(--muted-foreground)]">
-                Statut : {SUB_STATUS[sub.status] ?? sub.status}
-                {sub.plans ? ` · ${Number(sub.plans.price_amount).toLocaleString('fr-FR')} ${sub.plans.currency}` : ''}
-                {sub.current_period_end ? ` · échéance ${sub.current_period_end.slice(0, 10)}` : ''}
-              </p>
+              {sub.plan_id ? (
+                <>
+                  <p className="text-lg font-semibold">{sub.plans?.name ?? '—'}</p>
+                  <p className="text-[color:var(--muted-foreground)]">
+                    Statut : {SUB_STATUS[sub.status] ?? sub.status}
+                    {sub.plans ? ` · ${Number(sub.plans.price_amount).toLocaleString('fr-FR')} ${sub.plans.currency}` : ''}
+                    {sub.current_period_end ? ` · échéance ${sub.current_period_end.slice(0, 10)}` : ''}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[color:var(--muted-foreground)]">
+                    Statut : {SUB_STATUS[sub.status] ?? sub.status}
+                    {sub.trial_ends_at ? ` · essai jusqu'au ${sub.trial_ends_at.slice(0, 10)}` : ''}
+                  </p>
+                  {sub.subscription_modules.length === 0 ? (
+                    <p className="text-[color:var(--muted-foreground)]">Aucun module actif.</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {sub.subscription_modules.map((sm, i) =>
+                        sm.modules ? (
+                          <li key={i} className="flex justify-between">
+                            <span>{sm.modules.name}</span>
+                            <span className="font-medium">
+                              {Number(sm.modules.price_amount).toLocaleString('fr-FR')} {sm.modules.currency} / an
+                            </span>
+                          </li>
+                        ) : null,
+                      )}
+                    </ul>
+                  )}
+                </>
+              )}
             </>
           ) : (
             <p className="text-[color:var(--muted-foreground)]">Aucun abonnement actif. Contactez la plateforme.</p>

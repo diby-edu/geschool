@@ -84,18 +84,25 @@ export async function getSchoolSubscription(schoolId: string) {
   const supabase = await createClient();
   const { data } = await supabase
     .from('subscriptions')
-    .select('id, plan_id, status, trial_ends_at, current_period_start, current_period_end, plans(name, price_amount, currency, billing_period)')
+    .select(
+      'id, plan_id, status, trial_ends_at, current_period_start, current_period_end, ' +
+        'plans(name, price_amount, currency, billing_period), ' +
+        'subscription_modules(modules(name, price_amount, currency))',
+    )
     .eq('school_id', schoolId)
     .in('status', ['TRIALING', 'ACTIVE', 'PAST_DUE'])
     .maybeSingle();
   return data as unknown as {
     id: string;
-    plan_id: string;
+    // Abonnement "a la carte" (wizard d'inscription libre-service) : pas de
+    // forfait fixe, seulement les modules ci-dessous.
+    plan_id: string | null;
     status: string;
     trial_ends_at: string | null;
     current_period_start: string | null;
     current_period_end: string | null;
     plans: { name: string; price_amount: number; currency: string; billing_period: string } | null;
+    subscription_modules: { modules: { name: string; price_amount: number; currency: string } | null }[];
   } | null;
 }
 

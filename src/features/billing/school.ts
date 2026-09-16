@@ -33,7 +33,9 @@ export async function computeUsage(ctx: TenantContext): Promise<UsageLine[]> {
     getSchoolSubscription(ctx.school.id),
   ]);
 
-  const { data: plan } = sub
+  // Abonnement "a la carte" (wizard) : pas de plan_id, donc pas de quota fixe
+  // — juste 0 (= illimite) pour chaque metrique.
+  const { data: plan } = sub?.plan_id
     ? await supabase.from('plans').select('limits').eq('id', sub.plan_id).maybeSingle()
     : { data: null };
   const limits = ((plan?.limits ?? {}) as { students?: number; users?: number }) ?? {};

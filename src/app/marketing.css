@@ -219,3 +219,138 @@
   .mkt *, .mkt *::before, .mkt *::after { animation: none !important; transition: none !important; }
   .mkt-fade { opacity: 1 !important; transform: none !important; }
 }
+
+/* ---------------------------------------------------------------------------
+   Wizard d'inscription (/inscription) — meme identite, mise en page propre
+   (plus large que le formulaire de connexion, deux colonnes a l'etape modules)
+--------------------------------------------------------------------------- */
+
+.mkt-wiz-shell { max-width: 1040px; margin: 0 auto; padding: 8px 20px 80px; }
+
+.mkt-wiz-stepper { display: flex; align-items: center; justify-content: center; gap: 0; margin: 18px 0 36px; flex-wrap: wrap; }
+.mkt-wiz-pip { display: flex; align-items: center; gap: 10px; }
+.mkt-wiz-pip .dot {
+  width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+  font-weight: 700; font-size: 0.85rem; border: 2px solid var(--mkt-stroke); color: var(--mkt-muted);
+  background: var(--mkt-card); transition: all 0.2s;
+}
+.mkt-wiz-pip.done .dot { background: var(--mkt-green); border-color: var(--mkt-green); color: #fff; }
+.mkt-wiz-pip.active .dot { background: var(--mkt-brand); border-color: var(--mkt-brand); color: #fff; box-shadow: 0 0 0 5px rgba(74, 68, 224, 0.18); }
+.mkt-wiz-pip .label { font-size: 0.82rem; font-weight: 600; color: var(--mkt-muted); white-space: nowrap; }
+.mkt-wiz-pip.active .label { color: var(--mkt-tx); }
+.mkt-wiz-line { width: clamp(28px, 6vw, 72px); height: 2px; background: var(--mkt-stroke); margin: 0 6px; }
+.mkt-wiz-line.done { background: var(--mkt-green); }
+
+.mkt-wiz-panel {
+  background: var(--mkt-card); border: 1px solid var(--mkt-stroke); border-radius: 20px;
+  padding: clamp(22px, 4vw, 40px); box-shadow: 0 20px 50px -30px rgba(30, 20, 60, 0.25);
+}
+.mkt-wiz-eyebrow {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 0.72rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--mkt-brand);
+  background: var(--mkt-soft); padding: 5px 10px; border-radius: 999px; margin-bottom: 14px;
+}
+.mkt-wiz-panel h1 { font-size: clamp(1.4rem, 3vw, 1.9rem); margin: 0 0 6px; font-weight: 800; text-wrap: balance; }
+.mkt-wiz-panel .sub { color: var(--mkt-muted); margin: 0 0 28px; font-size: 0.95rem; max-width: 60ch; }
+
+.mkt-wiz-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 640px) { .mkt-wiz-grid2 { grid-template-columns: 1fr; } }
+
+.mkt-wiz-field { display: block; margin-bottom: 18px; }
+.mkt-wiz-field .lbl { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 7px; }
+.mkt-wiz-field .lbl .req { color: #d1476b; }
+.mkt-wiz-field input[type='text'],
+.mkt-wiz-field input[type='tel'],
+.mkt-wiz-field input[type='email'],
+.mkt-wiz-field input[type='password'] {
+  width: 100%; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--mkt-stroke);
+  background: var(--mkt-bg); color: var(--mkt-tx); font: inherit; font-size: 0.93rem; transition: border-color 0.15s;
+}
+.mkt-wiz-field input:focus { outline: none; border-color: var(--mkt-brand); }
+.mkt-wiz-hint { font-size: 0.78rem; color: var(--mkt-muted); margin: 6px 0 0; }
+
+.mkt-wiz-photo-drop {
+  width: 84px; height: 84px; border-radius: 18px; border: 2px dashed var(--mkt-stroke);
+  display: grid; place-items: center; cursor: pointer; color: var(--mkt-muted); background: var(--mkt-soft);
+  font-size: 1.5rem; overflow: hidden;
+}
+.mkt-wiz-photo-drop img { width: 100%; height: 100%; object-fit: cover; }
+.mkt-wiz-photo-row { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
+.mkt-wiz-photo-row .txt { font-size: 0.82rem; color: var(--mkt-muted); }
+
+.mkt-wiz-check-row {
+  display: flex; gap: 12px; align-items: flex-start; background: var(--mkt-soft);
+  border: 1px solid var(--mkt-stroke); border-radius: 14px; padding: 14px 16px; margin-top: 4px;
+}
+.mkt-wiz-check-row .t { font-size: 0.88rem; font-weight: 600; }
+.mkt-wiz-check-row .d { font-size: 0.8rem; color: var(--mkt-muted); margin-top: 2px; }
+.mkt-wiz-code-generated {
+  margin-top: 10px; font-size: 0.82rem; font-weight: 700; color: var(--mkt-teal);
+  background: rgba(18, 169, 155, 0.12); border-radius: 8px; padding: 6px 10px; width: fit-content;
+  font-family: monospace; letter-spacing: 0.03em;
+}
+
+.mkt-wiz-order-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 6px; }
+@media (max-width: 640px) { .mkt-wiz-order-grid { grid-template-columns: 1fr; } }
+.mkt-wiz-order-card {
+  border: 1.5px solid var(--mkt-stroke); border-radius: 14px; padding: 16px; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; transition: all 0.15s;
+  background: var(--mkt-card);
+}
+.mkt-wiz-order-card:hover { border-color: var(--mkt-violet); }
+.mkt-wiz-order-card.on { border-color: var(--mkt-brand); background: var(--mkt-soft); }
+.mkt-wiz-order-card .oname { font-weight: 700; font-size: 0.82rem; letter-spacing: 0.03em; }
+.mkt-wiz-order-card .odesc { font-size: 0.78rem; color: var(--mkt-muted); margin-top: 3px; }
+.mkt-wiz-order-card .radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--mkt-stroke); flex-shrink: 0; margin-top: 2px; }
+.mkt-wiz-order-card.on .radio { border-color: var(--mkt-brand); background: radial-gradient(circle, var(--mkt-brand) 40%, transparent 42%); }
+
+.mkt-wiz-nav-row { display: flex; justify-content: space-between; align-items: center; margin-top: 32px; }
+
+.mkt-wiz-step2-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 28px; align-items: start; }
+@media (max-width: 820px) { .mkt-wiz-step2-grid { grid-template-columns: 1fr; } }
+
+.mkt-wiz-module-card {
+  border: 2px solid var(--mkt-stroke); border-radius: 16px; padding: 20px; cursor: pointer;
+  display: flex; gap: 14px; margin-bottom: 16px; transition: all 0.15s; position: relative; background: var(--mkt-card);
+}
+.mkt-wiz-module-card:hover { border-color: var(--mkt-violet); }
+.mkt-wiz-module-card.on { border-color: var(--mkt-brand); background: var(--mkt-soft); }
+.mkt-wiz-module-card .icon { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 1.3rem; flex-shrink: 0; background: var(--mkt-soft); }
+.mkt-wiz-module-card .mbody { flex: 1; }
+.mkt-wiz-module-card .mname { font-weight: 700; font-size: 0.98rem; margin-bottom: 3px; }
+.mkt-wiz-module-card .mdesc { font-size: 0.82rem; color: var(--mkt-muted); line-height: 1.4; }
+.mkt-wiz-module-card .mprice { font-weight: 800; font-size: 0.95rem; color: var(--mkt-brand); margin-top: 8px; }
+.mkt-wiz-module-card .check {
+  width: 24px; height: 24px; border-radius: 8px; border: 2px solid var(--mkt-stroke); flex-shrink: 0;
+  display: grid; place-items: center; color: transparent; font-size: 0.85rem; font-weight: 900;
+}
+.mkt-wiz-module-card.on .check { background: var(--mkt-brand); border-color: var(--mkt-brand); color: #fff; }
+
+.mkt-wiz-parent-panel { border: 2px dashed var(--mkt-stroke); border-radius: 16px; padding: 20px; margin-top: 22px; display: flex; gap: 14px; transition: opacity 0.2s; }
+.mkt-wiz-parent-panel.locked { opacity: 0.5; }
+.mkt-wiz-parent-panel .icon { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 1.3rem; background: rgba(242, 167, 27, 0.2); flex-shrink: 0; }
+.mkt-wiz-parent-panel .mbody { flex: 1; }
+.mkt-wiz-parent-panel .ptitle { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.98rem; flex-wrap: wrap; }
+.mkt-wiz-badge-free { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; background: rgba(22, 160, 106, 0.16); color: var(--mkt-green); padding: 3px 8px; border-radius: 999px; }
+.mkt-wiz-parent-panel .pdesc { font-size: 0.82rem; color: var(--mkt-muted); margin-top: 5px; line-height: 1.5; }
+.mkt-wiz-parent-panel .plockmsg { font-size: 0.78rem; color: var(--mkt-amber); margin-top: 8px; font-weight: 600; }
+
+.mkt-wiz-summary { background: linear-gradient(165deg, var(--mkt-soft), var(--mkt-card)); border: 1px solid var(--mkt-stroke); border-radius: 18px; padding: 22px; position: sticky; top: 20px; }
+.mkt-wiz-trial-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(242, 167, 27, 0.18); color: #92650a; font-size: 0.74rem; font-weight: 800; padding: 6px 10px; border-radius: 999px; margin-bottom: 14px; }
+.mkt[data-theme='dark'] .mkt-wiz-trial-badge { color: var(--mkt-amber); }
+@media (prefers-color-scheme: dark) { .mkt:not([data-theme='light']) .mkt-wiz-trial-badge { color: var(--mkt-amber); } }
+.mkt-wiz-summary h3 { font-size: 1.1rem; margin: 0 0 12px; }
+.mkt-wiz-summary-sub { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mkt-muted); margin: 18px 0 8px; padding-top: 14px; border-top: 1px solid var(--mkt-stroke); }
+.mkt-wiz-benefits { list-style: none; margin: 0; padding: 0; }
+.mkt-wiz-benefits li { display: flex; align-items: flex-start; gap: 8px; font-size: 0.85rem; padding: 6px 0; }
+.mkt-wiz-benefits li .tick { width: 18px; height: 18px; border-radius: 50%; background: var(--mkt-green); color: #fff; flex-shrink: 0; display: grid; place-items: center; font-size: 0.65rem; font-weight: 900; margin-top: 1px; }
+.mkt-wiz-benefits .empty { color: var(--mkt-muted); font-style: italic; font-size: 0.82rem; }
+.mkt-wiz-sline { display: flex; justify-content: space-between; font-size: 0.85rem; padding: 8px 0; border-bottom: 1px solid var(--mkt-stroke); }
+.mkt-wiz-sline .sprice { font-weight: 700; font-variant-numeric: tabular-nums; }
+.mkt-wiz-sline.free .sprice { color: var(--mkt-green); }
+.mkt-wiz-sline.empty { color: var(--mkt-muted); font-style: italic; border-bottom: none; }
+.mkt-wiz-stotal { display: flex; justify-content: space-between; align-items: baseline; margin-top: 14px; padding-top: 4px; }
+.mkt-wiz-stotal .tl { font-size: 0.8rem; color: var(--mkt-muted); font-weight: 600; }
+.mkt-wiz-stotal .tv { font-size: 1.5rem; font-weight: 800; color: var(--mkt-brand); }
+.mkt-wiz-trial-note { font-size: 0.76rem; color: var(--mkt-muted); margin-top: 14px; line-height: 1.5; }
+.mkt-wiz-final-cta { margin-top: 20px; padding: 14px; border-radius: 12px; background: rgba(22, 160, 106, 0.12); color: var(--mkt-green); font-size: 0.8rem; font-weight: 700; text-align: center; }

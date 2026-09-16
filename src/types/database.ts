@@ -1324,6 +1324,45 @@ export type Database = {
         }
         Relationships: []
       }
+      modules: {
+        Row: {
+          id: string
+          code: string
+          name: string
+          description: string
+          price_amount: number
+          currency: string
+          billing_period: Database['public']['Enums']["billing_period"]
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          name: string
+          description?: string
+          price_amount?: number
+          currency?: string
+          billing_period?: Database['public']['Enums']["billing_period"]
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          code?: string
+          name?: string
+          description?: string
+          price_amount?: number
+          currency?: string
+          billing_period?: Database['public']['Enums']["billing_period"]
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       notification_preferences: {
         Row: {
           id: string
@@ -1392,6 +1431,24 @@ export type Database = {
           entity_type?: string | null
           entity_id?: string | null
           read_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      onboarding_signup_attempts: {
+        Row: {
+          id: string
+          ip_address: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          ip_address: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          ip_address?: string
           created_at?: string
         }
         Relationships: []
@@ -2562,6 +2619,9 @@ export type Database = {
           timezone: string
           created_at: string
           updated_at: string
+          neighborhood: string | null
+          education_tracks: string[]
+          parent_portal_enabled: boolean
         }
         Insert: {
           id?: string
@@ -2588,6 +2648,9 @@ export type Database = {
           timezone?: string
           created_at?: string
           updated_at?: string
+          neighborhood?: string | null
+          education_tracks?: string[]
+          parent_portal_enabled?: boolean
         }
         Update: {
           id?: string
@@ -2614,6 +2677,9 @@ export type Database = {
           timezone?: string
           created_at?: string
           updated_at?: string
+          neighborhood?: string | null
+          education_tracks?: string[]
+          parent_portal_enabled?: boolean
         }
         Relationships: []
       }
@@ -2977,11 +3043,32 @@ export type Database = {
         }
         Relationships: []
       }
+      subscription_modules: {
+        Row: {
+          id: string
+          school_id: string
+          subscription_id: string
+          module_id: string
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          subscription_id: string
+          module_id: string
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          subscription_id?: string
+          module_id?: string
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           id: string
           school_id: string
-          plan_id: string
+          plan_id: string | null
           status: Database['public']['Enums']["subscription_status"]
           started_at: string
           current_period_start: string | null
@@ -2995,7 +3082,7 @@ export type Database = {
         Insert: {
           id?: string
           school_id: string
-          plan_id: string
+          plan_id?: string | null
           status?: Database['public']['Enums']["subscription_status"]
           started_at?: string
           current_period_start?: string | null
@@ -3009,7 +3096,7 @@ export type Database = {
         Update: {
           id?: string
           school_id?: string
-          plan_id?: string
+          plan_id?: string | null
           status?: Database['public']['Enums']["subscription_status"]
           started_at?: string
           current_period_start?: string | null

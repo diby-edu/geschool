@@ -4,6 +4,7 @@ const MESSAGES: Record<string, string> = {
   created: 'Enregistrement cree.',
   updated: 'Modifications enregistrees.',
   deleted: 'Element supprime.',
+  onboarded: 'Bienvenue ! Votre etablissement est cree, votre essai de 30 jours a commence.',
 };
 
 /**

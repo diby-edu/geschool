@@ -66,7 +66,8 @@ export default async function SchoolBillingPage({
               {...(sub
                 ? {
                     defaults: {
-                      planId: sub.plan_id,
+                      // Abonnement "a la carte" (wizard d'inscription) : pas de forfait fixe a preselectionner.
+                      ...(sub.plan_id ? { planId: sub.plan_id } : {}),
                       status: sub.status,
                       trialEndsAt: sub.trial_ends_at,
                       periodStart: sub.current_period_start,

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
 import { getDashboardData } from '@/features/dashboard/queries';
 import { Card, CardContent } from '@/components/ui/card';
+import { Flash } from '@/components/ui/flash';
 import { KpiCard } from '@/features/dashboard/components/KpiCard';
 import { AttendanceChart } from '@/features/dashboard/components/AttendanceChart';
 import { LevelDonut } from '@/features/dashboard/components/LevelDonut';
@@ -32,14 +33,22 @@ function SectionCard({ title, action, children }: { title: string; action?: Reac
   );
 }
 
-export default async function DashboardPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function DashboardPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { slug } = await params;
+  const sp = await searchParams;
   const ctx = await getTenantContext(slug);
   const data = await getDashboardData(ctx);
   const base = `/e/${ctx.school.slug}`;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
+      <Flash searchParams={sp} />
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Tableau de bord</h1>
         <p className="mt-1 text-sm text-[color:var(--muted-foreground)]">

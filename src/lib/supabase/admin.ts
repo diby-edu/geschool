@@ -23,6 +23,9 @@ import type { Database } from '@/types/database';
  *   5. Taches planifiees
  *   6. Import de masse
  *   7. Amorcage de la plateforme (seed)
+ *   8. Inscription en libre-service d'un etablissement (wizard public) : le
+ *      createur et le sujet du compte sont la meme personne, sans acteur
+ *      authentifie prealable pour porter l'ecriture via la RLS habituelle.
  *
  * Si une operation echoue avec le client utilisateur, la reponse n'est JAMAIS
  * de passer sur celui-ci : c'est soit une policy a corriger, soit un droit
@@ -40,7 +43,8 @@ export type AdminOperation =
   | 'import.bulk'
   | 'sync.apply'
   | 'notifications.send'
-  | 'platform.seed';
+  | 'platform.seed'
+  | 'onboarding.self_register';
 
 let cached: SupabaseClient<Database> | null = null;
 
