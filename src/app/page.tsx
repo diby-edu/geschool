@@ -11,7 +11,12 @@ export const dynamic = 'force-dynamic';
 // La racine est la vitrine publique : contrairement au reste de l'app (jamais
 // indexe, cf. layout.tsx), elle doit etre trouvable par les moteurs de
 // recherche. Aucune donnee d'etablissement n'y transite.
-export const metadata: Metadata = { robots: { index: true, follow: true } };
+export const metadata: Metadata = {
+  title: 'Gestion scolaire en ligne pour les établissements ivoiriens',
+  description:
+    "Emploi du temps, notes, présences, bulletins et communication réunis dans un seul espace. Inscrivez votre établissement et profitez de 30 jours d'essai gratuit.",
+  robots: { index: true, follow: true },
+};
 
 /**
  * Visiteur non connecte -> vitrine publique.

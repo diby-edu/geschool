@@ -6,6 +6,7 @@ import { registerSchoolAction } from '../actions';
 import type { FormState } from '@/lib/forms';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
+import { MODULES, formatFrancs } from '../catalog';
 
 const STEP_LABELS = ['Établissement', 'Modules', 'Votre compte'];
 
@@ -15,37 +16,9 @@ const EDUCATION_TRACKS = [
   { code: 'PROFESSIONNEL', name: 'PROFESSIONNEL', desc: 'BEP, BT, CAP, CQP, FQ' },
 ] as const;
 
-const MODULES = [
-  {
-    code: 'SCOL',
-    icon: '📘',
-    name: 'Gestion scolaire et notes',
-    desc: 'Élèves, enseignants, classes, salles, emploi du temps, notes et bulletins réunis au même endroit.',
-    price: 200000,
-    benefits: [
-      'Bulletins prêts à imprimer, sans ressaisie',
-      'Emploi du temps généré pour chaque classe',
-      'Moyennes et classements calculés automatiquement',
-    ],
-  },
-  {
-    code: 'APPEL',
-    icon: '✋',
-    name: 'Appel numérique',
-    desc: 'Les enseignants marquent la présence en quelques secondes, sans papier, depuis leur téléphone.',
-    price: 100000,
-    benefits: [
-      'Appel pris en quelques secondes depuis le téléphone',
-      'Historique de présence consultable par la direction',
-    ],
-  },
-] as const;
-
 const PARENT_BENEFIT = 'Familles informées en direct, sans appel ni message à rédiger';
 
-function fmt(n: number): string {
-  return `${n.toLocaleString('fr-FR')} F`;
-}
+const fmt = formatFrancs;
 
 function toggleInSet(set: Set<string>, code: string): Set<string> {
   const next = new Set(set);
