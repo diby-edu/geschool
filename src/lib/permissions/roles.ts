@@ -6,9 +6,13 @@
 export const ROLE_CODES = [
   'SCHOOL_ADMIN',
   'DIRECTOR',
+  'DEPUTY_DIRECTOR',
   'CENSOR',
-  'SECRETARY',
+  'EDUCATION_INSPECTOR',
+  'HEAD_SUPERVISOR',
   'SUPERVISOR',
+  'SECRETARY',
+  'IT_ADMIN',
   'ACCOUNTANT',
   'TEACHER',
   'PARENT',
@@ -19,36 +23,47 @@ export type RoleCode = (typeof ROLE_CODES)[number];
 
 /**
  * Espaces de l'application. Une seule application, plusieurs espaces selon le
- * role (ARCHITECTURE.md §3).
+ * role (ARCHITECTURE.md §3). Une personne qui cumule des roles ouvre l'espace de
+ * son choix (features/navigation/spaces.ts).
  */
-export type Space = 'school' | 'teacher' | 'parent' | 'student';
-
-/**
- * Espace vers lequel diriger un utilisateur, du plus privilegie au moins
- * privilegie. Le personnel administratif atterrit dans l'espace etablissement ;
- * un enseignant pur dans l'espace enseignant ; etc.
- */
-export function defaultSpaceFor(roles: readonly RoleCode[]): Space {
-  const staff: RoleCode[] = ['SCHOOL_ADMIN', 'DIRECTOR', 'CENSOR', 'SECRETARY', 'SUPERVISOR', 'ACCOUNTANT'];
-  if (roles.some((r) => staff.includes(r))) return 'school';
-  if (roles.includes('TEACHER')) return 'teacher';
-  if (roles.includes('PARENT')) return 'parent';
-  if (roles.includes('STUDENT')) return 'student';
-  // Aucun role connu : par prudence, l'espace le plus restreint
-  return 'student';
-}
+export type Space = 'school' | 'teacher' | 'parent';
 
 const ROLE_LABELS: Record<RoleCode, string> = {
-  SCHOOL_ADMIN: 'Administrateur',
+  SCHOOL_ADMIN: 'Fondateur',
   DIRECTOR: 'Directeur',
+  DEPUTY_DIRECTOR: 'Directeur adjoint',
   CENSOR: 'Censeur',
-  SECRETARY: 'Secretaire',
-  SUPERVISOR: 'Educateur',
+  EDUCATION_INSPECTOR: "Inspecteur d'éducation",
+  HEAD_SUPERVISOR: 'Surveillant général',
+  SUPERVISOR: 'Éducateur',
+  SECRETARY: 'Secrétaire',
+  IT_ADMIN: 'Informaticien',
   ACCOUNTANT: 'Comptable',
   TEACHER: 'Enseignant',
   PARENT: 'Parent',
-  STUDENT: 'Eleve',
+  STUDENT: 'Élève',
 };
+
+/**
+ * Fonctions du PERSONNEL ADMINISTRATIF que le fondateur peut attribuer et dont il
+ * règle les droits (page « Rôles et droits », module Personnel). Les enseignants
+ * se gèrent dans Enseignants ; parents et élèves n'ont pas de droits réglables.
+ * Le Comptable n'y figure pas : le produit ne gère pas l'argent des inscriptions
+ * (sa ligne est conservée en base, elle n'est ni proposée ni dupliquée).
+ * Le Fondateur (SCHOOL_ADMIN) est à part : complet et non modifiable.
+ */
+export const STAFF_FUNCTIONS = [
+  'DIRECTOR',
+  'DEPUTY_DIRECTOR',
+  'CENSOR',
+  'EDUCATION_INSPECTOR',
+  'HEAD_SUPERVISOR',
+  'SUPERVISOR',
+  'SECRETARY',
+  'IT_ADMIN',
+] as const satisfies readonly RoleCode[];
+
+export type StaffFunction = (typeof STAFF_FUNCTIONS)[number];
 
 export function roleLabel(code: RoleCode): string {
   return ROLE_LABELS[code] ?? code;

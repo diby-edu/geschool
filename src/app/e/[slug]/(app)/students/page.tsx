@@ -11,7 +11,7 @@ import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Flash } from '@/components/ui/flash';
 import { Button } from '@/components/ui/button';
 
-export const metadata: Metadata = { title: 'Eleves' };
+export const metadata: Metadata = { title: 'Élèves' };
 
 export default async function StudentsPage({
   params,
@@ -29,34 +29,68 @@ export default async function StudentsPage({
   if (!ctx.academicYear) {
     return (
       <div className="mx-auto max-w-4xl">
-        <PageHeader title="Eleves" />
-        <EmptyState title="Aucune annee scolaire active" hint="Activez une annee pour inscrire des eleves." />
+        <PageHeader title="Élèves" />
+        <EmptyState title="Aucune année scolaire active" hint="Activez une année pour inscrire des élèves." action={{ href: `/e/${slug}/academic-years`, label: 'Gérer les années scolaires' }} />
       </div>
     );
   }
 
   const listParams = parseListParams(sp, { sortable: STUDENT_SORTABLE, defaultSort: 'last_name' });
-  const { rows, total } = await listStudents(ctx, ctx.academicYear.id, listParams);
+  const askedAssigned = typeof sp.statut === 'string' ? sp.statut : '';
+  const assigned = askedAssigned === 'affecte' || askedAssigned === 'non-affecte' ? askedAssigned : undefined;
+  const { rows, total } = await listStudents(ctx, ctx.academicYear.id, listParams, {
+    ...(assigned ? { assigned } : {}),
+  });
   const canView = hasPermission(ctx, 'students.view');
 
   const columns: Column<StudentRow>[] = [
     { key: 'last_name', header: 'Nom', render: (r) => `${r.last_name.toUpperCase()} ${r.first_name}` },
     { key: 'matricule', header: 'Matricule', render: (r) => <span className="font-mono">{r.matricule}</span> },
     { key: 'class_name', header: 'Classe', render: (r) => r.class_name ?? '—' },
+    {
+      key: 'is_state_assigned',
+      header: 'Statut',
+      render: (r) => (
+        <span className={r.is_state_assigned === null ? 'text-[color:var(--muted-foreground)]' : ''}>
+          {r.is_state_assigned === null ? 'Non renseigné' : r.is_state_assigned ? 'Affecté' : 'Non affecté'}
+          {r.is_repeating ? ' · redoublant' : ''}
+        </span>
+      ),
+    },
   ];
 
   return (
     <div className="mx-auto max-w-4xl">
       <Flash searchParams={sp} />
       <PageHeader
-        title="Eleves"
-        description={`Annee ${ctx.academicYear.name}`}
+        title="Élèves"
+        description={`Année ${ctx.academicYear.name}`}
         action={
-          hasPermission(ctx, 'students.create') ? (
-            <Link href={`${base}/new`}>
-              <Button>Inscrire un eleve</Button>
-            </Link>
-          ) : null
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {hasPermission(ctx, 'students.create') ? (
+              <Link href={`${base}/reinscription`}>
+                <Button variant="ghost">Réinscription</Button>
+              </Link>
+            ) : null}
+            {hasPermission(ctx, 'students.export') ? (
+              // Route de telechargement (pas une page) : un <a> simple, sans prefetch.
+              <a href={`${base}/export${listParams.q ? `?q=${encodeURIComponent(listParams.q)}` : ''}`} download>
+                <Button variant="secondary">
+                  {listParams.q ? 'Exporter cette recherche (CSV)' : 'Exporter la liste (CSV)'}
+                </Button>
+              </a>
+            ) : null}
+            {hasPermission(ctx, 'students.create') ? (
+              <Link href={`/e/${slug}/import?type=students`}>
+                <Button variant="secondary">Importer / exporter</Button>
+              </Link>
+            ) : null}
+            {hasPermission(ctx, 'students.create') ? (
+              <Link href={`${base}/new`}>
+                <Button>Inscrire un élève</Button>
+              </Link>
+            ) : null}
+          </div>
         }
       />
       <div className="mb-4">
@@ -70,7 +104,7 @@ export default async function StudentsPage({
         basePath={base}
         searchParams={sp}
         rowHref={canView ? (r) => `${base}/${r.id}` : undefined}
-        emptyLabel="Aucun eleve inscrit."
+        emptyLabel="Aucun élève inscrit."
       />
     </div>
   );

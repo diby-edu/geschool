@@ -45,11 +45,20 @@ export function requirePermission(ctx: TenantContext, code: PermissionCode): voi
  */
 export function requireWritable(ctx: TenantContext, code: PermissionCode): void {
   requirePermission(ctx, code);
+  requireSchoolWritable(ctx);
+}
+
+/**
+ * Seule la condition « etablissement inscriptible », sans permission : pour les
+ * ecritures autorisees par autre chose qu'une permission (propriete d'une
+ * evaluation, par exemple).
+ */
+export function requireSchoolWritable(ctx: TenantContext): void {
   if (!ctx.isPlatformAdmin && ctx.school.status !== 'ACTIVE') {
     // Meme code que la RLS (TenantReadOnlyError serait plus precis, mais on
     // reste sur 403 cote action ; la RLS refusera de toute facon l'ecriture).
     throw new AuthorizationError(
-      "Cet etablissement est en lecture seule : aucune modification n'est possible.",
+      "Cet établissement est en lecture seule : aucune modification n'est possible.",
     );
   }
 }
