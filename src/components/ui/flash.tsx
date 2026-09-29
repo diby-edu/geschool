@@ -1,10 +1,18 @@
 import { Alert } from '@/components/ui/alert';
 
 const MESSAGES: Record<string, string> = {
-  created: 'Enregistrement cree.',
-  updated: 'Modifications enregistrees.',
-  deleted: 'Element supprime.',
-  onboarded: 'Bienvenue ! Votre etablissement est cree, votre essai de 30 jours a commence.',
+  created: 'Enregistrement créé.',
+  updated: 'Modifications enregistrées.',
+  deleted: 'Élément supprimé.',
+  configured: 'Grille horaire enregistrée : la journée est découpée en créneaux.',
+  onboarded: 'Bienvenue ! Votre établissement est créé, votre essai de 30 jours a commence.',
+  access_created:
+    "Accès créé. Ses identifiants sont en attente : envoyez-les par SMS depuis Gestion des accès.",
+  access_linked:
+    "Ce numéro avait déjà un accès dans l'établissement : le rôle Enseignant lui a été ajouté. Il se connecte avec son mot de passe actuel.",
+  access_linked_pending:
+    "Ce numéro avait déjà un accès en attente d'activation : le rôle Enseignant lui a été ajouté. Envoyez ses identifiants depuis Gestion des accès.",
+  access_already: 'Cet enseignant a déjà un accès.',
 };
 
 /**

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useClientValue } from './useClientValue';
+import { DownloadIcon } from '../visuals';
 
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -9,7 +10,7 @@ type InstallPromptEvent = Event & {
 };
 
 /**
- * Bouton "Installer l'application" (PWA — le manifeste et le Service Worker
+ * Bouton "Telecharger l'application" (PWA — le manifeste et le Service Worker
  * existent deja, cf. ServiceWorkerRegister). Chrome/Edge/Android exposent
  * `beforeinstallprompt` : on declenche l'installation native. Ailleurs (Safari
  * iPhone, Firefox...) l'evenement n'existe pas : on explique le geste manuel
@@ -62,8 +63,9 @@ export function InstallButton() {
 
   return (
     <>
-      <button type="button" className="mkt-pill" style={{ marginTop: '1.4rem' }} onClick={install} aria-expanded={deferred ? undefined : showHelp}>
-        Installer l&apos;application
+      <button type="button" className="lp-dl" onClick={install} aria-expanded={deferred ? undefined : showHelp}>
+        <DownloadIcon />
+        Télécharger l&apos;application
       </button>
       {showHelp ? (
         <p className="lp-install-help" role="status">

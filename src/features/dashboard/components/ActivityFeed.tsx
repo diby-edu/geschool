@@ -9,11 +9,15 @@ const TONE_COLOR: Record<ActivityItem['tone'], string> = {
 
 const ROLE_LABEL: Record<string, string> = {
   DIRECTOR: 'Direction',
-  SCHOOL_ADMIN: 'Administration',
+  SCHOOL_ADMIN: 'Fondateur',
+  DEPUTY_DIRECTOR: 'Direction adjointe',
+  EDUCATION_INSPECTOR: 'Inspection',
+  HEAD_SUPERVISOR: 'Surveillance générale',
+  IT_ADMIN: 'Informatique',
   CENSOR: 'Censorat',
-  SECRETARY: 'Secretariat',
+  SECRETARY: 'Secrétariat',
   SUPERVISOR: 'Vie scolaire',
-  ACCOUNTANT: 'Comptabilite',
+  ACCOUNTANT: 'Comptabilité',
   TEACHER: 'Enseignant',
   PLATFORM_ADMIN: 'Super Admin',
 };
@@ -21,7 +25,7 @@ const ROLE_LABEL: Record<string, string> = {
 function formatWhen(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const hours = Math.round(diffMs / 3_600_000);
-  if (hours < 1) return "a l'instant";
+  if (hours < 1) return "à l'instant";
   if (hours < 24) return `il y a ${hours} h`;
   const days = Math.round(hours / 24);
   return `il y a ${days} j`;
@@ -29,7 +33,7 @@ function formatWhen(iso: string): string {
 
 export function ActivityFeed({ items }: { items: ActivityItem[] }) {
   if (items.length === 0) {
-    return <p className="text-sm text-[color:var(--muted-foreground)]">Aucune activite recente.</p>;
+    return <p className="text-sm text-[color:var(--muted-foreground)]">Aucune activité récente.</p>;
   }
 
   return (

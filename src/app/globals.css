@@ -12,9 +12,9 @@
 --------------------------------------------------------------------------- */
 
 @theme {
-  --color-brand: oklch(0.55 0.16 250);
-  --color-brand-foreground: oklch(0.99 0 0);
-  --color-brand-muted: oklch(0.95 0.02 250);
+  --color-brand: #4a44e0;
+  --color-brand-foreground: #ffffff;
+  --color-brand-muted: #ecebff;
 
   --color-success: oklch(0.6 0.14 150);
   --color-warning: oklch(0.75 0.15 75);
@@ -29,22 +29,59 @@
   --radius-card: 0.625rem;
 }
 
+/* Clair : fond legerement bleute, cartes blanches (palette du tableau de bord « Mosaique »). */
 :root {
-  --background: oklch(0.99 0 0);
-  --foreground: oklch(0.21 0.01 250);
-  --surface: oklch(1 0 0);
-  --border: oklch(0.92 0.005 250);
-  --muted-foreground: oklch(0.52 0.01 250);
+  --background: #f3f4fa;
+  --foreground: #171a3a;
+  --surface: #ffffff;
+  --border: #e6e8f4;
+  --muted-foreground: #5b6088;
+  color-scheme: light;
 }
 
+/* Sombre : meme jeu de jetons, marque eclaircie pour rester lisible sur fond fonce.
+   Suit le systeme tant que l'utilisateur n'a pas choisi (bouton clair / sombre,
+   cookie gs-theme -> attribut data-theme), puis son choix l'emporte. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: oklch(0.17 0.01 250);
-    --foreground: oklch(0.95 0.005 250);
-    --surface: oklch(0.21 0.012 250);
-    --border: oklch(0.28 0.012 250);
-    --muted-foreground: oklch(0.68 0.01 250);
+  :root:not([data-theme='light']) {
+    --background: #0d1024;
+    --foreground: #eef0ff;
+    --surface: #151936;
+    --border: rgba(140, 150, 255, 0.16);
+    --muted-foreground: #a4abd8;
+    --color-brand: #8b85ff;
+    --color-brand-foreground: #141433;
+    --color-brand-muted: rgba(139, 133, 255, 0.16);
+    color-scheme: dark;
   }
+}
+
+:root[data-theme='dark'] {
+  --background: #0d1024;
+  --foreground: #eef0ff;
+  --surface: #151936;
+  --border: rgba(140, 150, 255, 0.16);
+  --muted-foreground: #a4abd8;
+  --color-brand: #8b85ff;
+  --color-brand-foreground: #141433;
+  --color-brand-muted: rgba(139, 133, 255, 0.16);
+  color-scheme: dark;
+}
+
+/* Pastilles colorees du menu (une couleur par module, la meme que son bloc du tableau de bord). */
+.nav-chip {
+  background-color: var(--chip-bg);
+  color: var(--chip-fg);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .nav-chip {
+    background-color: var(--chip-bg-dark);
+    color: var(--chip-fg-dark);
+  }
+}
+:root[data-theme='dark'] .nav-chip {
+  background-color: var(--chip-bg-dark);
+  color: var(--chip-fg-dark);
 }
 
 @layer base {
@@ -74,4 +111,149 @@
       transition-duration: 0.01ms !important;
     }
   }
+}
+
+/* Point « En direct » du tableau de bord (respecte prefers-reduced-motion : voir la regle globale plus haut). */
+@keyframes pulse-dot {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-success) 60%, transparent); }
+  100% { box-shadow: 0 0 0 9px color-mix(in oklch, var(--color-success) 0%, transparent); }
+}
+.pulse-dot {
+  animation: pulse-dot 1.8s ease-out infinite;
+}
+
+/* =============================================================================
+   Habit des modules : chaque page porte la couleur de son module du menu, comme
+   son bloc du tableau de bord. ModuleScope pose --mod-c1/--mod-c2 (dégradé),
+   --mod-on (texte sur le dégradé), --mod-tint/--mod-ink (clair) et
+   --mod-dtint/--mod-dink (sombre). --mod-soft/--mod-strong choisissent selon
+   le thème. Le tableau de bord garde son propre style (data-module="dashboard").
+   ============================================================================= */
+.mod-scope {
+  --mod-soft: var(--mod-tint);
+  --mod-strong: var(--mod-ink);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .mod-scope {
+    --mod-soft: var(--mod-dtint);
+    --mod-strong: var(--mod-dink);
+  }
+}
+:root[data-theme='dark'] .mod-scope {
+  --mod-soft: var(--mod-dtint);
+  --mod-strong: var(--mod-dink);
+}
+
+/* Boutons principaux, survols et liens actifs aux couleurs du module. */
+.mod-scope.mod-brand {
+  --color-brand: var(--mod-c2);
+  --color-brand-foreground: var(--mod-on);
+  --color-brand-muted: color-mix(in oklch, var(--mod-soft) 75%, transparent);
+}
+
+/* En-tête de page : bandeau dégradé (repli indigo hors ModuleScope). */
+.page-hero {
+  background: linear-gradient(135deg, var(--mod-c1, #3730a3) 0%, var(--mod-c2, #5b50e6) 100%);
+  color: var(--mod-on, #ffffff);
+  box-shadow: 0 14px 34px -22px color-mix(in oklch, var(--mod-c1, #3730a3) 85%, transparent);
+}
+/* Boutons posés dans le bandeau : blanc plein (principal) ou translucide (secondaire). */
+.hero-actions {
+  --color-brand: #ffffff;
+  --color-brand-foreground: var(--mod-ink, #3730a3);
+  --color-brand-muted: rgba(255, 255, 255, 0.22);
+  --surface: rgba(255, 255, 255, 0.14);
+  --foreground: var(--mod-on, #ffffff);
+  --muted-foreground: var(--mod-on, #ffffff);
+  --border: rgba(255, 255, 255, 0.42);
+}
+.hero-actions a:not([class]),
+.hero-actions a[class*='muted-foreground'] {
+  font-weight: 600;
+}
+
+/* Tuiles de comptage (FilterTile) et pastilles de filtre (FilterPill). */
+.mod-tile {
+  background-color: color-mix(in oklch, var(--mod-soft, var(--color-brand-muted)) 55%, var(--surface));
+  color: var(--mod-strong, var(--foreground));
+  border-color: color-mix(in oklch, var(--mod-strong, var(--color-brand)) 18%, transparent);
+}
+.mod-tile-active {
+  background: linear-gradient(135deg, var(--mod-c1, #3730a3) 0%, var(--mod-c2, #5b50e6) 100%);
+  color: var(--mod-on, #ffffff);
+  border-color: transparent;
+  box-shadow: 0 12px 26px -18px var(--mod-c1, #3730a3);
+}
+.mod-pill {
+  background-color: color-mix(in oklch, var(--mod-soft, var(--color-brand-muted)) 45%, var(--surface));
+  color: var(--mod-strong, var(--foreground));
+  border-color: color-mix(in oklch, var(--mod-strong, var(--color-brand)) 18%, transparent);
+}
+.mod-pill-count {
+  background-color: color-mix(in oklch, var(--mod-strong, var(--color-brand)) 14%, transparent);
+}
+.mod-pill-active {
+  background: linear-gradient(135deg, var(--mod-c1, #3730a3) 0%, var(--mod-c2, #5b50e6) 100%);
+  color: var(--mod-on, #ffffff);
+  border-color: transparent;
+}
+.mod-pill-active .mod-pill-count {
+  background-color: rgba(255, 255, 255, 0.24);
+}
+
+/* État vide : teinté, pastille du module (PageThemeBadge variant « soft »). */
+.mod-empty {
+  background-color: color-mix(in oklch, var(--mod-soft, var(--color-brand-muted)) 28%, var(--surface));
+  border-color: color-mix(in oklch, var(--mod-strong, var(--color-brand)) 32%, transparent);
+}
+.mod-soft-chip {
+  background-color: var(--mod-soft, var(--color-brand-muted));
+  color: var(--mod-strong, var(--color-brand));
+}
+
+/* Tableaux des pages de module : en-tête teinté, survol teinté, coins arrondis. */
+.mod-scope:not([data-module='dashboard']) :is(div, section):has(> table) {
+  border-radius: 1.5rem;
+}
+.mod-scope:not([data-module='dashboard']) table thead tr {
+  background-color: color-mix(in oklch, var(--mod-soft) 60%, var(--surface));
+}
+.mod-scope:not([data-module='dashboard']) table thead th {
+  color: var(--mod-strong);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.mod-scope:not([data-module='dashboard']) table tbody tr:hover {
+  background-color: color-mix(in oklch, var(--mod-soft) 38%, var(--surface));
+}
+
+/* -----------------------------------------------------------------------------
+   Curseur : la main sur tout ce qui se clique
+   --------------------------------------------------------------------------- */
+/* Tailwind v4 laisse aux boutons le curseur par défaut (flèche) : rien ne
+   signale qu'ils se cliquent. On rétablit la main sur les vrais éléments
+   cliquables — et le curseur « interdit » sur ce qui est désactivé. */
+button:not(:disabled),
+summary,
+label:has(input[type='checkbox']:not(:disabled)),
+label:has(input[type='radio']:not(:disabled)),
+[role='button']:not([aria-disabled='true']),
+[role='menuitem'],
+[role='tab'],
+select:not(:disabled),
+input[type='checkbox']:not(:disabled),
+input[type='radio']:not(:disabled),
+input[type='file']:not(:disabled),
+input[type='submit']:not(:disabled),
+input[type='reset']:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled,
+input:disabled,
+[aria-disabled='true'] {
+  cursor: not-allowed;
 }

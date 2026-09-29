@@ -26,7 +26,7 @@ export function DataTable<Row extends { id: string }>({
   basePath,
   searchParams,
   rowHref,
-  emptyLabel = 'Aucun resultat',
+  emptyLabel = 'Aucun résultat',
 }: {
   columns: Column<Row>[];
   rows: Row[];
@@ -46,14 +46,14 @@ export function DataTable<Row extends { id: string }>({
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-[--radius-card] border" style={{ backgroundColor: 'var(--surface)' }}>
+      <div className="overflow-x-auto rounded-3xl border" style={{ backgroundColor: 'var(--surface)' }}>
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b text-left text-[color:var(--muted-foreground)]">
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={cn('px-3 py-2 font-medium', col.align === 'right' && 'text-right', col.className)}
+                  className={cn('px-4 py-3 font-medium', col.align === 'right' && 'text-right', col.className)}
                   aria-sort={
                     params.sort === col.key ? (params.dir === 'asc' ? 'ascending' : 'descending') : undefined
                   }
@@ -89,10 +89,10 @@ export function DataTable<Row extends { id: string }>({
                       return (
                         <td
                           key={col.key}
-                          className={cn('px-3 py-2', col.align === 'right' && 'text-right', col.className)}
+                          className={cn('px-4 py-2.5', col.align === 'right' && 'text-right', col.className)}
                         >
                           {href && i === 0 ? (
-                            <Link href={href} className="font-medium hover:underline">
+                            <Link href={href} className="font-semibold hover:underline">
                               {content}
                             </Link>
                           ) : (
@@ -112,7 +112,7 @@ export function DataTable<Row extends { id: string }>({
       {pages > 1 ? (
         <nav className="mt-3 flex items-center justify-between text-sm" aria-label="Pagination">
           <p className="text-[color:var(--muted-foreground)]">
-            {total.toLocaleString('fr-FR')} resultat{total > 1 ? 's' : ''} · page {params.page} / {pages}
+            {total.toLocaleString('fr-FR')} résultat{total > 1 ? 's' : ''} · page {params.page} / {pages}
           </p>
           <div className="flex gap-1">
             <PageLink

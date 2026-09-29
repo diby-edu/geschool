@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
+import { cookies } from 'next/headers';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
+import { THEME_COOKIE, parseTheme } from '@/lib/theme';
 import { locale } from '@/i18n/request';
 import { publicEnv } from '@/lib/env';
 import { ServiceWorkerRegister } from '@/components/pwa/ServiceWorkerRegister';
@@ -32,9 +34,11 @@ export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const messages = await getMessages();
+  // Choix clair / sombre de la personne (cookie) : la page arrive dans le bon theme.
+  const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
 
   return (
-    <html lang={locale} suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning {...(theme ? { 'data-theme': theme } : {})}>
       <body>
         <ServiceWorkerRegister />
         <ChunkErrorReload />

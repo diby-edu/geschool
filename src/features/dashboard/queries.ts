@@ -1,12 +1,19 @@
 import 'server-only';
+import { periodsForTrack, mainTrack } from '@/features/academic-years/periods-by-track';
+import type { EducationTrack } from '@/features/structure/official-tracks';
+import { schoolTracks } from '@/features/structure/queries';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
-import { hasPermission } from '@/lib/permissions';
-import { getSchoolSubscription } from '@/features/billing/platform';
+import type { Space } from '@/lib/permissions/roles';
+import { myChildrenIds } from '@/features/family/children';
 import { unreadCount } from '@/features/communication/inbox';
 import { activityLabel } from '@/lib/audit/labels';
-import type { ActivityItem, TodoItem, StaffOverview, TeacherOverview, TeacherStats, FamilyOverview, DashboardData } from './types';
+import { hasPermission } from '@/lib/permissions';
+import { listMySessionsOn } from '@/features/attendance/current';
+import { sessionPhase } from '@/features/attendance/day-phase';
+import { schoolToday } from './time';
+import type { ActivityItem, FamilyGrade, TeacherDayItem, TeacherOverview, TeacherStats, FamilyOverview, DashboardData } from './types';
 
 export type { Sparkline, ActivityItem, TodoItem, StaffOverview, TeacherOverview, TeacherStats, FamilyOverview, DashboardData } from './types';
 
@@ -28,58 +35,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // Utilitaires de date
 // ---------------------------------------------------------------------------
 
-function isoDaysAgo(days: number): string {
+export function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * DAY_MS).toISOString();
-}
-
-/** Bornes [debut, fin) des 6 dernieres semaines glissantes (7 jours chacune). */
-function weekBuckets(count: number): { from: string; to: string; label: string }[] {
-  const buckets: { from: string; to: string; label: string }[] = [];
-  for (let i = count - 1; i >= 0; i--) {
-    const to = new Date(Date.now() - i * 7 * DAY_MS);
-    const from = new Date(to.getTime() - 7 * DAY_MS);
-    buckets.push({ from: from.toISOString(), to: to.toISOString(), label: `S-${i}` });
-  }
-  return buckets;
-}
-
-// ---------------------------------------------------------------------------
-// Section : presence
-// ---------------------------------------------------------------------------
-
-async function loadAttendance(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  schoolId: string,
-): Promise<StaffOverview['attendance']> {
-  const buckets = weekBuckets(6);
-
-  async function rateOf(from: string, to: string): Promise<number | null> {
-    const [{ count: total }, { count: absent }] = await Promise.all([
-      supabase
-        .from('attendance_records')
-        .select('id', { count: 'exact', head: true })
-        .eq('school_id', schoolId)
-        .gte('recorded_at', from)
-        .lt('recorded_at', to),
-      supabase
-        .from('attendance_records')
-        .select('id', { count: 'exact', head: true })
-        .eq('school_id', schoolId)
-        .eq('status', 'ABSENT')
-        .gte('recorded_at', from)
-        .lt('recorded_at', to),
-    ]);
-    if (!total) return null;
-    return Math.round((1 - (absent ?? 0) / total) * 1000) / 10;
-  }
-
-  const rates = await Promise.all(buckets.map((b) => rateOf(b.from, b.to)));
-  const series = buckets.map((b, i) => ({ label: b.label, value: rates[i] ?? null }));
-  const rate7d = rates[rates.length - 1];
-  const ratePrev7d = rates[rates.length - 2];
-  if (rate7d === null || rate7d === undefined) return null;
-
-  return { rate7d, ratePrev7d: ratePrev7d ?? rate7d, series };
 }
 
 // ---------------------------------------------------------------------------
@@ -92,15 +49,19 @@ async function loadCurrentPeriod(
   supabase: Awaited<ReturnType<typeof createClient>>,
   schoolId: string,
   yearId: string,
+  track: EducationTrack = 'GENERAL',
 ): Promise<{ current: PeriodRow | null; previous: PeriodRow | null }> {
   const { data } = await supabase
     .from('academic_periods')
-    .select('id, name, sequence, starts_on')
+    .select('id, name, sequence, starts_on, tracks')
     .eq('school_id', schoolId)
     .eq('academic_year_id', yearId)
     .eq('is_grading_period', true)
     .order('sequence');
-  const periods = (data ?? []) as PeriodRow[];
+  // Une école à deux découpages (trimestres du général, semestres du technique)
+  // en porte deux dans la même année : on n'en suit qu'un, sinon « la période en
+  // cours » n'aurait pas de sens.
+  const periods = periodsForTrack((data ?? []) as (PeriodRow & { tracks: string[] | null })[], track);
   if (periods.length === 0) return { current: null, previous: null };
 
   const today = new Date().toISOString().slice(0, 10);
@@ -111,55 +72,13 @@ async function loadCurrentPeriod(
   return { current, previous };
 }
 
-async function averageOf(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  schoolId: string,
-  periodId: string,
-): Promise<number | null> {
-  const { data } = await supabase
-    .from('report_cards')
-    .select('general_average')
-    .eq('school_id', schoolId)
-    .eq('academic_period_id', periodId)
-    .not('general_average', 'is', null);
-  const values = ((data ?? []) as { general_average: number }[]).map((r) => Number(r.general_average));
-  if (values.length === 0) return null;
-  return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 100) / 100;
-}
-
-async function bulletinsProgress(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  schoolId: string,
-  periodId: string,
-  totalClasses: number,
-): Promise<{ published: number; total: number }> {
-  const { data } = await supabase
-    .from('report_cards')
-    .select('class_id, status')
-    .eq('school_id', schoolId)
-    .eq('academic_period_id', periodId);
-  const rows = (data ?? []) as { class_id: string; status: string }[];
-  const byClass = new Map<string, { total: number; published: number }>();
-  for (const r of rows) {
-    const c = byClass.get(r.class_id) ?? { total: 0, published: 0 };
-    c.total += 1;
-    if (r.status === 'PUBLISHED') c.published += 1;
-    byClass.set(r.class_id, c);
-  }
-  let published = 0;
-  for (const c of byClass.values()) {
-    if (c.total > 0 && c.published === c.total) published += 1;
-  }
-  return { published, total: totalClasses };
-}
-
 // ---------------------------------------------------------------------------
 // Section : classes (remplissage, repartition par niveau)
 // ---------------------------------------------------------------------------
 
-type ClassRow = { id: string; name: string; capacity: number; level_id: string | null; levels: { name: string } | null };
+export type ClassRow = { id: string; name: string; capacity: number; level_id: string | null; levels: { name: string } | null };
 
-async function loadClasses(
+export async function loadClasses(
   supabase: Awaited<ReturnType<typeof createClient>>,
   schoolId: string,
   yearId: string,
@@ -191,7 +110,7 @@ async function loadClasses(
 // Section : activite recente (journal d'audit)
 // ---------------------------------------------------------------------------
 
-async function loadActivity(
+export async function loadActivity(
   supabase: Awaited<ReturnType<typeof createClient>>,
   schoolId: string,
 ): Promise<ActivityItem[]> {
@@ -212,159 +131,21 @@ async function loadActivity(
 // Assemblage
 // ---------------------------------------------------------------------------
 
-async function loadStaffOverview(ctx: TenantContext): Promise<StaffOverview> {
-  const supabase = await createClient();
-  const schoolId = ctx.school.id;
-  const yearId = ctx.academicYear?.id ?? null;
-
-  const canClasses = hasPermission(ctx, 'classes.view');
-  const canTeachers = hasPermission(ctx, 'teachers.view');
-  const canAttendance = hasPermission(ctx, 'attendance.view_all');
-  const canJustify = hasPermission(ctx, 'attendance.justify') || canAttendance;
-  const canReports = hasPermission(ctx, 'reports.view');
-  const canSchedule = hasPermission(ctx, 'schedule.view');
-  const canBilling = hasPermission(ctx, 'billing.view');
-  const canAudit = hasPermission(ctx, 'audit.view');
-
-  const [
-    studentsTotal,
-    studentsNew30d,
-    teachersCount,
-    classesLoaded,
-    attendance,
-    period,
-    pendingJustifications,
-    scheduleVersion,
-    subscription,
-    activity,
-  ] = await Promise.all([
-    yearId
-      ? supabase
-          .from('student_enrollments')
-          .select('id', { count: 'exact', head: true })
-          .eq('school_id', schoolId)
-          .eq('academic_year_id', yearId)
-          .eq('status', 'ENROLLED')
-      : supabase.from('students').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).is('deleted_at', null),
-    yearId
-      ? supabase
-          .from('student_enrollments')
-          .select('id', { count: 'exact', head: true })
-          .eq('school_id', schoolId)
-          .eq('academic_year_id', yearId)
-          .eq('status', 'ENROLLED')
-          .gte('enrolled_on', isoDaysAgo(30).slice(0, 10))
-      : Promise.resolve({ count: 0 }),
-    canTeachers
-      ? supabase.from('teachers').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).is('deleted_at', null)
-      : Promise.resolve({ count: null }),
-    canClasses && yearId ? loadClasses(supabase, schoolId, yearId) : Promise.resolve(null),
-    canAttendance ? loadAttendance(supabase, schoolId) : Promise.resolve(null),
-    yearId ? loadCurrentPeriod(supabase, schoolId, yearId) : Promise.resolve({ current: null, previous: null }),
-    canJustify
-      ? supabase
-          .from('absence_justifications')
-          .select('id', { count: 'exact', head: true })
-          .eq('school_id', schoolId)
-          .eq('status', 'PENDING')
-      : Promise.resolve({ count: null }),
-    canSchedule && yearId
-      ? supabase
-          .from('schedule_versions')
-          .select('id', { count: 'exact', head: true })
-          .eq('school_id', schoolId)
-          .eq('academic_year_id', yearId)
-          .eq('status', 'PUBLISHED')
-      : Promise.resolve({ count: null }),
-    canBilling ? getSchoolSubscription(schoolId) : Promise.resolve(null),
-    canAudit ? loadActivity(supabase, schoolId) : Promise.resolve(null),
+/** Comptes de parents : créés / déjà connectés au moins une fois (activés). */
+export async function loadParents(supabase: Awaited<ReturnType<typeof createClient>>, schoolId: string) {
+  const guardians = () =>
+    supabase
+      .from('account_access')
+      .select('id', { count: 'exact', head: true })
+      .eq('school_id', schoolId)
+      .eq('subject_kind', 'GUARDIAN');
+  const [total, activated, pending] = await Promise.all([
+    guardians(),
+    guardians().eq('activation_status', 'ACTIVATED'),
+    // Même définition que le filtre « Non activés » de la page Accès : un compte suspendu n'est pas « à activer ».
+    guardians().neq('activation_status', 'ACTIVATED').neq('account_status', 'SUSPENDED'),
   ]);
-
-  let grades: StaffOverview['grades'] = null;
-  let bulletins: StaffOverview['bulletins'] = null;
-  if (canReports && period.current) {
-    const [average, averagePrev] = await Promise.all([
-      averageOf(supabase, schoolId, period.current.id),
-      period.previous ? averageOf(supabase, schoolId, period.previous.id) : Promise.resolve(null),
-    ]);
-    grades = { average, averagePrev };
-    if (classesLoaded) {
-      bulletins = await bulletinsProgress(supabase, schoolId, period.current.id, classesLoaded.classes.length);
-    }
-  }
-
-  let levelDistribution: StaffOverview['levelDistribution'] = null;
-  let classFill: StaffOverview['classFill'] = null;
-  if (classesLoaded) {
-    const byLevel = new Map<string, number>();
-    const fill: { name: string; enrolled: number; capacity: number }[] = [];
-    for (const c of classesLoaded.classes) {
-      const enrolled = classesLoaded.enrolledByClass.get(c.id) ?? 0;
-      const levelName = c.levels?.name ?? '—';
-      byLevel.set(levelName, (byLevel.get(levelName) ?? 0) + enrolled);
-      fill.push({ name: c.name, enrolled, capacity: c.capacity });
-    }
-    levelDistribution = Array.from(byLevel.entries()).map(([label, value]) => ({ label, value }));
-    const ratio = (c: { enrolled: number; capacity: number }) => (c.capacity > 0 ? c.enrolled / c.capacity : -1);
-    classFill = fill.sort((a, b) => ratio(b) - ratio(a)).slice(0, 6);
-  }
-
-  const base = `/e/${ctx.school.slug}`;
-  const todos: TodoItem[] = [];
-  if (bulletins && bulletins.published < bulletins.total) {
-    todos.push({
-      id: 'bulletins',
-      severity: 'critical',
-      label: `${bulletins.total - bulletins.published} classe(s) sans bulletin publie`,
-      detail: `${bulletins.published} / ${bulletins.total} classes publiees`,
-      href: `${base}/bulletins`,
-    });
-  }
-  if (typeof pendingJustifications.count === 'number' && pendingJustifications.count > 0) {
-    todos.push({
-      id: 'justifications',
-      severity: 'warning',
-      label: `${pendingJustifications.count} justificatif(s) en attente`,
-      detail: 'A traiter par la vie scolaire',
-      href: `${base}/attendance/justificatifs`,
-    });
-  }
-  if (canSchedule && yearId && typeof scheduleVersion.count === 'number' && scheduleVersion.count === 0) {
-    todos.push({
-      id: 'schedule',
-      severity: 'info',
-      label: 'Aucun emploi du temps publie cette annee',
-      detail: ctx.academicYear?.name ?? '',
-      href: `${base}/schedule`,
-    });
-  }
-  if (subscription?.status === 'PAST_DUE') {
-    todos.push({
-      id: 'billing',
-      severity: 'critical',
-      label: 'Abonnement impaye',
-      detail: subscription.plans?.name ?? '',
-      href: `${base}/facturation`,
-    });
-  }
-
-  return {
-    kind: 'staff',
-    periodName: period.current?.name ?? null,
-    students: { total: studentsTotal.count ?? 0, new30d: studentsNew30d.count ?? 0 },
-    teachers: teachersCount.count,
-    classes: classesLoaded ? classesLoaded.classes.length : null,
-    attendance,
-    grades,
-    bulletins,
-    levelDistribution,
-    classFill,
-    pendingJustifications: pendingJustifications.count,
-    scheduleGenerated: canSchedule && yearId ? (scheduleVersion.count ?? 0) > 0 : null,
-    subscription: subscription ? { status: subscription.status, planName: subscription.plans?.name ?? null } : null,
-    activity,
-    todos,
-  };
+  return { total: total.count ?? 0, activated: activated.count ?? 0, pending: pending.count ?? 0 };
 }
 
 async function loadTeacherOverview(ctx: TenantContext): Promise<TeacherOverview> {
@@ -396,10 +177,14 @@ async function loadTeacherOverview(ctx: TenantContext): Promise<TeacherOverview>
         periodName: null,
       },
       unreadNotifications: unread,
+      day: null,
+      toClose: null,
     };
   }
 
-  const [{ data: assigned }, { data: headOf }, unread] = await Promise.all([
+  const now = new Date();
+  const today = schoolToday(ctx.school.timezone, now);
+  const [{ data: assigned }, { data: headOf }, unread, daySessions, toClose] = await Promise.all([
     supabase
       .from('teaching_assignments')
       .select('class_id, classes(id, name, levels(name))')
@@ -416,6 +201,18 @@ async function loadTeacherOverview(ctx: TenantContext): Promise<TeacherOverview>
       .eq('status', 'ACTIVE')
       .eq('head_teacher_id', teacherRow.id),
     unreadCount(ctx),
+    hasPermission(ctx, 'schedule.view') ? listMySessionsOn(ctx, teacherRow.id, today) : Promise.resolve(null),
+    hasPermission(ctx, 'assessments.view')
+      ? supabase
+          .from('assessments')
+          .select('id', { count: 'exact', head: true })
+          .eq('school_id', schoolId)
+          .eq('academic_year_id', yearId)
+          .eq('teacher_id', teacherRow.id)
+          .in('status', ['DRAFT', 'OPEN'])
+          .lte('assessment_date', today)
+          .then((r) => r.count ?? 0)
+      : Promise.resolve(null),
   ]);
 
   type ClassRef = { id: string; name: string; levels: { name: string } | null };
@@ -448,7 +245,22 @@ async function loadTeacherOverview(ctx: TenantContext): Promise<TeacherOverview>
 
   const stats = await loadTeacherStats(ctx, teacherRow.id, yearId, classes.length, classes.reduce((sum, c) => sum + c.students, 0));
 
-  return { kind: 'teacher', classes, stats, unreadNotifications: unread };
+  const day: TeacherDayItem[] | null = daySessions
+    ? daySessions.map((d) => {
+        const called = d.registerStatus === 'SUBMITTED' || d.registerStatus === 'VALIDATED';
+        return {
+          occurrenceId: d.occurrenceId,
+          klass: d.klass,
+          subject: d.subject,
+          startsAt: d.startsAt,
+          endsAt: d.endsAt,
+          called,
+          phase: sessionPhase(d.startsIso, d.endsIso, called, now),
+        };
+      })
+    : null;
+
+  return { kind: 'teacher', classes, stats, unreadNotifications: unread, day, toClose };
 }
 
 async function loadTeacherStats(
@@ -476,7 +288,7 @@ async function loadTeacherStats(
       .eq('school_id', schoolId)
       .eq('academic_year_id', yearId)
       .eq('teacher_id', teacherId),
-    loadCurrentPeriod(supabase, schoolId, yearId),
+    loadCurrentPeriod(supabase, schoolId, yearId, mainTrack(await schoolTracks(ctx))),
     supabase
       .from('schedule_versions')
       .select('id')
@@ -546,13 +358,19 @@ async function loadFamilyOverview(ctx: TenantContext): Promise<FamilyOverview> {
   const schoolId = ctx.school.id;
   const yearId = ctx.academicYear?.id ?? null;
 
+  // Uniquement SES enfants (cf. children.ts) : la securite peut en montrer davantage
+  // a une personne qui cumule un autre role (enseignant, direction).
+  const childIds = await myChildrenIds(ctx);
   const [{ data: studentsData }, unread] = await Promise.all([
-    supabase
-      .from('students')
-      .select('id, first_name, last_name, matricule')
-      .eq('school_id', schoolId)
-      .is('deleted_at', null)
-      .order('last_name'),
+    childIds.length === 0
+      ? Promise.resolve({ data: [] as { id: string; first_name: string; last_name: string; matricule: string }[] })
+      : supabase
+          .from('students')
+          .select('id, first_name, last_name, matricule')
+          .eq('school_id', schoolId)
+          .in('id', childIds)
+          .is('deleted_at', null)
+          .order('last_name'),
     unreadCount(ctx),
   ]);
 
@@ -562,9 +380,14 @@ async function loadFamilyOverview(ctx: TenantContext): Promise<FamilyOverview> {
   const enrollmentByStudent = new Map<string, { className: string }>();
   const lastAverageByStudent = new Map<string, number>();
   const absencesByStudent = new Map<string, number>();
+  const latesByStudent = new Map<string, number>();
+  const bulletinsByStudent = new Map<string, number>();
+  const gradesByStudent = new Map<string, FamilyGrade[]>();
+
+  const announcements = await loadFamilyAnnouncements(supabase, schoolId, ctx.membership?.roles ?? []);
 
   if (studentIds.length > 0 && yearId) {
-    const [{ data: enrollData }, { data: reportData }, { data: absenceData }] = await Promise.all([
+    const [{ data: enrollData }, { data: reportData }, { data: absenceData }, { data: gradeData }] = await Promise.all([
       supabase
         .from('student_enrollments')
         .select('student_id, classes(name)')
@@ -576,15 +399,27 @@ async function loadFamilyOverview(ctx: TenantContext): Promise<FamilyOverview> {
         .from('report_cards')
         .select('student_id, general_average, academic_periods(sequence)')
         .eq('school_id', schoolId)
+        .eq('academic_year_id', yearId)
         .eq('status', 'PUBLISHED')
         .in('student_id', studentIds),
       supabase
         .from('attendance_records')
-        .select('student_id')
+        .select('student_id, status')
         .eq('school_id', schoolId)
-        .eq('status', 'ABSENT')
+        .in('status', ['ABSENT', 'EXCUSED', 'LATE'])
         .gte('recorded_at', isoDaysAgo(30))
         .in('student_id', studentIds),
+      // Notes lisibles par un parent : celles des évaluations PUBLIÉES de ses enfants (RLS).
+      supabase
+        .from('grades')
+        .select('student_id, score, is_absent, entered_at, assessments!inner(title, max_score, assessment_date, status, academic_year_id, subjects(name))')
+        .eq('school_id', schoolId)
+        .in('student_id', studentIds)
+        .eq('assessments.status', 'PUBLISHED')
+        .eq('assessments.academic_year_id', yearId)
+        .not('score', 'is', null)
+        .order('entered_at', { ascending: false })
+        .limit(20 * studentIds.length),
     ]);
 
     for (const r of (enrollData ?? []) as unknown as { student_id: string; classes: { name: string } | null }[]) {
@@ -606,8 +441,31 @@ async function loadFamilyOverview(ctx: TenantContext): Promise<FamilyOverview> {
       }
     }
 
-    for (const r of (absenceData ?? []) as { student_id: string }[]) {
-      absencesByStudent.set(r.student_id, (absencesByStudent.get(r.student_id) ?? 0) + 1);
+    for (const r of (absenceData ?? []) as { student_id: string; status: string }[]) {
+      const bucket = r.status === 'LATE' ? latesByStudent : absencesByStudent;
+      bucket.set(r.student_id, (bucket.get(r.student_id) ?? 0) + 1);
+    }
+
+    for (const r of (reportData ?? []) as unknown as { student_id: string }[]) {
+      bulletinsByStudent.set(r.student_id, (bulletinsByStudent.get(r.student_id) ?? 0) + 1);
+    }
+
+    for (const g of (gradeData ?? []) as unknown as {
+      student_id: string;
+      score: number | null;
+      assessments: { title: string; max_score: number; assessment_date: string | null; subjects: { name: string } | null } | null;
+    }[]) {
+      if (g.score === null || !g.assessments) continue;
+      const list = gradesByStudent.get(g.student_id) ?? [];
+      if (list.length >= 4) continue;
+      list.push({
+        subject: g.assessments.subjects?.name ?? g.assessments.title,
+        title: g.assessments.title,
+        score: Number(g.score),
+        max: Number(g.assessments.max_score),
+        date: g.assessments.assessment_date,
+      });
+      gradesByStudent.set(g.student_id, list);
     }
   }
 
@@ -620,20 +478,43 @@ async function loadFamilyOverview(ctx: TenantContext): Promise<FamilyOverview> {
       className: enrollmentByStudent.get(s.id)?.className ?? null,
       lastAverage: lastAverageByStudent.get(s.id) ?? null,
       absences30d: absencesByStudent.get(s.id) ?? 0,
+      lates30d: latesByStudent.get(s.id) ?? 0,
+      lastGrades: gradesByStudent.get(s.id) ?? [],
+      bulletins: bulletinsByStudent.get(s.id) ?? 0,
     })),
     unreadNotifications: unread,
+    announcements,
   };
 }
 
-export async function getDashboardData(ctx: TenantContext): Promise<DashboardData> {
-  if (hasPermission(ctx, 'students.view') || ctx.isPlatformAdmin) {
-    return loadStaffOverview(ctx);
-  }
+/**
+ * Annonces publiées qui VISENT les parents : « tout l'établissement », ou une
+ * audience qui comprend l'une des fonctions de la personne (même règle que les
+ * notifications, services/notifications.ts).
+ */
+async function loadFamilyAnnouncements(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  schoolId: string,
+  roles: readonly string[],
+): Promise<FamilyOverview['announcements']> {
+  const { data } = await supabase
+    .from('announcements')
+    .select('id, title, body, audience, published_at, expires_at')
+    .eq('school_id', schoolId)
+    .eq('status', 'PUBLISHED')
+    .order('published_at', { ascending: false })
+    .limit(20);
+  const mine = new Set(roles);
+  const now = Date.now();
+  return ((data ?? []) as unknown as { id: string; title: string; body: string; audience: { all?: boolean; roles?: string[] } | null; published_at: string | null; expires_at: string | null }[])
+    .filter((a) => !a.expires_at || Date.parse(a.expires_at) > now)
+    .filter((a) => a.audience?.all || (a.audience?.roles ?? []).some((r) => mine.has(r.toUpperCase())))
+    .slice(0, 3)
+    .map((a) => ({ id: a.id, title: a.title, excerpt: a.body.length > 220 ? `${a.body.slice(0, 220).trimEnd()}…` : a.body, publishedAt: a.published_at }));
+}
 
-  const roles = ctx.membership?.roles ?? [];
-  if (roles.includes('TEACHER')) {
-    return loadTeacherOverview(ctx);
-  }
-
+/** Tableau de bord des espaces Enseignant et Parent (celui de la direction : staff.ts). */
+export async function getDashboardData(ctx: TenantContext, space: Exclude<Space, 'school'>): Promise<DashboardData> {
+  if (space === 'teacher') return loadTeacherOverview(ctx);
   return loadFamilyOverview(ctx);
 }

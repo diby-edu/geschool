@@ -104,7 +104,7 @@ export function LandingMotion() {
     // Souris : parallaxe de l'aurore, halo, inclinaison du tableau de bord
     const hero = document.querySelector<HTMLElement>('.lp-hero');
     const spotlight = document.querySelector<HTMLElement>('.lp-spotlight');
-    const tilt = document.querySelector<HTMLElement>('.lp-tilt');
+    const tilts = document.querySelectorAll<HTMLElement>('.lp-tilt');
     if (hero && !reduce && finePointer) {
       const onMove = (ev: MouseEvent) => {
         const r = hero.getBoundingClientRect();
@@ -114,17 +114,19 @@ export function LandingMotion() {
         aurora?.style.setProperty('--my', `${(relY - 0.5) * 44}px`);
         spotlight?.style.setProperty('--sx', `${relX * 100}%`);
         spotlight?.style.setProperty('--sy', `${relY * 100}%`);
-        if (tilt) {
+        tilts.forEach((tilt) => {
           const pr = tilt.getBoundingClientRect();
           const px = (ev.clientX - pr.left) / pr.width;
           const py = (ev.clientY - pr.top) / pr.height;
           if (px >= -0.2 && px <= 1.2 && py >= -0.2 && py <= 1.2) {
             tilt.style.transform = `perspective(900px) rotateX(${(py - 0.5) * -8}deg) rotateY(${(px - 0.5) * 10}deg)`;
           }
-        }
+        });
       };
       const onLeave = () => {
-        if (tilt) tilt.style.transform = '';
+        tilts.forEach((tilt) => {
+          tilt.style.transform = '';
+        });
       };
       hero.addEventListener('mousemove', onMove);
       hero.addEventListener('mouseleave', onLeave);

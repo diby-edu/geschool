@@ -58,9 +58,9 @@ export default async function RootPage() {
       {schools.length === 0 ? (
         <Card>
           <CardContent className="space-y-3">
-            <h1 className="text-lg font-semibold">Aucun acces</h1>
+            <h1 className="text-lg font-semibold">Aucun accès</h1>
             <p className="text-sm text-[color:var(--muted-foreground)]">
-              Votre compte n&apos;est rattache a aucun etablissement actif. Contactez
+              Votre compte n&apos;est rattaché à aucun établissement actif. Contactez
               l&apos;administration.
             </p>
             <LogoutButton />
@@ -68,7 +68,7 @@ export default async function RootPage() {
         </Card>
       ) : (
         <>
-          <h1 className="text-lg font-semibold">Choisissez un etablissement</h1>
+          <h1 className="text-lg font-semibold">Choisissez un établissement</h1>
           <ul className="space-y-2">
             {schools.map((s) => (
               <li key={s.slug}>
