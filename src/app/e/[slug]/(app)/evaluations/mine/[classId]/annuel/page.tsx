@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
+import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { getMyTaughtClasses, getMySubjectsForClass } from '@/features/teachers/my-scope';
 import { computeAnnualConsolidation } from '@/features/evaluations/annual';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
@@ -25,6 +26,8 @@ export default async function MyClassAnnualPage({
   const { slug, classId } = await params;
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
+  requirePageAccess(ctx, 'grades.view');
+  requireFeature(ctx, 'grades');
   if (!ctx.academicYear) notFound();
   const base = `/e/${slug}/evaluations/mine/${classId}`;
 

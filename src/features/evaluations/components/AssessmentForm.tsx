@@ -8,7 +8,8 @@ import { Alert } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { SubmitButton } from '@/features/auth/components/SubmitButton';
 import type { FormState } from '@/lib/forms';
-import type { Ref } from '@/features/evaluations/refs';
+import type { ClassRef, PeriodRef, Ref } from '@/features/evaluations/refs';
+import { periodsForTrack } from '@/features/academic-years/periods-by-track';
 import { coefficientFromMaxScore } from '@/features/evaluations/schemas';
 
 type Defaults = {
@@ -38,7 +39,16 @@ export function AssessmentForm({
   lockSubjectIfSingle = false,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
-  refs: { subjects: Ref[]; classes: Ref[]; periods: Ref[]; types: Ref[]; scales: Ref[]; teachers: Ref[] };
+  refs: {
+    subjects: Ref[];
+    classes: ClassRef[];
+    /** Groupes notables, avec la classe qui donne leur decoupage de periodes. */
+    groups: (Ref & { classId: string | null })[];
+    periods: PeriodRef[];
+    types: Ref[];
+    scales: Ref[];
+    teachers: Ref[];
+  };
   defaults?: Defaults;
   submitLabel?: string;
   lockSubjectIfSingle?: boolean;
@@ -56,9 +66,23 @@ export function AssessmentForm({
   // question sans reponse possible. L'admin, lui, voit toujours la liste
   // complete de l'etablissement (jamais un seul choix).
   const singleClass = refs.classes.length === 1 ? refs.classes[0] : null;
+  // La classe commande le decoupage : trimestres pour le general, semestres pour
+  // le technique et le professionnel. Un bulletin ne melange jamais deux ordres,
+  // donc une evaluation non plus. Un professeur qui enseigne dans plusieurs
+  // ordres voit la bonne liste des qu'il choisit la classe.
+  const [target, setTarget] = useState<string>(
+    singleClass ? `CLASS:${singleClass.id}` : val('target'),
+  );
+  // Le decoupage des periodes suit l'ordre d'enseignement de la classe visee ;
+  // pour un groupe, celui de la premiere classe dont il tire ses eleves.
+  const targetClassId = target.startsWith('CLASS:')
+    ? target.slice(6)
+    : (refs.groups.find((g) => `GROUP:${g.id}` === target)?.classId ?? '');
+  const chosenClass = refs.classes.find((c) => c.id === targetClassId) ?? singleClass;
+  const periods = chosenClass ? periodsForTrack(refs.periods, chosenClass.track) : refs.periods;
   // Meme logique pour la periode : deja choisie via l'onglet du dossier de
   // classe avant d'ouvrir ce formulaire.
-  const singlePeriod = refs.periods.length === 1 ? refs.periods[0] : null;
+  const singlePeriod = periods.length === 1 ? periods[0] : null;
 
   return (
     <Card>
@@ -84,16 +108,39 @@ export function AssessmentForm({
                 </Select>
               )}
             </Field>
-            <Field label="Classe" htmlFor="classId" required errors={err.classId}>
+            <Field
+              label={refs.groups.length > 0 ? 'Classe ou groupe' : 'Classe'}
+              htmlFor="target"
+              required
+              errors={err.target}
+              {...(refs.groups.length > 0
+                ? { hint: 'Un groupe ne fait apparaitre que ses élèves dans la grille de saisie.' }
+                : {})}
+            >
               {singleClass ? (
                 <>
-                  <Input id="classId-display" value={singleClass.name} disabled />
-                  <input type="hidden" name="classId" value={singleClass.id} />
+                  <Input id="target-display" value={singleClass.name} disabled />
+                  <input type="hidden" name="target" value={`CLASS:${singleClass.id}`} />
                 </>
               ) : (
-                <Select id="classId" name="classId" defaultValue={val('classId')} required>
+                <Select id="target" name="target" value={target} onChange={(e) => setTarget(e.target.value)} required>
                   <option value="">—</option>
-                  {refs.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  <optgroup label="Classes">
+                    {refs.classes.map((c) => (
+                      <option key={c.id} value={`CLASS:${c.id}`}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                  {refs.groups.length > 0 ? (
+                    <optgroup label="Groupes">
+                      {refs.groups.map((g) => (
+                        <option key={g.id} value={`GROUP:${g.id}`}>
+                          {g.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null}
                 </Select>
               )}
             </Field>
@@ -104,9 +151,9 @@ export function AssessmentForm({
                   <input type="hidden" name="periodId" value={singlePeriod.id} />
                 </>
               ) : (
-                <Select id="periodId" name="periodId" defaultValue={val('periodId')} required>
+                <Select id="periodId" name="periodId" defaultValue={val('periodId')} key={chosenClass?.track ?? 'all'} required>
                   <option value="">—</option>
-                  {refs.periods.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {periods.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </Select>
               )}
             </Field>
@@ -150,16 +197,6 @@ export function AssessmentForm({
               <Input id="coefficient-display" value={coefficient} disabled title="Coefficient = barème / 20, calculé automatiquement." />
             </Field>
           </div>
-
-          <fieldset className="space-y-2 rounded-[--radius-card] border p-3">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="isEliminatory" defaultChecked={val('isEliminatory') === 'true'} className="size-4" />
-              Note éliminatoire
-            </label>
-            <Field label="Seuil éliminatoire" htmlFor="eliminatoryThreshold" errors={err.eliminatoryThreshold}>
-              <Input id="eliminatoryThreshold" name="eliminatoryThreshold" type="number" min="0" step="0.5" defaultValue={val('eliminatoryThreshold')} />
-            </Field>
-          </fieldset>
 
           <SubmitButton>{submitLabel}</SubmitButton>
         </form>

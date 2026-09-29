@@ -2,8 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
+import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { getMyTaughtClasses, getMySubjectsForClass } from '@/features/teachers/my-scope';
-import { listPeriods } from '@/features/evaluations/refs';
+import { listPeriodsForClass } from '@/features/evaluations/refs';
 import { listAssessments } from '@/features/evaluations/assessments';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Flash } from '@/components/ui/flash';
@@ -21,6 +22,8 @@ export default async function MyClassEvaluationsPage({
   const { slug, classId } = await params;
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
+  requirePageAccess(ctx, 'assessments.view');
+  requireFeature(ctx, 'grades');
   if (!ctx.academicYear) notFound();
   const yearId = ctx.academicYear.id;
   const base = `/e/${slug}/evaluations/mine/${classId}`;
@@ -31,7 +34,7 @@ export default async function MyClassEvaluationsPage({
   const klass = classes.find((c) => c.id === classId);
   if (!klass) notFound();
 
-  const [periods, subjects] = await Promise.all([listPeriods(ctx, yearId), getMySubjectsForClass(ctx, classId)]);
+  const [periods, subjects] = await Promise.all([listPeriodsForClass(ctx, yearId, classId), getMySubjectsForClass(ctx, classId)]);
   if (periods.length === 0) {
     return (
       <div className="mx-auto max-w-4xl">
@@ -48,7 +51,10 @@ export default async function MyClassEvaluationsPage({
   const requested = typeof sp.period === 'string' ? sp.period : null;
   const activeTab = requested === 'annual' ? 'annual' : requested && periods.some((p) => p.id === requested) ? requested : (periods[periods.length - 1]?.id ?? null);
 
-  const assessments = activeTab && activeTab !== 'annual' ? await listAssessments(ctx, yearId, { periodId: activeTab, classId }) : [];
+  const assessments =
+    activeTab && activeTab !== 'annual'
+      ? (await listAssessments(ctx, yearId, { periodId: activeTab, classId })).rows
+      : [];
   const canCalculate = subjects.length > 0;
 
   return (

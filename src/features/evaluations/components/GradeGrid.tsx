@@ -25,7 +25,10 @@ export function GradeGrid({
   students: GradeGridStudent[];
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(students.filter((s) => s.isAbsent).map((s) => s.studentId)));
+  // Un detail deja renseigne doit etre visible d'emblee.
+  const [expanded, setExpanded] = useState<Set<string>>(
+    new Set(students.filter((s) => s.isAbsent || s.isExcused || s.comment !== '').map((s) => s.studentId)),
+  );
   const scoreRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   if (students.length === 0) {
@@ -93,12 +96,33 @@ export function GradeGrid({
                   ⋯
                 </button>
               </div>
-              {isExpanded ? (
-                <label className="mt-2 ml-12 flex items-center gap-2 text-xs text-[color:var(--muted-foreground)]">
+              {/* Replie, pas demonte : les champs restent soumis, donc replier ne peut
+                  pas effacer une remarque ou une absence deja saisie. */}
+              <div hidden={!isExpanded} className="mt-2 ml-12 space-y-1.5 text-xs text-[color:var(--muted-foreground)]">
+                <label className="flex items-center gap-2">
                   <input type="checkbox" name={`absent_${s.studentId}`} defaultChecked={s.isAbsent} disabled={!editable} className="size-4" />
                   Absent à cette évaluation
                 </label>
-              ) : null}
+                {/* Une absence justifiée n'est jamais comptée comme un zéro, même
+                    quand l'établissement a choisi de sanctionner les absences. */}
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" name={`excused_${s.studentId}`} defaultChecked={s.isExcused} disabled={!editable} className="size-4" />
+                  Absence justifiée
+                </label>
+                <label className="flex items-center gap-2">
+                  <span className="shrink-0">Remarque</span>
+                  <input
+                    type="text"
+                    name={`comment_${s.studentId}`}
+                    defaultValue={s.comment}
+                    maxLength={200}
+                    disabled={!editable}
+                    placeholder="facultatif"
+                    className="h-8 min-w-0 flex-1 rounded-[--radius-card] border bg-[color:var(--surface)] px-2 text-xs disabled:opacity-60"
+                    style={{ borderColor: 'var(--border)' }}
+                  />
+                </label>
+              </div>
             </li>
           );
         })}

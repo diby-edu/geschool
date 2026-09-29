@@ -2,12 +2,12 @@ import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
-import { requireWritable, hasPermission } from '@/lib/permissions';
+import { hasPermission } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import type { TablesInsert } from '@/types/database';
 import { signAvatarUrls } from '@/lib/storage/avatars';
-import { getAssessment } from './assessments';
+import { getAssessment, requireAssessmentAccess } from './assessments';
 
 export type GradeGridStudent = {
   studentId: string;
@@ -33,14 +33,25 @@ export async function loadGradeGrid(ctx: TenantContext, assessmentId: string): P
   const supabase = await createClient();
   const assessment = await getAssessment(ctx, assessmentId);
   if (!assessment) throw new NotFoundError('Évaluation introuvable.');
-  if (!assessment.class_id) throw new ValidationError('Cette évaluation ne cible pas une classe.');
+  if (!assessment.class_id && !assessment.group_id) {
+    throw new ValidationError('Cette évaluation ne cible ni une classe ni un groupe.');
+  }
 
-  const { data: enr } = await supabase
-    .from('student_enrollments')
-    .select('student_id, students(matricule, first_name, last_name, photo_url)')
-    .eq('school_id', ctx.school.id)
-    .eq('class_id', assessment.class_id)
-    .eq('status', 'ENROLLED');
+  // Une évaluation de GROUPE ne liste que les élèves du groupe : le professeur
+  // d'allemand ne voit pas les hispanisants de la même classe.
+  const { data: enr } = assessment.group_id
+    ? await supabase
+        .from('student_groups')
+        .select('student_id, students(matricule, first_name, last_name, photo_url)')
+        .eq('school_id', ctx.school.id)
+        .eq('group_id', assessment.group_id)
+        .is('left_at', null)
+    : await supabase
+        .from('student_enrollments')
+        .select('student_id, students(matricule, first_name, last_name, photo_url)')
+        .eq('school_id', ctx.school.id)
+        .eq('class_id', assessment.class_id!)
+        .eq('status', 'ENROLLED');
 
   const { data: grades } = await supabase
     .from('grades')
@@ -91,18 +102,32 @@ export type GradeEntry = {
  * score. La grille est verrouillée après clôture, sauf droit « grades.update ».
  */
 export async function saveGrades(ctx: TenantContext, assessmentId: string, entries: GradeEntry[]): Promise<{ saved: number }> {
-  requireWritable(ctx, 'grades.create');
   const supabase = await createClient();
 
   const assessment = await getAssessment(ctx, assessmentId);
   if (!assessment) throw new NotFoundError('Évaluation introuvable.');
+  // Propriétaire de l'évaluation, ou détenteur de la permission générale grades.create.
+  await requireAssessmentAccess(ctx, assessment, 'grade');
   const locked = assessment.status === 'CLOSED' || assessment.status === 'PUBLISHED';
   if (locked && !hasPermission(ctx, 'grades.update')) {
     throw new ConflictError('Évaluation clôturée : saisie verrouillée.');
   }
   const maxScore = assessment.max_score;
 
+  // Ce qui existait avant d'enregistrer : effacer un champ deja vide n'est pas
+  // un echec, effacer une note existante qui reste en base en est un.
+  const { data: before } = await supabase
+    .from('grades')
+    .select('student_id')
+    .eq('school_id', ctx.school.id)
+    .eq('assessment_id', assessmentId);
+  const existing = new Set((before ?? []).map((g) => g.student_id));
+
   const rows: TablesInsert<'grades'>[] = [];
+  // Une note effacee doit disparaitre. Auparavant un champ vide etait
+  // simplement ignore : une note saisie par erreur restait en base, sans aucun
+  // moyen de la retirer depuis l'ecran.
+  const toDelete: string[] = [];
   for (const e of entries) {
     if (e.isAbsent) {
       rows.push({
@@ -118,7 +143,10 @@ export async function saveGrades(ctx: TenantContext, assessmentId: string, entri
       });
       continue;
     }
-    if (e.score === null) continue; // rien saisi, rien à enregistrer
+    if (e.score === null) {
+      if (existing.has(e.studentId)) toDelete.push(e.studentId);
+      continue;
+    }
     if (e.score < 0 || e.score > maxScore) {
       throw new ValidationError(`Note hors barème : ${e.score} (attendu entre 0 et ${maxScore}).`);
     }
@@ -135,10 +163,42 @@ export async function saveGrades(ctx: TenantContext, assessmentId: string, entri
     });
   }
 
+  if (toDelete.length > 0) {
+    // Compte exact : sans droit de suppression, la base ne renvoie pas d'erreur,
+    // elle ne touche simplement aucune ligne — et la note reparaitrait au
+    // rechargement sans que personne ne comprenne pourquoi.
+    let asked = 0;
+    let removed = 0;
+    for (let i = 0; i < toDelete.length; i += 200) {
+      const slice = toDelete.slice(i, i + 200);
+      const { error, count } = await supabase
+        .from('grades')
+        .delete({ count: 'exact' })
+        .eq('school_id', ctx.school.id)
+        .eq('assessment_id', assessmentId)
+        .in('student_id', slice);
+      if (error) throw error;
+      asked += slice.length;
+      removed += count ?? 0;
+    }
+    if (removed === 0 && asked > 0) {
+      throw new ConflictError('Ces notes n’ont pas pu être effacées : l’évaluation est clôturée, ou ce droit vous manque.');
+    }
+  }
+
   if (rows.length === 0) return { saved: 0 };
 
   const { error } = await supabase.from('grades').upsert(rows, { onConflict: 'assessment_id,student_id' });
   if (error) throw error;
+
+  // `grades` n'est pas diffusee en direct (des centaines de milliers de lignes) :
+  // on signale la validation sur l'evaluation, qui l'est. Un echec ici ne doit pas
+  // faire perdre des notes deja enregistrees.
+  await supabase
+    .from('assessments')
+    .update({ updated_at: new Date().toISOString() })
+    .eq('id', assessmentId)
+    .eq('school_id', ctx.school.id);
 
   await audit(ctx, {
     action: 'grades.save',

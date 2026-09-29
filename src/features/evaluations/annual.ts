@@ -2,6 +2,9 @@ import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
+import { classTrack } from './refs';
+import { periodsForTrack } from '@/features/academic-years/periods-by-track';
+import { gradingParams, subjectArgs } from './scale';
 
 /**
  * Consolidation ANNUELLE d'une matiere (§3.7) : PAS une copie d'une periode,
@@ -39,12 +42,19 @@ export async function computeAnnualConsolidation(
 
   const { data: periodRows } = await supabase
     .from('academic_periods')
-    .select('id, name, weight, sequence')
+    .select('id, name, weight, sequence, tracks')
     .eq('school_id', schoolId)
     .eq('academic_year_id', yearId)
     .eq('is_grading_period', true)
     .order('sequence');
-  const periods = ((periodRows ?? []) as { id: string; name: string; weight: number }[]).map((p) => ({
+  // Le bilan annuel d'une classe ne cumule que les périodes de SON ordre : trois
+  // trimestres pour le général, deux semestres pour le technique et le
+  // professionnel.
+  const track = await classTrack(ctx, classId);
+  const periods = periodsForTrack(
+    (periodRows ?? []) as { id: string; name: string; weight: number; tracks: string[] | null }[],
+    track,
+  ).map((p) => ({
     id: p.id,
     name: p.name,
     weight: Number(p.weight),
@@ -62,13 +72,14 @@ export async function computeAnnualConsolidation(
     students: { matricule: string; first_name: string; last_name: string } | null;
   }[];
 
+  const params = await gradingParams(ctx);
   const perPeriodAverages = await Promise.all(
     periods.map((p) =>
       supabase.rpc('class_subject_averages' as never, {
         p_class: classId,
         p_period: p.id,
         p_subject: subjectId,
-        p_include_draft: true,
+        ...subjectArgs(params),
       } as never),
     ),
   );

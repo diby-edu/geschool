@@ -74,7 +74,8 @@ export function SimpleAssessmentForm({
         <form action={formAction} className="space-y-4">
           {state.error ? <Alert tone="error">{state.error}</Alert> : null}
 
-          <input type="hidden" name="classId" value={classId} />
+          {/* Le professeur note SA classe : la cible est imposée, pas choisie. */}
+          <input type="hidden" name="target" value={`CLASS:${classId}`} />
           <input type="hidden" name="periodId" value={periodId} />
           <input type="hidden" name="gradingScaleId" value={gradingScaleId} />
           {teacherId ? <input type="hidden" name="teacherId" value={teacherId} /> : null}

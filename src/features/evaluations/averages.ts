@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
+import { gradingParams, rpcArgs } from './scale';
 
 export type RankingRow = {
   studentId: string;
@@ -23,9 +24,12 @@ export type RankingRow = {
 export async function classRanking(ctx: TenantContext, classId: string, periodId: string): Promise<RankingRow[]> {
   const supabase = await createClient();
 
+  // Le bareme de l'etablissement, pas les valeurs par defaut de la base.
+  const params = await gradingParams(ctx);
   const { data, error } = await supabase.rpc('class_period_ranking' as never, {
     p_class: classId,
     p_period: periodId,
+    ...rpcArgs(params),
   } as never);
   if (error) throw error;
 

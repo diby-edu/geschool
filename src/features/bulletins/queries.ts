@@ -2,16 +2,17 @@ import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
+import { myChildrenIds } from '@/features/family/children';
 import type { BulletinRow, BulletinDetail } from './types';
 
-export { BULLETIN_STATUS } from './types';
+export { BULLETIN_STATUS, bulletinStateLabel } from './types';
 export type { BulletinRow, BulletinItem, BulletinDetail } from './types';
 
 export async function listBulletins(ctx: TenantContext, classId: string, periodId: string): Promise<BulletinRow[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from('report_cards')
-    .select('id, general_average, rank, status, students(matricule, first_name, last_name)')
+    .select('id, general_average, rank, status, signed_at, students(matricule, first_name, last_name)')
     .eq('school_id', ctx.school.id)
     .eq('class_id', classId)
     .eq('academic_period_id', periodId);
@@ -20,6 +21,7 @@ export async function listBulletins(ctx: TenantContext, classId: string, periodI
     general_average: number | null;
     rank: number | null;
     status: string;
+    signed_at: string | null;
     students: { matricule: string; first_name: string; last_name: string } | null;
   }[])
     .map((r) => ({
@@ -29,6 +31,7 @@ export async function listBulletins(ctx: TenantContext, classId: string, periodI
       general_average: r.general_average === null ? null : Number(r.general_average),
       rank: r.rank,
       status: r.status,
+      signed: r.signed_at !== null,
     }))
     .sort((a, b) => (a.rank ?? 9999) - (b.rank ?? 9999) || a.student.localeCompare(b.student));
 }
@@ -105,13 +108,21 @@ export async function getBulletin(ctx: TenantContext, id: string): Promise<Bulle
 }
 
 /** Bulletins PUBLIÉS visibles par l'utilisateur courant (portail élève/parent). */
-export async function listMyBulletins(ctx: TenantContext): Promise<{ id: string; student: string; klass: string; period: string; average: number | null; rank: number | null }[]> {
+export async function listMyBulletins(ctx: TenantContext, opts: { childrenOnly?: boolean } = {}): Promise<{ id: string; student: string; klass: string; period: string; average: number | null; rank: number | null }[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  let query = supabase
     .from('report_cards')
     .select('id, general_average, rank, status, students(first_name, last_name), classes(name), academic_periods(name, sequence)')
     .eq('school_id', ctx.school.id)
     .eq('status', 'PUBLISHED');
+  // Espace Parent : uniquement les bulletins de SES enfants (une personne qui
+  // est aussi enseignante verrait sinon ceux de ses classes).
+  if (opts.childrenOnly) {
+    const childIds = await myChildrenIds(ctx);
+    if (childIds.length === 0) return [];
+    query = query.in('student_id', childIds);
+  }
+  const { data } = await query;
   return ((data ?? []) as unknown as {
     id: string;
     general_average: number | null;

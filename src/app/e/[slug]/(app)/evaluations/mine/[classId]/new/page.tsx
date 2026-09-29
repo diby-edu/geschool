@@ -2,8 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
+import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { getMyTaughtClasses, getMySubjectsForClass, getMyTeacherId } from '@/features/teachers/my-scope';
-import { listPeriods } from '@/features/evaluations/refs';
+import { listPeriodsForClass } from '@/features/evaluations/refs';
 import { listScales, listTypes, getDefaultScale } from '@/features/evaluations/config';
 import { getUsedSequenceNumbers } from '@/features/evaluations/assessments';
 import { createAssessmentAction } from '@/features/evaluations/actions';
@@ -33,6 +34,8 @@ export default async function NewMyAssessmentPage({
   const { slug, classId } = await params;
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
+  requirePageAccess(ctx, 'assessments.create');
+  requireFeature(ctx, 'grades');
   if (!ctx.academicYear) notFound();
   const yearId = ctx.academicYear.id;
   const base = `/e/${slug}/evaluations/mine/${classId}`;
@@ -43,7 +46,7 @@ export default async function NewMyAssessmentPage({
 
   const [subjects, allPeriods, types, scales, defaultScale, myTeacherId] = await Promise.all([
     getMySubjectsForClass(ctx, classId),
-    listPeriods(ctx, yearId),
+    listPeriodsForClass(ctx, yearId, classId),
     listTypes(ctx),
     listScales(ctx),
     getDefaultScale(ctx),

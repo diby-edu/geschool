@@ -3,17 +3,16 @@ import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
 import { signAvatarUrls } from '@/lib/storage/avatars';
+import { gradingParams, subjectArgs } from './scale';
 
 /**
  * Moyenne et classement d'UNE matiere sur une classe, calcules A TOUT MOMENT
- * (§3.6) : contrairement au classement general des bulletins
- * (class_period_ranking, reserve a la direction et aux evaluations
- * cloturees/publiees), ce calcul inclut aussi les evaluations en brouillon —
- * la cloture reste un geste de l'administration qui gele la saisie, elle ne
- * conditionne plus ce calcul de travail. S'appuie sur
- * app.class_subject_averages(..., p_include_draft => true), migration 0038 :
- * meme formule que partout ailleurs (note ramenee sur 20, ponderee par
- * coefficient), une seule verite de calcul.
+ * (§3.6). Ce qui compte vient du reglage de l'etablissement (voir ./scale) :
+ * par defaut tout ce qui est saisi, sans attendre la cloture — la cloture
+ * verrouille la saisie, elle ne conditionne pas le calcul. Depuis 0074, la
+ * moyenne GENERALE et le rang suivent la meme regle : une seule verite.
+ * Meme formule que partout ailleurs (note ramenee sur l'echelle du bareme,
+ * ponderee par coefficient).
  */
 
 export type LiveRankingRow = {
@@ -39,6 +38,7 @@ export async function computeLiveRanking(
 ): Promise<LiveRanking> {
   const supabase = await createClient();
   const schoolId = ctx.school.id;
+  const params = await gradingParams(ctx);
 
   const [{ data: assessRows }, { data: enrRows }, { data: avgRows }] = await Promise.all([
     supabase
@@ -59,7 +59,8 @@ export async function computeLiveRanking(
       p_class: classId,
       p_period: periodId,
       p_subject: subjectId,
-      p_include_draft: true,
+      // Le sort des matieres facultatives ne concerne que la moyenne GENERALE.
+      ...subjectArgs(params),
     } as never),
   ]);
 

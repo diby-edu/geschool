@@ -2,9 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
-import { requirePageAccess } from '@/lib/permissions/guard';
-import { getAssessment } from '@/features/evaluations/assessments';
-import { listPeriods, listClasses, listSubjects, listTeachers } from '@/features/evaluations/refs';
+import { requireFeature } from '@/lib/permissions/guard';
+import { canActOnAssessment, getAssessment } from '@/features/evaluations/assessments';
+import { listPeriods, listClasses,
+  listGroupRefs, listSubjects, listTeachers } from '@/features/evaluations/refs';
 import { listScales, listTypes } from '@/features/evaluations/config';
 import { updateAssessmentAction } from '@/features/evaluations/actions';
 import { AssessmentForm } from '@/features/evaluations/components/AssessmentForm';
@@ -16,16 +17,19 @@ export const metadata: Metadata = { title: 'Modifier l’évaluation' };
 export default async function EditAssessmentPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = await params;
   const ctx = await getTenantContext(slug);
-  requirePageAccess(ctx, 'assessments.update');
+  requireFeature(ctx, 'grades');
   const base = `/e/${slug}/evaluations`;
 
   const a = await getAssessment(ctx, id);
   if (!a || !ctx.academicYear) notFound();
+  // Propriétaire ou permission générale ; 404 sinon (comme requirePageAccess).
+  if (!(await canActOnAssessment(ctx, a, 'update'))) notFound();
   const yearId = ctx.academicYear.id;
 
-  const [subjects, classes, periods, types, scales, teachers] = await Promise.all([
+  const [subjects, classes, groups, periods, types, scales, teachers] = await Promise.all([
     listSubjects(ctx),
     listClasses(ctx, yearId),
+    listGroupRefs(ctx, yearId),
     listPeriods(ctx, yearId),
     listTypes(ctx),
     listScales(ctx),
@@ -54,6 +58,7 @@ export default async function EditAssessmentPage({ params }: { params: Promise<{
         refs={{
           subjects: subjects.map((s) => ({ id: s.id, name: s.name })),
           classes,
+        groups,
           periods,
           types: types.map((t) => ({ id: t.id, name: t.name })),
           scales: scales.map((s) => ({ id: s.id, name: s.name })),

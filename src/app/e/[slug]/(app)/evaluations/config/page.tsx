@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
-import { requirePageAccessAny } from '@/lib/permissions/guard';
+import { requirePageAccessAny, requireFeature } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { listScales, listTypes } from '@/features/evaluations/config';
 import {
@@ -10,9 +10,12 @@ import {
   deleteScaleAction,
   saveTypeAction,
   deleteTypeAction,
+  saveGradingPolicyAction,
 } from '@/features/evaluations/actions';
 import { ScaleForm } from '@/features/evaluations/components/ScaleForm';
 import { TypeForm } from '@/features/evaluations/components/TypeForm';
+import { GradingPolicyForm } from '@/features/evaluations/components/GradingPolicyForm';
+import { gradingParams } from '@/features/evaluations/scale';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Flash } from '@/components/ui/flash';
 import { Alert } from '@/components/ui/alert';
@@ -34,11 +37,13 @@ export default async function EvaluationConfigPage({
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
   requirePageAccessAny(ctx, ['grading.manage_scales', 'grading.manage_settings']);
+  requireFeature(ctx, 'grades');
   const base = `/e/${slug}/evaluations`;
 
-  const [scales, types] = await Promise.all([listScales(ctx), listTypes(ctx)]);
+  const [scales, types, grading] = await Promise.all([listScales(ctx), listTypes(ctx), gradingParams(ctx)]);
   const canScales = hasPermission(ctx, 'grading.manage_scales');
   const canTypes = hasPermission(ctx, 'grading.manage_settings');
+  const canPolicy = hasPermission(ctx, 'settings.update');
   const empty = scales.length === 0 && types.length === 0;
 
   return (
@@ -47,6 +52,7 @@ export default async function EvaluationConfigPage({
       {sp.seeded !== undefined ? <Alert tone="success">Configuration de départ créée.</Alert> : null}
       {sp.scale === '1' ? <Alert tone="success">Barème enregistré.</Alert> : null}
       {sp.type === '1' ? <Alert tone="success">Type enregistré.</Alert> : null}
+      {sp.regle === '1' ? <Alert tone="success">Règle de calcul enregistrée.</Alert> : null}
 
       <PageHeader
         title="Barèmes et types d’évaluation"
@@ -64,6 +70,25 @@ export default async function EvaluationConfigPage({
             <SimpleSubmit action={seedDefaultsAction.bind(null, slug)} label="Créer les valeurs par défaut" />
           </CardContent>
         </Card>
+      ) : null}
+
+      {/* Règles de calcul */}
+      {canPolicy ? (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-[color:var(--muted-foreground)]">
+            Règles de calcul
+          </h2>
+          <GradingPolicyForm
+            action={saveGradingPolicyAction.bind(null, slug)}
+            absentCountsAsZero={grading.absentCountsAsZero}
+            countDraftGrades={grading.countDraftGrades}
+            optionalMode={grading.optionalMode}
+          />
+          <p className="text-xs text-[color:var(--muted-foreground)]">
+            Le maximum, le nombre de décimales et l’arrondi des moyennes viennent du barème marqué « par défaut »
+            ci-dessous.
+          </p>
+        </section>
       ) : null}
 
       {/* Barèmes */}

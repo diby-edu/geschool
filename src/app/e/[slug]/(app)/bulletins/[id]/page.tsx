@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
-import { requirePageAccess } from '@/lib/permissions/guard';
+import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { getBulletin, BULLETIN_STATUS } from '@/features/bulletins/queries';
 import { BulletinView } from '@/features/bulletins/components/BulletinView';
 import { PrintButton } from '@/features/bulletins/components/PrintButton';
@@ -26,6 +26,7 @@ export default async function BulletinDetailPage({
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
   requirePageAccess(ctx, 'reports.view');
+  requireFeature(ctx, 'bulletins');
 
   const b = await getBulletin(ctx, id);
   if (!b) notFound();

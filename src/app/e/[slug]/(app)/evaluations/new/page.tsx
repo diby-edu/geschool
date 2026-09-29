@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
-import { requirePageAccess } from '@/lib/permissions/guard';
-import { listPeriods, listClasses, listSubjects, listTeachers } from '@/features/evaluations/refs';
+import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
+import { listPeriods, listClasses,
+  listGroupRefs, listSubjects, listTeachers } from '@/features/evaluations/refs';
 import { listScales, listTypes } from '@/features/evaluations/config';
 import { createAssessmentAction } from '@/features/evaluations/actions';
 import { AssessmentForm } from '@/features/evaluations/components/AssessmentForm';
@@ -16,21 +17,23 @@ export default async function NewAssessmentPage({ params }: { params: Promise<{ 
   const { slug } = await params;
   const ctx = await getTenantContext(slug);
   requirePageAccess(ctx, 'assessments.create');
+  requireFeature(ctx, 'grades');
   const base = `/e/${slug}/evaluations`;
 
   if (!ctx.academicYear) {
     return (
       <div className="mx-auto max-w-3xl">
         <PageHeader title="Nouvelle évaluation" />
-        <EmptyState title="Aucune année active" hint="Activez une année scolaire d'abord." />
+        <EmptyState title="Aucune année active" hint="Activez une année scolaire d'abord." action={{ href: `/e/${slug}/academic-years`, label: 'Gérer les années scolaires' }} />
       </div>
     );
   }
   const yearId = ctx.academicYear.id;
 
-  const [subjects, classes, periods, types, scales, teachers] = await Promise.all([
+  const [subjects, classes, groups, periods, types, scales, teachers] = await Promise.all([
     listSubjects(ctx),
     listClasses(ctx, yearId),
+    listGroupRefs(ctx, yearId),
     listPeriods(ctx, yearId),
     listTypes(ctx),
     listScales(ctx),
@@ -61,6 +64,7 @@ export default async function NewAssessmentPage({ params }: { params: Promise<{ 
           refs={{
             subjects: subjects.map((s) => ({ id: s.id, name: s.name })),
             classes,
+          groups,
             periods,
             types: types.map((t) => ({ id: t.id, name: t.name })),
             scales: scales.map((s) => ({ id: s.id, name: s.name })),

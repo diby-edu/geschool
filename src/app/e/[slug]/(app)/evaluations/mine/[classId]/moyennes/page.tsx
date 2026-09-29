@@ -2,14 +2,19 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
+import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { getMyTaughtClasses, getMySubjectsForClass } from '@/features/teachers/my-scope';
-import { listPeriods } from '@/features/evaluations/refs';
+import { listPeriodsForClass } from '@/features/evaluations/refs';
 import { computeLiveRanking } from '@/features/evaluations/live-ranking';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/alert';
 import { StudentAvatar } from '@/components/ui/student-avatar';
+import { SimpleSubmit } from '@/components/ui/simple-submit';
+import { getCompletionState } from '@/features/grading/completion';
+import { completeAveragesAction, reopenAveragesAction } from '@/features/grading/actions';
+import { formatDate } from '@/features/academic-years/labels';
 
 export const metadata: Metadata = { title: 'Moyennes et classement' };
 
@@ -29,6 +34,8 @@ export default async function MyClassRankingPage({
   const { slug, classId } = await params;
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
+  requirePageAccess(ctx, 'grades.view');
+  requireFeature(ctx, 'grades');
   if (!ctx.academicYear) notFound();
   const yearId = ctx.academicYear.id;
   const base = `/e/${slug}/evaluations/mine/${classId}`;
@@ -37,7 +44,7 @@ export default async function MyClassRankingPage({
   const klass = classes.find((c) => c.id === classId);
   if (!klass) notFound();
 
-  const [subjects, periods] = await Promise.all([getMySubjectsForClass(ctx, classId), listPeriods(ctx, yearId)]);
+  const [subjects, periods] = await Promise.all([getMySubjectsForClass(ctx, classId), listPeriodsForClass(ctx, yearId, classId)]);
   const periodId = typeof sp.period === 'string' ? sp.period : undefined;
   const period = periodId ? periods.find((p) => p.id === periodId) : undefined;
   const subjectId = typeof sp.subject === 'string' ? sp.subject : subjects.length === 1 ? subjects[0]!.id : undefined;
@@ -73,7 +80,10 @@ export default async function MyClassRankingPage({
     );
   }
 
-  const ranking = await computeLiveRanking(ctx, classId, period.id, subject.id);
+  const [ranking, completion] = await Promise.all([
+    computeLiveRanking(ctx, classId, period.id, subject.id),
+    getCompletionState(ctx, classId, subject.id, period.id),
+  ]);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -82,6 +92,32 @@ export default async function MyClassRankingPage({
         description={`${subject.name} · ${period.name}`}
         action={<Link href={`${base}?period=${period.id}`}><Button variant="ghost">Retour</Button></Link>}
       />
+
+      {completion.assignmentId && !completion.unavailable ? (
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0 text-sm">
+              <p className="font-semibold">
+                {completion.completed ? 'Vos moyennes sont marquées terminées' : 'Avez-vous terminé vos moyennes ?'}
+              </p>
+              <p className="text-[color:var(--muted-foreground)]">
+                {completion.completed
+                  ? 'La direction voit que cette classe et cette matière sont à jour.'
+                  : completion.open
+                    ? `La période de calcul est ouverte${completion.window.ends ? ` jusqu'au ${formatDate(completion.window.ends)}` : ''}. Quand tout est saisi, prévenez la direction.`
+                    : "La période de calcul des moyennes n'est pas ouverte : la direction l'ouvrira le moment venu."}
+              </p>
+            </div>
+            {completion.completed ? (
+              completion.open ? (
+                <SimpleSubmit action={reopenAveragesAction.bind(null, slug, classId, subject.id, period.id)} label="Rouvrir mes moyennes" />
+              ) : null
+            ) : completion.open ? (
+              <SimpleSubmit action={completeAveragesAction.bind(null, slug, classId, subject.id, period.id)} label="J'ai terminé mes moyennes" />
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Alert tone="info">
         Calculé à partir de toutes les évaluations saisies, y compris celles en brouillon. La clôture d&apos;une

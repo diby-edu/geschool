@@ -1,13 +1,15 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
-import { requirePageAccess } from '@/lib/permissions/guard';
+import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { listClasses, listPeriods } from '@/features/evaluations/refs';
-import { listBulletins, BULLETIN_STATUS } from '@/features/bulletins/queries';
+import { periodsForTrack } from '@/features/academic-years/periods-by-track';
+import { listBulletins, bulletinStateLabel } from '@/features/bulletins/queries';
 import {
   generateBulletinsAction,
   validateBulletinsAction,
+  signBulletinsAction,
   publishBulletinsAction,
   unpublishBulletinsAction,
 } from '@/features/bulletins/actions';
@@ -30,13 +32,14 @@ export default async function BulletinsPage({
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
   requirePageAccess(ctx, 'reports.view');
+  requireFeature(ctx, 'bulletins');
   const base = `/e/${slug}/bulletins`;
 
   if (!ctx.academicYear) {
     return (
       <div className="mx-auto max-w-3xl">
         <PageHeader title="Bulletins" />
-        <EmptyState title="Aucune année active" hint="Activez une année scolaire d'abord." />
+        <EmptyState title="Aucune année active" hint="Activez une année scolaire d'abord." action={{ href: `/e/${slug}/academic-years`, label: 'Gérer les années scolaires' }} />
       </div>
     );
   }
@@ -44,20 +47,29 @@ export default async function BulletinsPage({
   const [classes, periods] = await Promise.all([listClasses(ctx, yearId), listPeriods(ctx, yearId)]);
 
   const classId = typeof sp.class === 'string' ? sp.class : '';
-  const periodId = typeof sp.period === 'string' ? sp.period : '';
+  // Un bulletin ne mélange jamais deux ordres d'enseignement : la classe choisie
+  // commande le découpage (trimestres du général, semestres du technique et du
+  // professionnel). Une période d'un autre ordre est ignorée.
+  const chosenClass = classes.find((c) => c.id === classId);
+  const shownPeriods = chosenClass ? periodsForTrack(periods, chosenClass.track) : periods;
+  const askedPeriod = typeof sp.period === 'string' ? sp.period : '';
+  const periodId = shownPeriods.some((p) => p.id === askedPeriod) ? askedPeriod : '';
   const bulletins = classId && periodId ? await listBulletins(ctx, classId, periodId) : [];
 
   const canGenerate = hasPermission(ctx, 'reports.generate');
   const canValidate = hasPermission(ctx, 'reports.validate');
   const canPublish = hasPermission(ctx, 'reports.publish');
+  const canSign = hasPermission(ctx, 'reports.sign');
   const anyPublished = bulletins.some((b) => b.status === 'PUBLISHED');
   const anyGenerated = bulletins.some((b) => b.status === 'GENERATED');
-  const anyValidated = bulletins.some((b) => b.status === 'VALIDATED');
+  const anyToSign = bulletins.some((b) => b.status === 'VALIDATED' && !b.signed);
+  const anyReadyToPublish = bulletins.some((b) => b.status === 'VALIDATED' && b.signed);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       {sp.generated !== undefined ? <Alert tone="success">{sp.generated} bulletin(s) généré(s).</Alert> : null}
       {sp.validated !== undefined ? <Alert tone="success">{sp.validated} bulletin(s) validé(s).</Alert> : null}
+      {sp.signed !== undefined ? <Alert tone="success">{sp.signed} bulletin(s) signé(s) : ils peuvent maintenant être publiés.</Alert> : null}
       {sp.published !== undefined ? <Alert tone="success">{sp.published} bulletin(s) publié(s).</Alert> : null}
       {sp.unpublished !== undefined ? <Alert tone="info">{sp.unpublished} bulletin(s) dépublié(s).</Alert> : null}
 
@@ -77,7 +89,7 @@ export default async function BulletinsPage({
               <label htmlFor="period" className="mb-1 block text-sm font-medium">Période</label>
               <select id="period" name="period" defaultValue={periodId} className="h-10 rounded-[--radius-card] border bg-[color:var(--surface)] px-3 text-sm">
                 <option value="">—</option>
-                {periods.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {shownPeriods.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
             <Button type="submit" variant="secondary" size="sm">Afficher</Button>
@@ -98,8 +110,11 @@ export default async function BulletinsPage({
             {canValidate && anyGenerated ? (
               <SimpleSubmit action={validateBulletinsAction.bind(null, slug, classId, periodId)} label="Valider (conseil)" small />
             ) : null}
-            {canPublish && (anyValidated || anyGenerated) ? (
-              <SimpleSubmit action={publishBulletinsAction.bind(null, slug, classId, periodId)} label="Publier" small />
+            {canSign && anyToSign ? (
+              <SimpleSubmit action={signBulletinsAction.bind(null, slug, classId, periodId)} label="Signer les bulletins validés" small />
+            ) : null}
+            {canPublish && anyReadyToPublish ? (
+              <SimpleSubmit action={publishBulletinsAction.bind(null, slug, classId, periodId)} label="Publier les bulletins signés" small />
             ) : null}
             {canPublish && anyPublished ? (
               <SimpleSubmit action={unpublishBulletinsAction.bind(null, slug, classId, periodId)} label="Dépublier" small />
@@ -128,7 +143,7 @@ export default async function BulletinsPage({
                       <td className="px-3 py-2 font-mono text-xs text-[color:var(--muted-foreground)]">{b.matricule}</td>
                       <td className="px-3 py-2">{b.student}</td>
                       <td className="px-3 py-2 text-right font-medium">{b.general_average != null ? b.general_average.toFixed(2) : '—'}</td>
-                      <td className="px-3 py-2">{BULLETIN_STATUS[b.status] ?? b.status}</td>
+                      <td className="px-3 py-2">{bulletinStateLabel(b.status, b.signed)}</td>
                       <td className="px-3 py-2 text-right">
                         <Link href={`${base}/${b.id}`} className="text-sm text-[color:var(--color-brand)] hover:underline">Voir</Link>
                       </td>

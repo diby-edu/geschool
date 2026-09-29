@@ -5,7 +5,7 @@ import { getTenantContext } from '@/lib/tenant/context';
 import { runFormAction, type FormState } from '@/lib/forms';
 import { ValidationError } from '@/lib/errors';
 import { generateForClass } from './generate';
-import { validateBulletins, publishBulletins, unpublishBulletins } from './workflow';
+import { validateBulletins, signBulletins, publishBulletins, unpublishBulletins } from './workflow';
 
 function requireSelection(classId: string, periodId: string): void {
   if (!classId || !periodId) throw new ValidationError('Choisissez une classe et une période.');
@@ -25,6 +25,14 @@ export async function validateBulletinsAction(slug: string, classId: string, per
     const ctx = await getTenantContext(slug);
     const n = await validateBulletins(ctx, classId, periodId);
     redirect(`/e/${slug}/bulletins?class=${classId}&period=${periodId}&validated=${n}`);
+  });
+}
+
+export async function signBulletinsAction(slug: string, classId: string, periodId: string, _p: FormState, _fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    const n = await signBulletins(ctx, classId, periodId);
+    redirect(`/e/${slug}/bulletins?class=${classId}&period=${periodId}&signed=${n}`);
   });
 }
 

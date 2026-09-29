@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
-import { requirePageAccess } from '@/lib/permissions/guard';
+import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
-import { getAssessment, statusLabel } from '@/features/evaluations/assessments';
+import { assessmentAccess, getAssessment, statusLabel } from '@/features/evaluations/assessments';
 import { loadGradeGrid } from '@/features/evaluations/grades';
 import {
   saveGradesAction,
@@ -33,6 +33,7 @@ export default async function AssessmentDetailPage({
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
   requirePageAccess(ctx, 'assessments.view');
+  requireFeature(ctx, 'grades');
   const base = `/e/${slug}/evaluations`;
 
   const a = await getAssessment(ctx, id);
@@ -44,21 +45,25 @@ export default async function AssessmentDetailPage({
     assessment_date: string;
     max_score: number;
     coefficient: number;
-    is_eliminatory: boolean;
-    eliminatory_threshold: number | null;
     subjects: { name: string } | null;
     classes: { name: string } | null;
+    groups: { name: string } | null;
     academic_periods: { name: string } | null;
     assessment_types: { name: string } | null;
     grading_scales: { name: string } | null;
   };
 
   const grid = await loadGradeGrid(ctx, id);
-  const canEnter = hasPermission(ctx, 'grades.create') || hasPermission(ctx, 'grades.update');
+  // Modifier / supprimer / noter : propriétaire de l'évaluation OU permission générale
+  // (l'enseignant n'a plus de droit général sur celles d'un collègue, 0051).
+  const access = await assessmentAccess(ctx, a);
+  const canEnter = access.grade || hasPermission(ctx, 'grades.update');
   const canValidate = hasPermission(ctx, 'grades.validate');
   const canPublish = hasPermission(ctx, 'grades.publish');
-  const canEdit = hasPermission(ctx, 'assessments.update');
-  const canDelete = hasPermission(ctx, 'assessments.delete');
+  const canEdit = access.update;
+  // Déclarer sa saisie terminée : geste du propriétaire de l'évaluation.
+  const canGrade = access.grade;
+  const canDelete = access.delete;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -69,7 +74,7 @@ export default async function AssessmentDetailPage({
 
       <PageHeader
         title={rel.title}
-        description={`${rel.classes?.name ?? '—'} · ${rel.subjects?.name ?? '—'} · ${rel.academic_periods?.name ?? '—'}`}
+        description={`${rel.classes?.name ?? (rel.groups ? `${rel.groups.name} (groupe)` : '—')} · ${rel.subjects?.name ?? '—'} · ${rel.academic_periods?.name ?? '—'}`}
         action={<Link href={base}><Button variant="ghost">Retour</Button></Link>}
       />
 
@@ -80,7 +85,6 @@ export default async function AssessmentDetailPage({
             <span>Barème : <strong className="text-[color:var(--foreground)]">{rel.grading_scales?.name ?? '—'} (/{rel.max_score})</strong></span>
             <span>Coefficient : <strong className="text-[color:var(--foreground)]">{rel.coefficient}</strong></span>
             <span>Date : <strong className="text-[color:var(--foreground)]">{rel.assessment_date}</strong></span>
-            {rel.is_eliminatory ? <span>Éliminatoire &lt; <strong className="text-[color:var(--foreground)]">{rel.eliminatory_threshold}</strong></span> : null}
             {/* Brouillon est l'etat par defaut (avant toute action admin) : le
                 signaler n'apporte rien, seuls les etats qui resultent d'une
                 action reelle (cloture, publication) sont montres. */}
@@ -89,6 +93,20 @@ export default async function AssessmentDetailPage({
           <div className="flex items-center gap-2">
             {canEdit && rel.status !== 'PUBLISHED' ? (
               <Link href={`${base}/${id}/edit`}><Button variant="secondary" size="sm">Modifier</Button></Link>
+            ) : null}
+            {canGrade && rel.status === 'DRAFT' ? (
+              <SimpleSubmit
+                action={transitionAssessmentAction.bind(null, slug, id, 'submit')}
+                label="J’ai fini la saisie"
+                small
+              />
+            ) : null}
+            {canGrade && rel.status === 'OPEN' ? (
+              <SimpleSubmit
+                action={transitionAssessmentAction.bind(null, slug, id, 'unsubmit')}
+                label="Reprendre la saisie"
+                small
+              />
             ) : null}
             {canValidate && (rel.status === 'DRAFT' || rel.status === 'OPEN') ? (
               <SimpleSubmit action={transitionAssessmentAction.bind(null, slug, id, 'close')} label="Clôturer" small />

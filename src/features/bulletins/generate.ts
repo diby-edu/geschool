@@ -1,4 +1,6 @@
 import 'server-only';
+import { classTrack } from '@/features/evaluations/refs';
+import { gradingParams, rpcArgs } from '@/features/evaluations/scale';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
@@ -6,6 +8,7 @@ import { requireWritable } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import type { TablesInsert } from '@/types/database';
+import { fetchAllRows } from '@/lib/supabase/pagination';
 
 export type GenerateResult = { generated: number };
 
@@ -33,11 +36,21 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
 
   const { data: period } = await supabase
     .from('academic_periods')
-    .select('id, starts_on, ends_on')
+    .select('id, name, starts_on, ends_on, tracks')
     .eq('school_id', ctx.school.id)
     .eq('id', periodId)
     .maybeSingle();
   if (!period) throw new NotFoundError('Période introuvable.');
+
+  // Un bulletin ne mélange jamais deux ordres d'enseignement : il suit sa classe.
+  // Une classe du technique se voit en semestres, jamais en trimestres.
+  const track = await classTrack(ctx, classId);
+  const scope = (period as { tracks?: string[] | null }).tracks ?? null;
+  if (scope !== null && !scope.includes(track)) {
+    throw new ValidationError(
+      `« ${period.name} » ne concerne pas cette classe : elle suit le découpage de son ordre d'enseignement.`,
+    );
+  }
 
   // Refuser de régénérer par-dessus des bulletins déjà validés/publiés.
   const { data: locked } = await supabase
@@ -55,11 +68,26 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
   // Programme de la classe : matières + coefficients du niveau.
   const { data: ls } = await supabase
     .from('level_subjects')
-    .select('subject_id, coefficient, subjects(name)')
+    .select('subject_id, coefficient, is_mandatory, subjects(name)')
     .eq('school_id', ctx.school.id)
     .eq('level_id', klass.level_id);
-  const subjects = ((ls ?? []) as unknown as { subject_id: string; coefficient: number; subjects: { name: string } | null }[])
-    .map((r) => ({ id: r.subject_id, coefficient: Number(r.coefficient), name: r.subjects?.name ?? 'Matière' }));
+  const subjects = (
+    (ls ?? []) as unknown as { subject_id: string; coefficient: number; is_mandatory: boolean; subjects: { name: string } | null }[]
+  ).map((r) => ({
+    id: r.subject_id,
+    coefficient: Number(r.coefficient),
+    name: r.subjects?.name ?? 'Matière',
+    optional: !r.is_mandatory,
+  }));
+  // Sans programme de niveau, il n'y a ni coefficient ni moyenne generale : le
+  // bulletin serait imprime vide, avec un rang identique pour tous. On refuse,
+  // en disant ou aller le saisir.
+  if (subjects.length === 0) {
+    throw new ValidationError(
+      `Le programme du niveau de « ${klass.name} » n'est pas saisi : aucune matière, aucun coefficient. ` +
+        'Renseignez « Matières par niveau » avant de générer les bulletins.',
+    );
+  }
 
   // Élèves inscrits.
   const { data: enr } = await supabase
@@ -72,7 +100,13 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
   if (studentIds.length === 0) throw new ValidationError('Aucun élève inscrit dans cette classe.');
 
   // Classement général (moyenne générale, rang, effectif).
-  const { data: rankData } = await supabase.rpc('class_period_ranking' as never, { p_class: classId, p_period: periodId } as never);
+  // Bareme de l'etablissement (maximum, decimales, arrondi, absences).
+  const params = await gradingParams(ctx);
+  const { data: rankData } = await supabase.rpc('class_period_ranking' as never, {
+    p_class: classId,
+    p_period: periodId,
+    ...rpcArgs(params),
+  } as never);
   const ranking = new Map(
     ((rankData ?? []) as unknown as { student_id: string; general_average: number | null; rank_position: number | null; class_size: number }[])
       .map((r) => [r.student_id, r]),
@@ -85,7 +119,12 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
   type SubjStat = { average: Map<string, number | null>; classAvg: number | null; min: number | null; max: number | null; rank: Map<string, number> };
   const subjStats = new Map<string, SubjStat>();
   for (const s of subjects) {
-    const { data: rows } = await supabase.rpc('class_subject_averages' as never, { p_class: classId, p_period: periodId, p_subject: s.id } as never);
+    const { data: rows } = await supabase.rpc('class_subject_averages' as never, {
+      p_class: classId,
+      p_period: periodId,
+      p_subject: s.id,
+      ...rpcArgs(params),
+    } as never);
     const list = ((rows ?? []) as unknown as { student_id: string; average: number | null }[]).map((r) => ({ student_id: r.student_id, average: r.average === null ? null : Number(r.average) }));
     const avgMap = new Map(list.map((r) => [r.student_id, r.average]));
     const values = list.map((r) => r.average).filter((a): a is number => a !== null);
@@ -126,6 +165,9 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
           absences_count: absences.get(studentId) ?? 0,
           lateness_count: lateness.get(studentId) ?? 0,
           generated_at: new Date().toISOString(),
+          // Un bulletin regenere doit etre revalide puis resigne.
+          signed_at: null,
+          signed_by: null,
         } satisfies TablesInsert<'report_cards'>,
         { onConflict: 'student_id,academic_period_id' },
       )
@@ -145,7 +187,12 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
         subject_name_snapshot: s.name,
         coefficient: s.coefficient,
         average: avg,
-        weighted_points: avg !== null ? round2(avg * s.coefficient) : null,
+        // Une matière facultative qui n'entre pas dans la moyenne générale
+        // (réglage « bonus » ou « hors moyenne ») ne porte pas de points : sa
+        // note reste affichée, mais elle ne s'ajoute pas au total. En « elle
+        // compte comme les autres », rien ne change.
+        weighted_points:
+          avg === null || (s.optional && params.optionalMode !== 'COUNT') ? null : round2(avg * s.coefficient),
         class_average: st.classAvg,
         class_min: st.min,
         class_max: st.max,
@@ -172,22 +219,34 @@ async function countAttendance(
   to: string,
 ): Promise<{ absences: Map<string, number>; lateness: Map<string, number> }> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from('attendance_records')
-    .select('student_id, status, attendance_registers(session_occurrences(occurs_on))')
-    .eq('school_id', ctx.school.id)
-    .in('status', ['ABSENT', 'LATE'])
-    .in('student_id', studentIds);
-
-  const absences = new Map<string, number>();
-  const lateness = new Map<string, number>();
-  for (const r of (data ?? []) as unknown as {
+  // Les bornes de la periode s'appliquent EN BASE, et la lecture est paginee :
+  // une classe compte des milliers d'appels sur un trimestre, et une lecture
+  // simple s'arretait a 1 000 lignes sans le dire — les absences imprimees sur
+  // le bulletin etaient alors sous-comptees, silencieusement.
+  type Row = {
+    id: string;
     student_id: string;
     status: string;
     attendance_registers: { session_occurrences: { occurs_on: string } | null } | null;
-  }[]) {
-    const date = r.attendance_registers?.session_occurrences?.occurs_on;
-    if (!date || date < from || date > to) continue;
+  };
+  const rows = await fetchAllRows<Row>((cursor) => {
+    let q = supabase
+      .from('attendance_records')
+      .select('id, student_id, status, attendance_registers!inner(session_occurrences!inner(occurs_on))')
+      .eq('school_id', ctx.school.id)
+      .in('status', ['ABSENT', 'LATE'])
+      .in('student_id', studentIds)
+      .gte('attendance_registers.session_occurrences.occurs_on', from)
+      .lte('attendance_registers.session_occurrences.occurs_on', to)
+      .order('id') // curseur : tri total requis (cf. lib/supabase/pagination)
+      .limit(500);
+    if (cursor) q = q.gt('id', cursor);
+    return q as unknown as PromiseLike<{ data: Row[] | null; error: { message: string } | null }>;
+  }, 500);
+
+  const absences = new Map<string, number>();
+  const lateness = new Map<string, number>();
+  for (const r of rows) {
     const target = r.status === 'ABSENT' ? absences : lateness;
     target.set(r.student_id, (target.get(r.student_id) ?? 0) + 1);
   }

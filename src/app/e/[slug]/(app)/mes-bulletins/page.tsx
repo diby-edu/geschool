@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
+import { requireFeature } from '@/lib/permissions/guard';
 import { listMyBulletins } from '@/features/bulletins/queries';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 
@@ -15,9 +16,11 @@ export const metadata: Metadata = { title: 'Mes bulletins' };
 export default async function MesBulletinsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const ctx = await getTenantContext(slug);
+  requireFeature(ctx, 'parent_portal');
   const base = `/e/${slug}/mes-bulletins`;
 
-  const bulletins = await listMyBulletins(ctx);
+  // Un parent (meme s'il est aussi enseignant) ne voit ici que les bulletins de ses enfants.
+  const bulletins = await listMyBulletins(ctx, { childrenOnly: (ctx.membership?.roles ?? []).includes('PARENT') });
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">

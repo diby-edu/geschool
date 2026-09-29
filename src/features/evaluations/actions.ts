@@ -6,8 +6,18 @@ import { runFormAction, formValues, type FormState } from '@/lib/forms';
 import { ValidationError } from '@/lib/errors';
 import { gradingScaleSchema, assessmentTypeSchema, assessmentSchema } from './schemas';
 import { saveScale, deleteScale, saveType, deleteType, seedDefaults } from './config';
-import { createAssessment, updateAssessment, deleteAssessment, transitionAssessment } from './assessments';
+import {
+  createAssessment,
+  updateAssessment,
+  deleteAssessment,
+  transitionAssessment,
+  transitionMany,
+  assessmentIdsMatching,
+  type AssessmentStatus,
+} from './assessments';
 import { saveGrades, type GradeEntry } from './grades';
+import { writeSettings } from '@/features/settings/school-settings';
+import { readOptionalMode } from './optional-mode';
 
 // --- Configuration : barèmes + types -----------------------------------------
 
@@ -16,6 +26,57 @@ export async function seedDefaultsAction(slug: string, _p: FormState, _fd: FormD
     const ctx = await getTenantContext(slug);
     const { scale, types } = await seedDefaults(ctx);
     redirect(`/e/${slug}/evaluations/config?seeded=${scale ? 1 : 0}-${types}`);
+  });
+}
+
+/**
+ * Clôturer (ou publier) plusieurs évaluations : celles cochées, ou toutes
+ * celles que le filtre affiché désigne.
+ */
+export async function bulkTransitionAction(
+  slug: string,
+  action: 'close' | 'publish',
+  scope: 'selection' | 'filter',
+  _p: FormState,
+  fd: FormData,
+): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    if (!ctx.academicYear) throw new ValidationError("Activez une année scolaire d'abord.");
+    const str = (k: string): string | undefined => {
+      const v = String(fd.get(k) ?? '').trim();
+      return v === '' ? undefined : v;
+    };
+
+    const ids =
+      scope === 'filter'
+        ? await assessmentIdsMatching(ctx, ctx.academicYear.id, {
+            ...(str('periodId') ? { periodId: str('periodId')! } : {}),
+            ...(str('classId') ? { classId: str('classId')! } : {}),
+            ...(str('subjectId') ? { subjectId: str('subjectId')! } : {}),
+            ...(str('status') ? { status: str('status') as AssessmentStatus } : {}),
+          })
+        : fd.getAll('ids').map(String).filter(Boolean);
+
+    if (ids.length === 0) throw new ValidationError('Aucune évaluation sélectionnée.');
+    const changed = await transitionMany(ctx, ids, action);
+    const back = String(fd.get('back') ?? `/e/${slug}/evaluations`);
+    const sep = back.includes('?') ? '&' : '?';
+    redirect(`${back}${sep}lot=${changed}`);
+  });
+}
+
+/** Règles de calcul : ce qui compte dans une moyenne (notes en brouillon, absences). */
+export async function saveGradingPolicyAction(slug: string, _p: FormState, fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    const on = (k: string): boolean => fd.get(k) === 'on' || fd.get(k) === 'true';
+    await writeSettings(ctx, 'grading', {
+      absentCountsAsZero: on('absentCountsAsZero'),
+      countDraftGrades: on('countDraftGrades'),
+      optionalMode: readOptionalMode(fd.get('optionalMode')),
+    });
+    redirect(`/e/${slug}/evaluations/config?regle=1`);
   });
 }
 
@@ -75,15 +136,13 @@ function parseAssessment(fd: FormData) {
   return assessmentSchema.parse({
     title: fd.get('title'),
     subjectId: fd.get('subjectId'),
-    classId: fd.get('classId'),
+    target: fd.get('target'),
     periodId: fd.get('periodId'),
     assessmentTypeId: fd.get('assessmentTypeId'),
     gradingScaleId: fd.get('gradingScaleId'),
     teacherId: fd.get('teacherId') ?? '',
     assessmentDate: fd.get('assessmentDate'),
     maxScore: fd.get('maxScore'),
-    isEliminatory: fd.get('isEliminatory') === 'on' || fd.get('isEliminatory') === 'true',
-    eliminatoryThreshold: fd.get('eliminatoryThreshold') ?? '',
   });
 }
 
@@ -116,7 +175,7 @@ export async function deleteAssessmentAction(slug: string, id: string, _p: FormS
 export async function transitionAssessmentAction(
   slug: string,
   id: string,
-  action: 'close' | 'publish' | 'reopen',
+  action: 'submit' | 'unsubmit' | 'close' | 'publish' | 'reopen',
   _p: FormState,
   _fd: FormData,
 ): Promise<FormState> {

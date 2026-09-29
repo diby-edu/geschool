@@ -14,7 +14,15 @@ export type BulletinRow = {
   general_average: number | null;
   rank: number | null;
   status: string;
+  /** Signé par le directeur (étape entre la validation et la publication). */
+  signed: boolean;
 };
+
+/** État affiché : « Validé » se précise selon la signature. */
+export function bulletinStateLabel(status: string, signed: boolean): string {
+  if (status === 'VALIDATED') return signed ? 'Validé · signé' : 'Validé · à signer';
+  return BULLETIN_STATUS[status] ?? status;
+}
 
 export type BulletinItem = {
   subject: string;

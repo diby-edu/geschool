@@ -48,27 +48,35 @@ export function coefficientFromMaxScore(maxScore: number): number {
   return Math.round((maxScore / 20) * 100) / 100;
 }
 
+/**
+ * Une evaluation porte sur une CLASSE entiere ou sur un GROUPE.
+ *
+ * La table le prevoyait (class_id / group_id), aucun ecran ne savait viser un
+ * groupe : le professeur d'allemand ne pouvait pas noter ses germanistes sans
+ * faire apparaitre toute la classe dans sa grille.
+ */
 export const assessmentSchema = z
   .object({
     title: z.string().trim().min(1, 'Titre requis.').max(160),
     subjectId: z.uuid('Matière requise.'),
-    classId: z.uuid('Classe requise.'),
+    /** « CLASS:<uuid> » ou « GROUP:<uuid> » : la cible de l'evaluation. */
+    target: z.string().regex(/^(CLASS|GROUP):[0-9a-f-]{36}$/, 'Classe ou groupe requis.'),
     periodId: z.uuid('Période requise.'),
     assessmentTypeId: z.uuid('Type requis.'),
     gradingScaleId: z.uuid('Barème requis.'),
     teacherId: z.union([z.uuid(), z.literal('')]).optional(),
     assessmentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date invalide.'),
     maxScore: z.coerce.number().min(0.5, 'Barème maximum invalide.').max(1000),
-    isEliminatory: z.coerce.boolean().default(false),
-    eliminatoryThreshold: z.union([z.coerce.number().min(0).max(1000), z.literal('')]).optional(),
     // « Devoir n°2 »… choisi par l'enseignant (formulaire simplifie) parmi les
     // numeros pas encore pris pour la meme matiere+classe+periode+type.
     // Absent du formulaire admin classique : 1 par defaut (toRow, assessments.ts).
     sequenceNumber: z.coerce.number().int().min(1).max(999).optional(),
-  })
-  .refine((v) => !v.isEliminatory || (v.eliminatoryThreshold !== '' && v.eliminatoryThreshold !== undefined), {
-    message: 'Un seuil est requis pour une note éliminatoire.',
-    path: ['eliminatoryThreshold'],
   });
 
 export type AssessmentInput = z.infer<typeof assessmentSchema>;
+
+/** Decoupe « CLASS:uuid » / « GROUP:uuid » en ce que la base attend. */
+export function splitTarget(target: string): { classId: string | null; groupId: string | null } {
+  const [kind, id] = target.split(':');
+  return kind === 'GROUP' ? { classId: null, groupId: id! } : { classId: id!, groupId: null };
+}
