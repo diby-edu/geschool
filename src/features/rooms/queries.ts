@@ -15,7 +15,7 @@ export type RoomRow = {
   room_type_name: string | null;
 };
 
-export type RoomTypeRow = Pick<Tables<'room_types'>, 'id' | 'code' | 'name'>;
+export type RoomTypeRow = Pick<Tables<'room_types'>, 'id' | 'code' | 'name' | 'tracks'>;
 
 export const ROOM_SORTABLE = ['code', 'name', 'capacity'] as const;
 
@@ -58,7 +58,7 @@ export async function getRoom(ctx: TenantContext, id: string) {
   const supabase = await createClient();
   const { data } = await supabase
     .from('rooms')
-    .select('id, code, name, capacity, building, floor, is_accessible, is_active, room_type_id')
+    .select('id, code, name, capacity, building, floor, is_active, room_type_id, tracks')
     .eq('school_id', ctx.school.id)
     .eq('id', id)
     .maybeSingle();
@@ -69,8 +69,54 @@ export async function listRoomTypes(ctx: TenantContext): Promise<RoomTypeRow[]> 
   const supabase = await createClient();
   const { data } = await supabase
     .from('room_types')
-    .select('id, code, name')
+    .select('id, code, name, tracks')
     .eq('school_id', ctx.school.id)
     .order('name');
   return (data ?? []) as RoomTypeRow[];
+}
+
+/**
+ * Salles actives, pour les listes déroulantes (salle attitrée d'une classe).
+ *
+ * `track` restreint aux salles qui servent cet ordre d'enseignement : on ne
+ * propose pas l'atelier de mécanique comme salle attitrée d'une 6ème générale.
+ */
+export async function listActiveRoomOptions(
+  ctx: TenantContext,
+  track?: string,
+): Promise<{ id: string; name: string }[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from('rooms')
+    .select('id, code, name')
+    .eq('school_id', ctx.school.id)
+    .eq('is_active', true);
+  if (track) query = query.overlaps('tracks', [track]);
+  const { data, error } = await query.order('code');
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ id: r.id, name: r.name === r.code ? r.code : `${r.code} — ${r.name}` }));
+}
+
+export type RoomFeatureRow = { id: string; code: string; name: string };
+
+/** Équipements déclarés par l'établissement (vidéoprojecteur, paillasses, machines…). */
+export async function listRoomFeatures(ctx: TenantContext): Promise<RoomFeatureRow[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('room_features')
+    .select('id, code, name')
+    .eq('school_id', ctx.school.id)
+    .order('name');
+  return (data ?? []) as RoomFeatureRow[];
+}
+
+/** Équipements d'une salle donnée. */
+export async function listRoomFeatureIds(ctx: TenantContext, roomId: string): Promise<string[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('room_room_features')
+    .select('feature_id')
+    .eq('school_id', ctx.school.id)
+    .eq('room_id', roomId);
+  return (data ?? []).map((r) => r.feature_id);
 }
