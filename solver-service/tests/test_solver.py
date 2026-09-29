@@ -189,3 +189,54 @@ def test_multi_teacher_task_blocks_both():
     )
     sol = solve(data)
     assert sol.status == "INFEASIBLE"
+
+
+def test_salles_interchangeables_resolues_par_capacite():
+    """Six salles identiques, six cours simultanes possibles : chacun a la sienne.
+
+    Le modele remplace l'affectation nominative par une contrainte de capacite,
+    puis distribue les salles apres coup. Le resultat doit rester correct :
+    jamais deux cours dans la meme salle au meme moment.
+    """
+    rooms = list(range(6))
+    data = ScheduleInput(
+        request_id="t",
+        timeout_seconds=10,
+        slot_count=2,
+        room_count=6,
+        tasks=[_task(i, [0], rooms=rooms, teachers=[i], classes=[i]) for i in range(6)],
+    )
+    sol = solve(data)
+    assert sol.status in ("OPTIMAL", "FEASIBLE")
+    assert len(sol.assignments) == 6
+    used = [a.room for a in sol.assignments]
+    assert sorted(used) == rooms  # six salles distinctes, aucune repetee
+    assert all(r in rooms for r in used)
+
+
+def test_capacite_insuffisante_reste_infaisable():
+    """Sept cours simultanes pour six salles : impossible, et dit comme tel."""
+    rooms = list(range(6))
+    data = ScheduleInput(
+        request_id="t",
+        timeout_seconds=10,
+        slot_count=1,
+        room_count=6,
+        tasks=[_task(i, [0], rooms=rooms, teachers=[i], classes=[i]) for i in range(7)],
+    )
+    sol = solve(data)
+    assert sol.status == "INFEASIBLE"
+
+
+def test_peu_de_salles_garde_l_affectation_nominative():
+    """Sous le seuil, on reste sur l'affectation exacte salle par salle."""
+    data = ScheduleInput(
+        request_id="t",
+        timeout_seconds=10,
+        slot_count=2,
+        room_count=2,
+        tasks=[_task(i, [0], rooms=[0, 1], teachers=[i], classes=[i]) for i in range(2)],
+    )
+    sol = solve(data)
+    assert sol.status in ("OPTIMAL", "FEASIBLE")
+    assert sorted(a.room for a in sol.assignments) == [0, 1]

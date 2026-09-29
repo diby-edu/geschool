@@ -52,7 +52,7 @@ export function AddSessionForm({
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Debut" htmlFor="startSlotId" required errors={err.startSlotId}>
+            <Field label="Début" htmlFor="startSlotId" required errors={err.startSlotId}>
               <Select id="startSlotId" name="startSlotId" required defaultValue="">
                 <option value="" disabled>
                   —
@@ -64,7 +64,7 @@ export function AddSessionForm({
                 ))}
               </Select>
             </Field>
-            <Field label="Fin" htmlFor="endSlotId" required errors={err.endSlotId} hint="Meme jour que le debut">
+            <Field label="Fin" htmlFor="endSlotId" required errors={err.endSlotId} hint="Même jour que le début">
               <Select id="endSlotId" name="endSlotId" required defaultValue="">
                 <option value="" disabled>
                   —
@@ -79,7 +79,7 @@ export function AddSessionForm({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Matiere" htmlFor="subjectId" required errors={err.subjectId}>
+            <Field label="Matière" htmlFor="subjectId" required errors={err.subjectId}>
               <Select id="subjectId" name="subjectId" required defaultValue="">
                 <option value="" disabled>
                   —

@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -11,11 +11,15 @@ import { updateRequirementAction, deleteRequirementAction } from '@/features/sch
 import type { RequirementRow } from '@/features/schedule/requirements';
 import type { FormState } from '@/lib/forms';
 
+/**
+ * Où se passe ce cours ? Une seule question, trois réponses possibles. La cible
+ * (salle précise ou type de salle) se choisit dans un second menu : « imposé »
+ * ou « de préférence » s'applique à l'un comme à l'autre.
+ */
 const ROOM_MODES = [
-  { v: 'NONE', l: 'Aucune salle imposee' },
-  { v: 'PREFERRED', l: 'Salle preferee' },
-  { v: 'REQUIRED_ROOM', l: 'Salle imposee' },
-  { v: 'REQUIRED_TYPE', l: 'Type de salle impose' },
+  { v: 'NONE', l: 'N’importe quelle salle' },
+  { v: 'PREFERRED', l: 'De préférence…' },
+  { v: 'REQUIRED_ROOM', l: 'Obligatoirement…' },
 ];
 const STATUSES = [
   { v: 'ACTIVE', l: 'Active' },
@@ -26,7 +30,22 @@ const STATUSES = [
 const ROOM_LABEL: Record<string, string> = Object.fromEntries(ROOM_MODES.map((m) => [m.v, m.l]));
 const STATUS_LABEL: Record<string, string> = Object.fromEntries(STATUSES.map((s) => [s.v, s.l]));
 
-export function RequirementsTable({ slug, rows, canEdit }: { slug: string; rows: RequirementRow[]; canEdit: boolean }) {
+export type RoomChoice = { id: string; name: string; kind: 'ROOM' | 'TYPE' };
+
+export function RequirementsTable({
+  slug,
+  rows,
+  canEdit,
+  roomChoices = [],
+  features = [],
+}: {
+  slug: string;
+  rows: RequirementRow[];
+  canEdit: boolean;
+  /** Salles et types de salle de l'école, pour la cible de la règle. */
+  roomChoices?: RoomChoice[];
+  features?: { id: string; name: string }[];
+}) {
   return (
     <div className="overflow-hidden rounded-[--radius-card] border">
       <table className="w-full text-sm">
@@ -34,16 +53,16 @@ export function RequirementsTable({ slug, rows, canEdit }: { slug: string; rows:
           <tr>
             <th className="px-3 py-2">Enseignement</th>
             <th className="px-3 py-2">Enseignant(s)</th>
-            <th className="px-3 py-2 text-center">Seances</th>
-            <th className="px-3 py-2 text-center">Duree</th>
+            <th className="px-3 py-2 text-center">Séances</th>
+            <th className="px-3 py-2 text-center">Durée</th>
             <th className="px-3 py-2">Salle</th>
-            <th className="px-3 py-2">Etat</th>
+            <th className="px-3 py-2">État</th>
             {canEdit ? <th className="px-3 py-2" /> : null}
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
-            <Row key={r.id} slug={slug} r={r} canEdit={canEdit} />
+            <Row key={r.id} slug={slug} r={r} canEdit={canEdit} roomChoices={roomChoices} features={features} />
           ))}
         </tbody>
       </table>
@@ -51,12 +70,29 @@ export function RequirementsTable({ slug, rows, canEdit }: { slug: string; rows:
   );
 }
 
-function Row({ slug, r, canEdit }: { slug: string; r: RequirementRow; canEdit: boolean }) {
+function Row({
+  slug,
+  r,
+  canEdit,
+  roomChoices,
+  features,
+}: {
+  slug: string;
+  r: RequirementRow;
+  canEdit: boolean;
+  roomChoices: RoomChoice[];
+  features: { id: string; name: string }[];
+}) {
   const [state, formAction] = useActionState<FormState, FormData>(
     updateRequirementAction.bind(null, slug, r.id),
     {},
   );
   const err = state.fieldErrors ?? {};
+  // « Obligatoirement » couvre salle ET type : le mode enregistré suit la cible.
+  const modeValue = r.room_mode === 'REQUIRED_TYPE' ? 'REQUIRED_ROOM' : r.room_mode;
+  const [mode, setMode] = useState(modeValue);
+  const types = roomChoices.filter((c) => c.kind === 'TYPE');
+  const rooms = roomChoices.filter((c) => c.kind === 'ROOM');
 
   return (
     <tr className="border-t align-top">
@@ -75,26 +111,81 @@ function Row({ slug, r, canEdit }: { slug: string; r: RequirementRow; canEdit: b
               </div>
             ) : null}
             <div className="w-20">
-              <Field label="Seances" htmlFor={`s-${r.id}`} errors={err.sessionsCount}>
+              <Field label="Séances" htmlFor={`s-${r.id}`} errors={err.sessionsCount}>
                 <Input id={`s-${r.id}`} name="sessionsCount" type="number" min="1" max="20" defaultValue={String(r.sessions_count)} />
               </Field>
             </div>
             <div className="w-24">
-              <Field label="Duree (min)" htmlFor={`d-${r.id}`} errors={err.sessionDurationMinutes}>
+              <Field label="Durée (min)" htmlFor={`d-${r.id}`} errors={err.sessionDurationMinutes}>
                 <Input id={`d-${r.id}`} name="sessionDurationMinutes" type="number" min="15" step="5" defaultValue={String(r.session_duration_minutes ?? 60)} />
               </Field>
             </div>
             <div className="w-44">
-              <Field label="Salle" htmlFor={`rm-${r.id}`}>
-                <Select id={`rm-${r.id}`} name="roomMode" defaultValue={r.room_mode}>
+              <Field label="Où ?" htmlFor={`rm-${r.id}`}>
+                <Select id={`rm-${r.id}`} name="roomMode" value={mode} onChange={(e) => setMode(e.target.value)}>
                   {ROOM_MODES.map((m) => (
                     <option key={m.v} value={m.v}>{m.l}</option>
                   ))}
                 </Select>
               </Field>
             </div>
+            {mode !== 'NONE' ? (
+              <div className="w-56">
+                <Field label="Quelle salle" htmlFor={`rt-${r.id}`}>
+                  <Select id={`rt-${r.id}`} name="roomTarget" defaultValue={r.room_target}>
+                    <option value="">— Choisir —</option>
+                    {types.length > 0 ? (
+                      <optgroup label="Types de salle">
+                        {types.map((c) => (
+                          <option key={c.id} value={`T:${c.id}`}>{c.name}</option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                    {rooms.length > 0 ? (
+                      <optgroup label="Salles précises">
+                        {rooms.map((c) => (
+                          <option key={c.id} value={`R:${c.id}`}>{c.name}</option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                  </Select>
+                </Field>
+              </div>
+            ) : null}
+            <div className="w-28">
+              <Field label="Capacité mini" htmlFor={`mc-${r.id}`} errors={err.minCapacity}>
+                <Input
+                  id={`mc-${r.id}`}
+                  name="minCapacity"
+                  type="number"
+                  min="0"
+                  defaultValue={r.min_capacity === null ? '' : String(r.min_capacity)}
+                />
+              </Field>
+            </div>
+            {features.length > 0 ? (
+              <details className="w-full">
+                <summary className="cursor-pointer text-xs font-semibold text-[color:var(--muted-foreground)]">
+                  Équipements exigés ({r.required_features.length})
+                </summary>
+                <div className="mt-1.5 flex flex-wrap gap-3">
+                  {features.map((f) => (
+                    <label key={f.id} className="flex cursor-pointer items-center gap-1.5 text-xs">
+                      <input
+                        type="checkbox"
+                        name="requiredFeatures"
+                        value={f.id}
+                        defaultChecked={r.required_features.includes(f.id)}
+                        className="size-3.5"
+                      />
+                      {f.name}
+                    </label>
+                  ))}
+                </div>
+              </details>
+            ) : null}
             <div className="w-32">
-              <Field label="Etat" htmlFor={`st-${r.id}`}>
+              <Field label="État" htmlFor={`st-${r.id}`}>
                 <Select id={`st-${r.id}`} name="status" defaultValue={r.status}>
                   {STATUSES.map((s) => (
                     <option key={s.v} value={s.v}>{s.l}</option>

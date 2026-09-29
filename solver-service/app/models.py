@@ -64,6 +64,66 @@ class FixedOccupation(_Model):
     room_index: int | None = None
 
 
+class LoadLimit(_Model):
+    """Plafond de charge sur un ensemble de taches.
+
+    Traduit les regles « maximum par jour » et « maximum d'affilee » de
+    l'application. Les taches concernees sont designees par leurs index : le
+    service ignore s'il s'agit d'un enseignant, d'une classe ou d'une matiere.
+
+    Un plafond ne s'applique qu'aux taches listees — c'est ce qui evite de
+    creer des variables pour toute l'ecole quand une seule regle existe.
+    """
+
+    task_indexes: list[int] = Field(default_factory=list)
+    # Creneaux occupes au maximum dans une meme journee. None = pas de plafond.
+    max_per_day: int | None = None
+    # Creneaux occupes au maximum a la suite, sans interruption. None = pas de plafond.
+    max_consecutive: int | None = None
+    # None = plafond DUR, jamais depasse. Un entier = plafond SOUPLE : chaque
+    # creneau au-dela coute ce poids, et le solveur arbitre.
+    weight: int | None = None
+    # Repris tel quel dans les diagnostics de l'application.
+    label: str = ""
+
+
+class SlotPenalty(_Model):
+    """Creneaux de depart DECONSEILLES pour un ensemble de taches.
+
+    Primitive volontairement generique : « les maths plutot le matin » et
+    « jamais en derniere heure » se ramenent toutes deux a une liste de
+    creneaux qui coutent. Une preference ne se refuse pas, elle se paie.
+    """
+
+    task_indexes: list[int] = Field(default_factory=list)
+    slots: list[int] = Field(default_factory=list)
+    weight: int = 1
+    label: str = ""
+
+
+class GapPenalty(_Model):
+    """Trous dans la journee d'une ressource (une classe, un enseignant).
+
+    Le trou se mesure par journee : etendue occupee moins creneaux reellement
+    occupes. Deux cours a 8h et 11h le meme jour laissent deux trous.
+
+    C'est la preference la plus demandee par les etablissements, et la seule
+    qui ne se ramene pas a un choix de creneau : elle depend de l'ensemble des
+    seances de la ressource.
+    """
+
+    task_indexes: list[int] = Field(default_factory=list)
+    weight: int = 1
+    label: str = ""
+
+
+class PenaltyDetail(_Model):
+    """Ce qu'une preference a coute dans la solution retenue."""
+
+    label: str
+    penalty: int
+
+
 class ScheduleInput(_Model):
     contract_version: str = "1.0.0"
     request_id: str
@@ -75,6 +135,13 @@ class ScheduleInput(_Model):
     timeout_seconds: int = 30
     workers: int = 1
     random_seed: int = 42
+    # Creneaux de chaque journee, dans l'ordre chronologique. Necessaire aux
+    # plafonds de charge : sans elle, le service ne voit qu'une suite plate de
+    # creneaux et ne sait pas ou une journee commence.
+    days: list[list[int]] = Field(default_factory=list)
+    load_limits: list[LoadLimit] = Field(default_factory=list)
+    slot_penalties: list[SlotPenalty] = Field(default_factory=list)
+    gap_penalties: list[GapPenalty] = Field(default_factory=list)
     tasks: list[Task] = Field(default_factory=list)
     fixed_occupations: list[FixedOccupation] = Field(default_factory=list)
 
@@ -106,6 +173,14 @@ class ScheduleSolution(_Model):
     # insoluble (noyau d'infaisabilite, via les hypotheses CP-SAT). Vide si le
     # probleme est faisable ou si seul un domaine vide est en cause.
     infeasible_core: list[int] = Field(default_factory=list)
+    # Regles DURES qui, a elles seules, rendent le probleme insoluble. Designees
+    # par CP-SAT lui-meme (hypotheses), pas devinees.
+    blocking_rules: list[str] = Field(default_factory=list)
+    # Somme ponderee des preferences non satisfaites. 0 = tout est respecte.
+    penalty: int = 0
+    # Le detail, preference par preference : c'est ce qui permet de dire
+    # « 18 preferences non satisfaites » et lesquelles.
+    penalty_details: list[PenaltyDetail] = Field(default_factory=list)
     statistics: SolveStatistics = Field(default_factory=SolveStatistics)
 
 

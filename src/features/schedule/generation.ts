@@ -9,6 +9,19 @@ import type { TablesInsert } from '@/types/database';
 import { detectConflicts, type ValidatorSession } from '@/lib/schedule/validator';
 import { getConfig, getConfigForCycle, listCyclesOverview } from './config';
 import { loadValidatorSessions } from './sessions';
+import { listRules } from './constraints/service';
+import {
+  blockingRules,
+  gapPenalties,
+  loadLimits,
+  ruleAppliesTo,
+  slotPenalties,
+  spreadLimits,
+  type CourseTask,
+  type SlotInfo,
+} from './constraints/apply';
+import { lockedPlacements } from './constraints/locks';
+import { fetchAllRows } from '@/lib/supabase/pagination';
 import { getSolver, SolverError, type FixedOccupation, type ScheduleInput, type ScheduleSolution, type SolverTask } from './solver';
 
 // ---------------------------------------------------------------------------
@@ -18,6 +31,10 @@ import { getSolver, SolverError, type FixedOccupation, type ScheduleInput, type 
 export type GenerationResult = {
   jobId: string;
   status: 'SUCCEEDED' | 'INFEASIBLE' | 'FAILED';
+  /** Somme pondérée des préférences non satisfaites. 0 = tout est respecté. */
+  penalty?: number;
+  /** Le détail, préférence par préférence, la plus coûteuse en tête. */
+  penaltyDetails?: { label: string; penalty: number }[];
   solverStatus?: string;
   versionId?: string;
   taskCount: number;
@@ -78,6 +95,7 @@ export async function generateSchedule(
   yearId: string,
   cycleId?: string,
   targetVersionId?: string,
+  seed?: number,
 ): Promise<GenerationResult> {
   requireWritable(ctx, 'schedule.generate');
   const supabase = await createClient();
@@ -96,34 +114,50 @@ export async function generateSchedule(
     .order('day_of_week')
     .order('position');
   const slots = (rawSlots ?? []) as Slot[];
-  if (slots.length === 0) throw new ValidationError('La grille horaire ne contient aucun creneau.');
+  if (slots.length === 0) throw new ValidationError('La grille horaire ne contient aucun créneau.');
 
   const slotIndexById = new Map<string, number>();
   slots.forEach((s, i) => slotIndexById.set(s.id, i));
   // Indices globaux groupes par jour, dans l'ordre des positions.
+  // Dernier creneau de chaque journee : « jamais en derniere heure » s'y appuie.
+  const lastOfDayIndexes = new Set<number>();
+
   const dayToIndexes = new Map<number, number[]>();
   slots.forEach((s, i) => {
     const list = dayToIndexes.get(s.day_of_week) ?? [];
     list.push(i);
     dayToIndexes.set(s.day_of_week, list);
   });
+  for (const indexes of dayToIndexes.values()) {
+    const last = indexes[indexes.length - 1];
+    if (last !== undefined) lastOfDayIndexes.add(last);
+  }
 
   // --- exigences a placer ---
-  const { data: reqs } = await supabase
-    .from('teaching_requirements')
-    .select(
-      'id, subject_id, weekly_minutes, sessions_count, session_duration_minutes, ' +
-        'room_requirement_mode, required_room_id, required_room_type_id, preferred_room_id, min_capacity, ' +
-        'subjects(name), ' +
-        'teaching_requirement_targets(target_type, class_id, group_id, classes(name), groups(name)), ' +
-        'teaching_requirement_teachers(teacher_id, teachers(first_name, last_name))',
-    )
-    .eq('school_id', ctx.school.id)
-    .eq('academic_year_id', yearId)
-    .eq('status', 'ACTIVE');
-  const requirements = (reqs ?? []) as unknown as ReqRow[];
+  // Lecture par curseur : au-dela de 1 000 lignes, une lecture simple serait
+  // tronquee par PostgREST sans erreur — l'emploi du temps genere aurait
+  // silencieusement oublie des cours. Un lycee de 5 000 eleves y est.
+  const requirements = await fetchAllRows<ReqRow>((cursor) => {
+    let q = supabase
+      .from('teaching_requirements')
+      .select(
+        'id, subject_id, weekly_minutes, sessions_count, session_duration_minutes, ' +
+          'room_requirement_mode, required_room_id, required_room_type_id, preferred_room_id, ' +
+          'preferred_room_type_id, min_capacity, required_features, ' +
+          'subjects(name), ' +
+          'teaching_requirement_targets(target_type, class_id, group_id, classes(name), groups(name)), ' +
+          'teaching_requirement_teachers(teacher_id, teachers(first_name, last_name))',
+      )
+      .eq('school_id', ctx.school.id)
+      .eq('academic_year_id', yearId)
+      .eq('status', 'ACTIVE')
+      .order('id') // curseur : tri total requis (cf. lib/supabase/pagination)
+      .limit(200);
+    if (cursor) q = q.gt('id', cursor);
+    return q as unknown as PromiseLike<{ data: ReqRow[] | null; error: { message: string } | null }>;
+  }, 200);
   if (requirements.length === 0) {
-    throw new ValidationError('Aucune exigence pedagogique active. Synchronisez-les depuis les affectations.');
+    throw new ValidationError('Aucune exigence pédagogique active. Synchronisez-les depuis les affectations.');
   }
 
   // --- espaces d'index compacts ---
@@ -150,10 +184,21 @@ export async function generateSchedule(
   // --- salles actives (pour resoudre les candidats par mode) ---
   const { data: roomRows } = await supabase
     .from('rooms')
-    .select('id, room_type_id, capacity, is_active')
+    .select('id, room_type_id, capacity, is_active, room_room_features(feature_id)')
     .eq('school_id', ctx.school.id)
     .eq('is_active', true);
-  const rooms = (roomRows ?? []) as { id: string; room_type_id: string | null; capacity: number; is_active: boolean }[];
+  const rooms = ((roomRows ?? []) as unknown as {
+    id: string;
+    room_type_id: string | null;
+    capacity: number;
+    is_active: boolean;
+    room_room_features: { feature_id: string }[];
+  }[]).map((r) => ({
+    id: r.id,
+    room_type_id: r.room_type_id,
+    capacity: r.capacity,
+    features: (r.room_room_features ?? []).map((f) => f.feature_id),
+  }));
 
   // --- appartenance groupe -> classes (§16) ---
   const { data: gcRows } = await supabase
@@ -177,9 +222,41 @@ export async function generateSchedule(
   const cyclesWithOwnGrid = new Set(cyclesOverview.filter((c) => c.configId).map((c) => c.id));
   const { data: classCycleRows } = await supabase
     .from('classes')
-    .select('id, levels(cycle_id)')
+    .select('id, level_id, levels(cycle_id)')
     .eq('school_id', ctx.school.id)
     .eq('academic_year_id', yearId);
+  // Le niveau de chaque classe : une regle posee sur un NIVEAU vise tous les
+  // cours de ses classes, et le cours ne connait que ses classes.
+  const classToLevel = new Map(
+    ((classCycleRows ?? []) as unknown as { id: string; level_id: string | null }[]).map((row) => [row.id, row.level_id]),
+  );
+
+  // Les regles DURES de l'annee, actives seulement. Une preference n'a aucun
+  // effet ici : elle appartient a la fonction d'objectif, pas au filtrage.
+  // Seances figees par l'ecole : elles doivent retrouver EXACTEMENT leur place.
+  const locks = await lockedPlacements(ctx, yearId, targetVersionId);
+  const locksByRequirement = new Map<string, typeof locks>();
+  for (const lock of locks) {
+    const list = locksByRequirement.get(lock.requirementId) ?? [];
+    list.push(lock);
+    locksByRequirement.set(lock.requirementId, list);
+  }
+  const lostLocks: string[] = [];
+
+  const allRules = (await listRules(ctx)).filter((r) => r.enabled);
+  const asActive = (r: (typeof allRules)[number]) => ({
+    code: r.code,
+    scopeType: r.scopeType,
+    scopeId: r.scopeId,
+    params: r.params,
+    summary: r.summary,
+  });
+  const hardRules = allRules.filter((r) => r.severity === 'HARD').map(asActive);
+  const softRules = allRules.filter((r) => r.severity === 'SOFT').map(asActive);
+  // Le poids que l'ecole a donne a chaque preference.
+  const weightByRule = new Map(allRules.map((r) => [r.summary, Math.max(1, r.weight || 10)]));
+  const weightOf = (rule: { summary: string }) => weightByRule.get(rule.summary) ?? 10;
+
   const classToCycle = new Map(
     ((classCycleRows ?? []) as unknown as { id: string; levels: { cycle_id: string } | null }[]).map((row) => [
       row.id,
@@ -198,6 +275,9 @@ export async function generateSchedule(
   // --- construction des taches ---
   const tasks: SolverTask[] = [];
   const taskMeta: TaskMeta[] = [];
+  // Portee de chaque tache : une regle de charge vise un ensemble de seances,
+  // pas une seance isolee. On la retient au fur et a mesure.
+  const courseTasks: CourseTask[] = [];
   const problems: string[] = [];
   // Notices de portee (hors cycle vise) : purement informatives — une
   // generation par cycle exclut TOUJOURS les exigences des autres cycles,
@@ -218,7 +298,7 @@ export async function generateSchedule(
       excluded.push(
         cycleId
           ? `« ${label} » : ne cible pas une classe de ce cycle — ignoree dans ce lancement.`
-          : `« ${label} » : cible une classe dont le cycle a ses propres horaires — generez-la depuis ce cycle (page de generation, selecteur de cycle).`,
+          : `« ${label} » : cible une classe dont le cycle a ses propres horaires — generez-la depuis ce cycle (page de génération, selecteur de cycle).`,
       );
       continue;
     }
@@ -233,6 +313,14 @@ export async function generateSchedule(
     // creneaux de depart candidats : tenue dans la journee (span REELLEMENT
     // contigu, sans pause entre deux creneaux — cf. dayToIndexes) et
     // disponibilite de TOUS les enseignants de la seance sur toute la duree.
+    const courseScope = {
+      subjectId: r.subject_id,
+      classIds,
+      levelIds: [...new Set(classIds.map((cid) => classToLevel.get(cid)).filter((l): l is string => !!l))],
+      teacherIds,
+    };
+    const blockedBy = new Set<string>();
+
     const candidateStartSlots: number[] = [];
     for (const [, dayIndexes] of dayToIndexes) {
       for (let k = 0; k + durationSlots <= dayIndexes.length; k++) {
@@ -249,12 +337,40 @@ export async function generateSchedule(
           if (!w) return true; // aucune contrainte declaree
           return teacherFreeAt(w.avail, w.unavail, w.avail.length > 0, first.day_of_week, hmToMin(first.starts_at), hmToMin(last.ends_at));
         });
-        if (ok) candidateStartSlots.push(span[0]!);
+        if (!ok) continue;
+
+        // Les regles dures de l'ecole retirent leurs creneaux : le solveur ne
+        // les voit jamais, il ne peut donc pas les choisir.
+        const window = {
+          day: first.day_of_week,
+          startMin: hmToMin(first.starts_at),
+          endMin: hmToMin(last.ends_at),
+        };
+        // « Jamais en derniere heure » posee en DURE se traite ici, comme un
+        // moment interdit : le creneau disparait des candidats.
+        if (
+          lastOfDayIndexes.has(span[0]!) &&
+          hardRules.some((r) => r.code === 'NOT_LAST_SLOT' && ruleAppliesTo(r, courseScope))
+        ) {
+          blockedBy.add('Jamais en dernière heure');
+          continue;
+        }
+
+        const blocked = blockingRules(hardRules, courseScope, window);
+        if (blocked.length > 0) {
+          for (const b of blocked) blockedBy.add(b.summary);
+          continue;
+        }
+        candidateStartSlots.push(span[0]!);
       }
     }
 
     if (candidateStartSlots.length === 0) {
-      problems.push(`« ${label} » : aucun creneau compatible (duree ${durMin} min ou disponibilites des enseignants).`);
+      problems.push(
+        blockedBy.size > 0
+          ? `« ${label} » : aucun créneau compatible — vos règles l'interdisent partout (${[...blockedBy].join(' ; ')}).`
+          : `« ${label} » : aucun créneau compatible (durée ${durMin} min ou disponibilités des enseignants).`,
+      );
       continue;
     }
 
@@ -263,29 +379,90 @@ export async function generateSchedule(
     const groupIndexes = groupIds.map((id) => groupIx.get(id));
     const candidateRooms = roomResult.roomIds.map((id) => roomIx.get(id));
 
-    for (let n = 0; n < r.sessions_count; n++) {
+    const myLocks = locksByRequirement.get(r.id) ?? [];
+
+    // « Grouper les séances » : une règle DURE fusionne les séances en blocs.
+    // Deux séances groupées deviennent une seule tâche de deux créneaux — le
+    // solveur n'a donc aucun concept nouveau à apprendre, et la contiguïté est
+    // garantie par construction. Une règle souple reste sans effet ici : on ne
+    // fusionne pas « si possible ».
+    const blockRule = hardRules.find((x) => x.code === 'BLOCK_SESSIONS' && ruleAppliesTo(x, courseScope));
+    const blockSize = blockRule ? Math.max(2, Number(blockRule.params.size) || 2) : 1;
+    const wholeBlocks = blockSize > 1 ? Math.floor(r.sessions_count / blockSize) : 0;
+    const leftover = r.sessions_count - wholeBlocks * blockSize;
+    const plan: number[] = [
+      ...Array.from({ length: wholeBlocks }, () => blockSize * durationSlots),
+      ...Array.from({ length: leftover }, () => durationSlots),
+    ];
+
+    for (let n = 0; n < plan.length; n++) {
       const index = tasks.length;
+      courseTasks.push({ taskIndex: index, scope: courseScope });
+
+      // Les seances verrouillees passent en premier : la n-ieme tache reprend
+      // le n-ieme verrou. Un verrou dont le creneau n'existe plus dans la
+      // grille est abandonne et signale — le taire replacerait le cours
+      // ailleurs sans que personne le sache.
+      const lock = myLocks[n];
+      let fixedStartSlot: number | null = null;
+      let fixedRoom: number | null = null;
+      if (lock) {
+        const slotIndex = slotIndexById.get(lock.startSlotId);
+        if (slotIndex === undefined) {
+          lostLocks.push(`« ${lock.label} » : son créneau verrouillé n'existe plus dans la grille horaire.`);
+        } else {
+          fixedStartSlot = slotIndex;
+          const roomIndex = lock.roomId ? roomIx.get(lock.roomId) : undefined;
+          fixedRoom = roomIndex === undefined ? null : roomIndex;
+        }
+      }
+
+      const thisDuration = plan[n] ?? durationSlots;
+      // Un bloc ne tient pas forcément partout : on écarte les départs trop
+      // tardifs dans la journée plutôt que de laisser le solveur échouer.
+      const startsForThis =
+        thisDuration === durationSlots
+          ? candidateStartSlots
+          : candidateStartSlots.filter((startIndex) => {
+              const day = slots[startIndex]!.day_of_week;
+              const dayList = dayToIndexes.get(day) ?? [];
+              const at = dayList.indexOf(startIndex);
+              return at >= 0 && at + thisDuration <= dayList.length;
+            });
+      if (startsForThis.length === 0) {
+        problems.push(`« ${label} » : un bloc de ${thisDuration} créneaux ne tient dans aucune journée.`);
+        break;
+      }
+
       tasks.push({
         index,
-        durationSlots,
-        candidateStartSlots,
+        durationSlots: thisDuration,
+        candidateStartSlots: startsForThis,
         candidateRooms,
         teacherIndexes,
         classIndexes,
         groupIndexes,
-        locked: false,
-        fixedStartSlot: null,
-        fixedRoom: null,
+        locked: fixedStartSlot !== null,
+        fixedStartSlot,
+        fixedRoom,
         priority: 100,
         label,
       });
-      taskMeta.push({ requirement: r, durationSlots, classIds, groupIds, teacherIds, candidateRoomIds: roomResult.roomIds });
+      taskMeta.push({
+        requirement: r,
+        durationSlots: thisDuration,
+        classIds,
+        groupIds,
+        teacherIds,
+        candidateRoomIds: roomResult.roomIds,
+        preferredRoomIds: roomResult.preferredIds ?? [],
+      });
     }
   }
 
   if (tasks.length === 0) {
     throw new ValidationError(
-      `Impossible de constituer le probleme :\n- ${[...problems, ...excluded].join('\n- ') || 'aucune tache exploitable.'}`,
+      `Impossible de constituer le problème :\n- ${[...problems, ...excluded].join('\n- ') || 'aucune tache exploitable.'}`,
     );
   }
 
@@ -330,10 +507,34 @@ export async function generateSchedule(
     }
   }
 
+  // --- salles indisponibles chaque semaine (salle pretee, club, reunion) ---
+  // Une regle hebdomadaire ferme la salle au meme creneau toutes les semaines :
+  // on l'exprime comme une occupation fixe de cette salle, exactement comme un
+  // cours deja pose. Le solveur n'a donc rien de nouveau a apprendre.
+  const { data: roomRules } = await supabase
+    .from('room_availability')
+    .select('room_id, day_of_week, starts_at, ends_at')
+    .eq('school_id', ctx.school.id)
+    .eq('academic_year_id', yearId)
+    .eq('kind', 'UNAVAILABLE');
+  for (const rule of (roomRules ?? []) as { room_id: string; day_of_week: number; starts_at: string; ends_at: string }[]) {
+    if (!roomIx.has(rule.room_id)) continue;
+    const r = roomIx.get(rule.room_id);
+    const from = hmToMin(rule.starts_at);
+    const to = hmToMin(rule.ends_at);
+    for (const idx of dayToIndexes.get(rule.day_of_week) ?? []) {
+      const slot = slots[idx]!;
+      if (hmToMin(slot.starts_at) >= to || from >= hmToMin(slot.ends_at)) continue;
+      fixedOccupations.push({ startSlot: idx, durationSlots: 1, teacherIndexes: [], classIndexes: [], groupIndexes: [], roomIndex: r });
+    }
+  }
+
   // --- verification arithmetique (rapide, avant tout appel solveur) ---
   const totalSlots = slots.length;
   const preCheck = arithmeticPrecheck(tasks, taskMeta, teacherIx, classIx, availByTeacher, slots, dayToIndexes, slotMinutes, totalSlots);
   const allProblems = [...problems, ...preCheck];
+  // Un verrou perdu n'empeche pas de generer : il se signale dans le bilan.
+  const notices = [...excluded, ...lostLocks];
 
   // --- job (garde-fou : une seule generation a la fois, ADR-014) ---
   const timeout = Math.min(180, Math.max(20, tasks.length)); // borne le temps sur 1 vCPU
@@ -356,7 +557,7 @@ export async function generateSchedule(
     if (error) {
       // 23505 sur l'index partiel « une seule RUNNING » = generation concurrente
       if ((error as { code?: string }).code === '23505') {
-        throw new ConflictError('Une generation est deja en cours. Reessayez dans un instant.');
+        throw new ConflictError('Une génération est déjà en cours. Réessayez dans un instant.');
       }
       throw error;
     }
@@ -367,10 +568,19 @@ export async function generateSchedule(
   // (`excluded` — hors de la portee du cycle vise — n'est jamais un motif
   // d'echec : c'est le fonctionnement normal d'une generation par cycle.)
   if (allProblems.length > 0) {
-    return finishInfeasible(ctx, jobId, tasks.length, [...allProblems, ...excluded], undefined);
+    return finishInfeasible(ctx, jobId, tasks.length, [...allProblems, ...notices], undefined);
   }
 
   // --- resolution ---
+  // Les créneaux décrits pour les préférences : demi-journée, dernier du jour.
+  const slotInfos: SlotInfo[] = slots.map((slot, index) => ({
+    index,
+    day: slot.day_of_week,
+    rank: (dayToIndexes.get(slot.day_of_week) ?? []).indexOf(index),
+    lastOfDay: lastOfDayIndexes.has(index),
+    startMin: hmToMin(slot.starts_at),
+  }));
+
   const input: ScheduleInput = {
     requestId,
     slotCount: totalSlots,
@@ -378,6 +588,22 @@ export async function generateSchedule(
     groupParentClasses,
     timeoutSeconds: timeout,
     workers: 1,
+    // Une graine differente explore l'espace autrement : c'est ce qui permet
+    // de proposer plusieurs emplois du temps valides et de les comparer.
+    ...(seed === undefined ? {} : { randomSeed: seed }),
+    // Sans le decoupage en journees, le solveur ne voit qu'une suite plate de
+    // creneaux : il ne saurait ni compter « par jour », ni distinguer deux
+    // seances separees par une nuit de deux seances qui se suivent.
+    days: [...dayToIndexes.entries()].sort((a, b) => a[0] - b[0]).map(([, indexes]) => indexes),
+    loadLimits: [
+      ...loadLimits(hardRules, courseTasks),
+      // Un plafond posé en PRÉFÉRENCE se dépasse en le payant.
+      ...loadLimits(softRules, courseTasks).map((l) => ({ ...l, weight: weightOf({ summary: l.label }) })),
+      ...spreadLimits(hardRules, courseTasks, () => 0).map((l) => ({ ...l, weight: null })),
+      ...spreadLimits(softRules, courseTasks, weightOf),
+    ],
+    slotPenalties: slotPenalties(softRules, courseTasks, slotInfos, weightOf),
+    gapPenalties: gapPenalties(softRules, courseTasks, weightOf),
     tasks,
     fixedOccupations,
   };
@@ -397,10 +623,17 @@ export async function generateSchedule(
   }
 
   // --- materialisation : version BROUILLON + seances ---
+  // Ce qui a ete ecrit, retenu hors du try : si la suite echoue (une lecture
+  // de verification qui depasse le statement_timeout, par exemple), il faut
+  // pouvoir l'effacer. Sans cela une generation marquee « echouee » laisse
+  // derriere elle des centaines de seances a demi validees, que rien ne
+  // distingue des bonnes.
+  let written: { versionId: string; sessionIds: string[] } | null = null;
   try {
-    const { versionId, sessionIds } = await materializeDraft(
-      ctx, yearId, jobId, solution, taskMeta, slots, slotMinutes, roomIdByIndex, targetVersionId,
+    const { versionId, sessionIds, preferenceMisses } = await materializeDraft(
+      ctx, yearId, jobId, solution, taskMeta, slots, slotMinutes, roomIdByIndex, targetVersionId, fixedOccupations,
     );
+    written = { versionId, sessionIds };
 
     // Post-validation INDEPENDANTE : le validateur pur doit confirmer 0 conflit
     // dur, sur la version ENTIERE (les deux cycles deja materialises compris —
@@ -417,7 +650,15 @@ export async function generateSchedule(
       // (targetVersionId) peut deja contenir les seances, validees, d'un
       // cycle precedent — les effacer aussi romprait ce travail deja bon.
       if (targetVersionId) {
-        await supabase.from('schedule_sessions').delete().eq('school_id', ctx.school.id).in('id', sessionIds);
+        // Par paquets : un millier d'identifiants dans une seule URL la ferait
+        // rejeter par le serveur avant meme d'arriver a la base.
+        for (let i = 0; i < sessionIds.length; i += 200) {
+          await supabase
+            .from('schedule_sessions')
+            .delete()
+            .eq('school_id', ctx.school.id)
+            .in('id', sessionIds.slice(i, i + 200));
+        }
       } else {
         await supabase.from('schedule_versions').delete().eq('school_id', ctx.school.id).eq('id', versionId);
       }
@@ -426,8 +667,30 @@ export async function generateSchedule(
       return { jobId, status: 'FAILED', taskCount: tasks.length, assignedCount: solution.assignments.length, diagnostics: [], message };
     }
 
-    const successDiagnostics =
-      excluded.length > 0 ? [`${excluded.length} exigence(s) hors de ce cycle — ignoree(s) dans ce lancement.`] : [];
+    const successDiagnostics = [
+      ...(excluded.length > 0 ? [`${excluded.length} exigence(s) hors de ce cycle — ignoree(s) dans ce lancement.`] : []),
+      // Un verrou perdu doit se voir : le cours a ete replace ailleurs.
+      ...lostLocks,
+      ...(locks.length > lostLocks.length
+        ? [`${locks.length - lostLocks.length} séance(s) verrouillée(s) conservée(s) à leur place.`]
+        : []),
+      ...(solution.penalty > 0
+        ? [
+            `${solution.penaltyDetails.length} préférence(s) non satisfaite(s) — ` +
+              solution.penaltyDetails
+                .slice(0, 3)
+                .map((d) => `${d.label} (${d.penalty})`)
+                .join(', ') +
+              (solution.penaltyDetails.length > 3 ? '…' : ''),
+          ]
+        : ['Toutes les préférences sont respectées.']),
+      ...(preferenceMisses > 0
+        ? [
+            `${preferenceMisses} cours n'a (ont) pas pu se tenir dans la salle souhaitée — elle était occupée : ` +
+              'il(s) se tien(nen)t dans une salle ordinaire.',
+          ]
+        : []),
+    ];
 
     await supabase
       .from('schedule_generation_jobs')
@@ -461,10 +724,33 @@ export async function generateSchedule(
       versionId,
       taskCount: tasks.length,
       assignedCount: solution.assignments.length,
+      penalty: solution.penalty,
+      penaltyDetails: solution.penaltyDetails,
       diagnostics: successDiagnostics,
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Erreur lors de la creation de la version.';
+    const message = err instanceof Error ? err.message : 'Erreur lors de la création de la version.';
+    // Meme regle que le rejet du validateur : on n'annule QUE ce que ce
+    // lancement a insere. Une version ciblee peut contenir le travail, deja
+    // bon, d'un cycle precedent.
+    if (written) {
+      try {
+        if (targetVersionId) {
+          for (let i = 0; i < written.sessionIds.length; i += 200) {
+            await supabase
+              .from('schedule_sessions')
+              .delete()
+              .eq('school_id', ctx.school.id)
+              .in('id', written.sessionIds.slice(i, i + 200));
+          }
+        } else {
+          await supabase.from('schedule_versions').delete().eq('school_id', ctx.school.id).eq('id', written.versionId);
+        }
+      } catch {
+        // Le nettoyage a echoue lui aussi : le message d'erreur reste celui de
+        // la cause, et la version brouillon reste supprimable a la main.
+      }
+    }
     await failJob(ctx, jobId, message);
     return { jobId, status: 'FAILED', taskCount: tasks.length, assignedCount: 0, diagnostics: [], message };
   }
@@ -518,6 +804,19 @@ export async function listGenerationJobs(ctx: TenantContext, yearId: string, lim
 // Materialisation d'une version brouillon
 // ---------------------------------------------------------------------------
 
+/** Insertion par paquets : une requete par 500 lignes, pas une par ligne. */
+async function insertInChunks<T extends 'schedule_sessions' | 'schedule_session_targets' | 'schedule_session_teachers' | 'schedule_session_rooms'>(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  table: T,
+  rows: TablesInsert<T>[],
+): Promise<void> {
+  for (let i = 0; i < rows.length; i += 500) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await supabase.from(table).insert(rows.slice(i, i + 500) as any);
+    if (error) throw error;
+  }
+}
+
 async function materializeDraft(
   ctx: TenantContext,
   yearId: string,
@@ -527,8 +826,9 @@ async function materializeDraft(
   slots: Slot[],
   slotMinutes: number,
   roomIdByIndex: Map<number, string>,
-  targetVersionId?: string,
-): Promise<{ versionId: string; sessionIds: string[] }> {
+  targetVersionId: string | undefined,
+  fixedOccupations: FixedOccupation[],
+): Promise<{ versionId: string; sessionIds: string[]; preferenceMisses: number }> {
   const supabase = await createClient();
 
   // Ajout a une version brouillon existante (generation par cycle, en
@@ -568,7 +868,7 @@ async function materializeDraft(
         school_id: ctx.school.id,
         academic_year_id: yearId,
         number,
-        name: `Generation ${number}`,
+        name: `Génération ${number}`,
         status: 'DRAFT',
         source: 'GENERATED',
         generation_job_id: jobId,
@@ -580,59 +880,120 @@ async function materializeDraft(
     versionId = version.id;
   }
 
+  // --- salles : ce que le solveur a choisi, puis les souhaits ---------------
+  //
+  // Le solveur ne connaît que « salle possible » ou « salle impossible ». Une
+  // préférence (« de préférence en salle informatique ») se règle donc ici :
+  // pour chaque cours qui en exprime une, on tente de le faire basculer dans
+  // une salle souhaitée LIBRE à son créneau. Sinon il garde la salle ordinaire
+  // que le solveur lui a donnée — l'emploi du temps reste valide dans tous les
+  // cas, et le rapport dit combien de souhaits n'ont pas pu être honorés.
+  const chosenRoom = new Map<number, string | undefined>();
+  const busyByRoom = new Map<string, { start: number; end: number }[]>();
+  const occupy = (roomId: string, start: number, end: number) => {
+    const list = busyByRoom.get(roomId) ?? [];
+    list.push({ start, end });
+    busyByRoom.set(roomId, list);
+  };
+  const release = (roomId: string, start: number, end: number) => {
+    const list = busyByRoom.get(roomId) ?? [];
+    const i = list.findIndex((w) => w.start === start && w.end === end);
+    if (i >= 0) list.splice(i, 1);
+  };
+  const isFree = (roomId: string, start: number, end: number) =>
+    !(busyByRoom.get(roomId) ?? []).some((w) => w.start < end && start < w.end);
+
+  for (const occ of fixedOccupations) {
+    if (occ.roomIndex === null || occ.roomIndex === undefined) continue;
+    const rid = roomIdByIndex.get(occ.roomIndex);
+    if (rid) occupy(rid, occ.startSlot, occ.startSlot + Math.max(1, occ.durationSlots));
+  }
+  for (const a of solution.assignments) {
+    const rid = a.room >= 0 ? roomIdByIndex.get(a.room) : undefined;
+    chosenRoom.set(a.taskIndex, rid);
+    if (rid) occupy(rid, a.startSlot, a.endSlot);
+  }
+
+  let preferenceMisses = 0;
+  for (const a of solution.assignments) {
+    const meta = taskMeta[a.taskIndex];
+    if (!meta || meta.preferredRoomIds.length === 0) continue;
+    const current = chosenRoom.get(a.taskIndex);
+    if (current && meta.preferredRoomIds.includes(current)) continue;
+    const target = meta.preferredRoomIds.find((rid) => isFree(rid, a.startSlot, a.endSlot));
+    if (!target) {
+      preferenceMisses++;
+      continue;
+    }
+    if (current) release(current, a.startSlot, a.endSlot);
+    occupy(target, a.startSlot, a.endSlot);
+    chosenRoom.set(a.taskIndex, target);
+  }
+
+  // Une seance touche quatre tables. Ecrire ligne par ligne coutait quatre
+  // allers-retours par seance : plus de 4 000 requetes pour un lycee, soit
+  // plusieurs minutes alors que le solveur, lui, repond en quelques secondes.
+  // On fabrique donc les identifiants ici et on ecrit par paquets.
   const sessionIds: string[] = [];
+  const sessionRows: TablesInsert<'schedule_sessions'>[] = [];
+  const targetRows: TablesInsert<'schedule_session_targets'>[] = [];
+  const teacherRows: TablesInsert<'schedule_session_teachers'>[] = [];
+  const roomRows: TablesInsert<'schedule_session_rooms'>[] = [];
+
   for (const a of solution.assignments) {
     const meta = taskMeta[a.taskIndex];
     if (!meta) continue;
     const startSlot = slots[a.startSlot]!;
     const lastSlot = slots[a.endSlot - 1] ?? startSlot;
     const duration = (a.endSlot - a.startSlot) * slotMinutes;
+    const sessionId = crypto.randomUUID();
+    sessionIds.push(sessionId);
 
-    const { data: session, error: sErr } = await supabase
-      .from('schedule_sessions')
-      .insert({
-        school_id: ctx.school.id,
-        academic_year_id: yearId,
-        schedule_version_id: versionId,
-        teaching_requirement_id: meta.requirement.id,
-        subject_id: meta.requirement.subject_id,
-        day_of_week: startSlot.day_of_week,
-        start_slot_id: startSlot.id,
-        end_slot_id: lastSlot.id,
-        starts_at: startSlot.starts_at,
-        ends_at: lastSlot.ends_at,
-        duration_minutes: duration,
-        status: 'PLANNED',
-      } satisfies TablesInsert<'schedule_sessions'>)
-      .select('id')
-      .single();
-    if (sErr) throw sErr;
-    sessionIds.push(session.id);
+    sessionRows.push({
+      id: sessionId,
+      school_id: ctx.school.id,
+      academic_year_id: yearId,
+      schedule_version_id: versionId,
+      teaching_requirement_id: meta.requirement.id,
+      subject_id: meta.requirement.subject_id,
+      day_of_week: startSlot.day_of_week,
+      start_slot_id: startSlot.id,
+      end_slot_id: lastSlot.id,
+      starts_at: startSlot.starts_at,
+      ends_at: lastSlot.ends_at,
+      duration_minutes: duration,
+      status: 'PLANNED',
+    });
 
-    const targets: TablesInsert<'schedule_session_targets'>[] = [
-      ...meta.classIds.map((cid) => ({ school_id: ctx.school.id, session_id: session.id, target_type: 'CLASS' as const, class_id: cid })),
-      ...meta.groupIds.map((gid) => ({ school_id: ctx.school.id, session_id: session.id, target_type: 'GROUP' as const, group_id: gid })),
-    ];
-    if (targets.length > 0) await supabase.from('schedule_session_targets').insert(targets);
-
-    if (meta.teacherIds.length > 0) {
-      await supabase.from('schedule_session_teachers').insert(
-        meta.teacherIds.map((tid, i) => ({
-          school_id: ctx.school.id,
-          session_id: session.id,
-          teacher_id: tid,
-          role: i === 0 ? ('LEAD' as const) : ('ASSISTANT' as const),
-        })),
-      );
+    for (const cid of meta.classIds) {
+      targetRows.push({ school_id: ctx.school.id, session_id: sessionId, target_type: 'CLASS', class_id: cid });
     }
-
-    const roomId = a.room >= 0 ? roomIdByIndex.get(a.room) : undefined;
+    for (const gid of meta.groupIds) {
+      targetRows.push({ school_id: ctx.school.id, session_id: sessionId, target_type: 'GROUP', group_id: gid });
+    }
+    meta.teacherIds.forEach((tid, i) => {
+      teacherRows.push({
+        school_id: ctx.school.id,
+        session_id: sessionId,
+        teacher_id: tid,
+        role: i === 0 ? 'LEAD' : 'ASSISTANT',
+      });
+    });
+    const roomId = chosenRoom.get(a.taskIndex);
     if (roomId) {
-      await supabase.from('schedule_session_rooms').insert({ school_id: ctx.school.id, session_id: session.id, room_id: roomId, is_primary: true });
+      roomRows.push({ school_id: ctx.school.id, session_id: sessionId, room_id: roomId, is_primary: true });
     }
   }
 
-  return { versionId, sessionIds };
+  // Les seances d'abord : les trois autres tables les referencent.
+  await insertInChunks(supabase, 'schedule_sessions', sessionRows);
+  await Promise.all([
+    insertInChunks(supabase, 'schedule_session_targets', targetRows),
+    insertInChunks(supabase, 'schedule_session_teachers', teacherRows),
+    insertInChunks(supabase, 'schedule_session_rooms', roomRows),
+  ]);
+
+  return { versionId, sessionIds, preferenceMisses };
 }
 
 // ---------------------------------------------------------------------------
@@ -653,7 +1014,16 @@ function translateInfeasibility(
   };
   for (const t of solution.emptyDomainTasks) {
     const meta = taskMeta[t];
-    if (meta) push(`« ${meta.requirement.subjects?.name ?? 'Cours'} — ${targetLabel(meta.requirement)} » : aucun creneau possible.`);
+    if (meta) push(`« ${meta.requirement.subjects?.name ?? 'Cours'} — ${targetLabel(meta.requirement)} » : aucun créneau possible.`);
+  }
+  // CP-SAT a pu désigner les règles elles-mêmes : c'est la réponse la plus
+  // utile — on sait quoi assouplir, sans deviner.
+  if (solution.blockingRules.length > 0) {
+    push(
+      solution.blockingRules.length === 1
+        ? `Cette règle rend l'emploi du temps impossible : ${solution.blockingRules[0]}. La lever ou l'assouplir suffirait.`
+        : `Ces règles sont incompatibles entre elles : ${solution.blockingRules.join(' ; ')}. En lever une suffirait.`,
+    );
   }
   if (solution.infeasibleCore.length > 0) {
     const labels = solution.infeasibleCore
@@ -664,7 +1034,7 @@ function translateInfeasibility(
     push(`Ces enseignements ne peuvent pas coexister sur la grille : ${uniq.join(' ; ')}.`);
   }
   if (out.length === 0) {
-    push('Le solveur n\'a trouve aucun placement possible. Ajoutez des creneaux, des salles, ou reduisez le nombre de seances.');
+    push('Le solveur n\'a trouvé aucun placement possible. Ajoutez des créneaux, des salles, ou reduisez le nombre de séances.');
   }
   return out;
 }
@@ -703,7 +1073,7 @@ function arithmeticPrecheck(
     }
     if (need > free) {
       const name = teacherNameOf(tid, taskMeta);
-      problems.push(`Enseignant ${name} : ${need} creneau(x) necessaires, ${free} seulement disponible(s).`);
+      problems.push(`Enseignant ${name} : ${need} créneau(x) nécessaires, ${free} seulement disponible(s).`);
     }
   }
 
@@ -717,7 +1087,7 @@ function arithmeticPrecheck(
   for (const [cid, need] of needByClass) {
     if (need > totalSlots) {
       const name = classNameOf(cid, taskMeta);
-      problems.push(`Classe ${name} : ${need} creneau(x) necessaires, la grille n'en compte que ${totalSlots}.`);
+      problems.push(`Classe ${name} : ${need} créneau(x) nécessaires, la grille n'en compte que ${totalSlots}.`);
     }
   }
 
@@ -732,24 +1102,43 @@ function arithmeticPrecheck(
 // Helpers internes
 // ---------------------------------------------------------------------------
 
-function resolveRooms(r: ReqRow, rooms: { id: string; room_type_id: string | null; capacity: number }[]): { roomIds: string[]; error?: string } {
+type GenRoom = { id: string; room_type_id: string | null; capacity: number; features: string[] };
+
+/**
+ * Quelles salles conviennent à une exigence ?
+ *
+ * La capacité minimale et les équipements exigés (paillasses, postes
+ * informatiques, machines) filtrent toujours. Ensuite, selon le mode :
+ *   - salle ou type IMPOSÉ : rien d'autre n'est accepté ;
+ *   - PRÉFÉRÉ : toutes les salles restent possibles, mais on note celles que
+ *     l'école souhaite. Après résolution, on essaie d'y déplacer le cours ;
+ *     si elles sont prises, ou si l'école n'en a aucune, le cours se tient dans
+ *     une salle ordinaire — sans bloquer la génération.
+ */
+function resolveRooms(r: ReqRow, rooms: GenRoom[]): { roomIds: string[]; preferredIds?: string[]; error?: string } {
   const minCap = r.min_capacity ?? 0;
-  const withCap = rooms.filter((x) => x.capacity >= minCap);
+  const needed = r.required_features ?? [];
+  const suits = (x: GenRoom) => x.capacity >= minCap && needed.every((f) => x.features.includes(f));
+  const withCap = rooms.filter(suits);
+
   switch (r.room_requirement_mode) {
     case 'REQUIRED_ROOM': {
       const room = rooms.find((x) => x.id === r.required_room_id);
-      if (!room) return { roomIds: [], error: 'la salle imposee est introuvable ou inactive.' };
+      if (!room) return { roomIds: [], error: 'la salle imposée est introuvable ou inactive.' };
       return { roomIds: [room.id] };
     }
     case 'REQUIRED_TYPE': {
       const list = withCap.filter((x) => x.room_type_id === r.required_room_type_id).map((x) => x.id);
-      if (list.length === 0) return { roomIds: [], error: 'aucune salle du type impose ne convient (capacite ?).' };
+      if (list.length === 0) {
+        return { roomIds: [], error: 'aucune salle du type imposé ne convient (capacité, équipements ?).' };
+      }
       return { roomIds: list };
     }
     case 'PREFERRED': {
-      // Preference non optimisee en v1.0.0 : on autorise toutes les salles
-      // compatibles (la salle preferee en fait partie).
-      return { roomIds: withCap.map((x) => x.id) };
+      const preferred = withCap
+        .filter((x) => x.id === r.preferred_room_id || (r.preferred_room_type_id !== null && x.room_type_id === r.preferred_room_type_id))
+        .map((x) => x.id);
+      return { roomIds: withCap.map((x) => x.id), preferredIds: preferred };
     }
     case 'NONE':
     default:
@@ -844,6 +1233,8 @@ type ReqRow = {
   session_duration_minutes: number | null;
   room_requirement_mode: 'NONE' | 'PREFERRED' | 'REQUIRED_ROOM' | 'REQUIRED_TYPE';
   required_room_id: string | null;
+  preferred_room_type_id: string | null;
+  required_features: string[] | null;
   required_room_type_id: string | null;
   preferred_room_id: string | null;
   min_capacity: number | null;
@@ -865,6 +1256,8 @@ type TaskMeta = {
   groupIds: string[];
   teacherIds: string[];
   candidateRoomIds: string[];
+  /** Salles souhaitées (mode « de préférence ») : essayées après résolution. */
+  preferredRoomIds: string[];
 };
 
 /** Attribue des indices compacts stables (0..N-1) a des uuid. */
@@ -887,4 +1280,61 @@ class Indexer {
   get size(): number {
     return this.map.size;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Variantes
+// ---------------------------------------------------------------------------
+
+export type VariantRun = {
+  seed: number;
+  versionId: string | undefined;
+  status: GenerationResult['status'];
+  penalty: number;
+  penaltyDetails: { label: string; penalty: number }[];
+  assignedCount: number;
+  taskCount: number;
+};
+
+/**
+ * Plusieurs emplois du temps valides, à comparer.
+ *
+ * Toutes les contraintes dures sont respectées dans chacun : ce qui les
+ * distingue, c'est le prix payé en préférences. L'école choisit sur pièces au
+ * lieu de subir la première solution venue.
+ *
+ * Chaque variante est une génération complète — trois variantes coûtent trois
+ * fois le temps de calcul. C'est pour cela qu'on ne le fait que sur demande.
+ *
+ * Les variantes s'enchaînent, jamais en parallèle : la base n'autorise qu'une
+ * génération à la fois, et c'est une protection qu'on ne contourne pas.
+ */
+export async function generateVariants(
+  ctx: TenantContext,
+  yearId: string,
+  cycleId: string | undefined,
+  count: number,
+): Promise<VariantRun[]> {
+  const runs: VariantRun[] = [];
+  const total = Math.max(1, Math.min(count, 5));
+
+  for (let i = 0; i < total; i++) {
+    // Des graines éloignées plutôt que 1, 2, 3 : deux graines voisines donnent
+    // souvent le même parcours de recherche, donc la même solution.
+    const seed = 42 + i * 1013;
+    const result = await generateSchedule(ctx, yearId, cycleId, undefined, seed);
+    runs.push({
+      seed,
+      versionId: result.versionId,
+      status: result.status,
+      penalty: result.penalty ?? 0,
+      penaltyDetails: result.penaltyDetails ?? [],
+      assignedCount: result.assignedCount,
+      taskCount: result.taskCount,
+    });
+    // Inutile d'insister si le problème est insoluble : il le restera.
+    if (result.status === 'INFEASIBLE') break;
+  }
+
+  return runs;
 }

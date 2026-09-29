@@ -41,7 +41,7 @@ export async function getVersion(ctx: TenantContext, id: string) {
 
 export async function createVersion(ctx: TenantContext): Promise<string> {
   requireWritable(ctx, 'schedule.create');
-  if (!ctx.academicYear) throw new ValidationError("Activez une annee scolaire d'abord.");
+  if (!ctx.academicYear) throw new ValidationError("Activez une année scolaire d'abord.");
   const supabase = await createClient();
   const yearId = ctx.academicYear.id;
 
@@ -110,7 +110,7 @@ export async function publishVersion(ctx: TenantContext, id: string): Promise<vo
     .eq('id', id);
   if (error) throw error;
 
-  await materializeOccurrences(ctx, id, version.academic_year_id);
+  await syncYearOccurrences(ctx, id, version.academic_year_id);
   await audit(ctx, { action: 'schedule.publish', module: 'schedule', entityType: 'schedule_version', entityId: id });
 }
 
@@ -120,8 +120,25 @@ export async function deleteVersion(ctx: TenantContext, id: string): Promise<voi
   const version = await getVersion(ctx, id);
   if (!version) throw new NotFoundError('Version introuvable.');
   if (version.status === 'PUBLISHED') {
-    throw new ConflictError('Une version publiee ne peut pas etre supprimee ; archivez-la via une nouvelle publication.');
+    throw new ConflictError('Une version publiée ne peut pas être supprimée ; archivez-la via une nouvelle publication.');
   }
   await supabase.from('schedule_versions').delete().eq('school_id', ctx.school.id).eq('id', id);
   await audit(ctx, { action: 'schedule.version_delete', module: 'schedule', entityType: 'schedule_version', entityId: id });
+}
+
+/**
+ * Séances datées de l'année (celles de l'appel) : la base les produit pour chaque
+ * jour de classe — trimestres, hors congés, à partir d'aujourd'hui — et retire
+ * celles à venir de l'ancienne version (migration 0063). Tant que la migration
+ * n'est pas appliquée, ancienne génération (12 semaines).
+ */
+async function syncYearOccurrences(ctx: TenantContext, versionId: string, yearId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('sync_schedule_occurrences' as never, { p_year: yearId } as never);
+  if (!error) return;
+  if (error.code === 'PGRST202' || error.code === '42883') {
+    await materializeOccurrences(ctx, versionId, yearId);
+    return;
+  }
+  throw error;
 }

@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
-import { requirePageAccess } from '@/lib/permissions/guard';
+import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { getConfig, listCyclesOverview } from '@/features/schedule/config';
 import { listRequirements } from '@/features/schedule/requirements';
+import { listRoomTypes, listRoomFeatures, listActiveRoomOptions } from '@/features/rooms/queries';
 import { listGenerationJobs } from '@/features/schedule/generation';
 import {
   syncRequirementsAction,
@@ -18,14 +19,14 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { SimpleSubmit } from '@/components/ui/simple-submit';
 
-export const metadata: Metadata = { title: 'Generation de l\'emploi du temps' };
+export const metadata: Metadata = { title: 'Génération de l\'emploi du temps' };
 
 const JOB_STATUS: Record<string, string> = {
   QUEUED: 'En file',
   RUNNING: 'En cours',
   SUCCEEDED: 'Reussie',
   INFEASIBLE: 'Impossible',
-  FAILED: 'Echec',
+  FAILED: 'Échec',
   CANCELLED: 'Annulee',
 };
 
@@ -40,13 +41,14 @@ export default async function GeneratePage({
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
   requirePageAccess(ctx, 'schedule.generate');
+  requireFeature(ctx, 'schedule');
   const base = `/e/${slug}/schedule`;
 
   if (!ctx.academicYear) {
     return (
       <div className="mx-auto max-w-4xl">
-        <PageHeader title="Generation" />
-        <EmptyState title="Aucune annee active" hint="Activez une annee scolaire d'abord." />
+        <PageHeader title="Génération" />
+        <EmptyState title="Aucune année active" hint="Activez une année scolaire d'abord." action={{ href: `/e/${slug}/academic-years`, label: 'Gérer les années scolaires' }} />
       </div>
     );
   }
@@ -60,6 +62,15 @@ export default async function GeneratePage({
   // (§ decision "pause par cycle") n'a jamais de grille par defaut du tout.
   const hasAnyGrid = config !== null || cyclesWithOwnGrid.length > 0;
   const requirements = hasAnyGrid ? await listRequirements(ctx, yearId) : [];
+  // Cibles possibles d'une règle de salle : les types d'abord (« un laboratoire »),
+  // puis les salles précises (« le laboratoire B12 »).
+  const [roomTypes, roomFeatures, roomList] = hasAnyGrid
+    ? await Promise.all([listRoomTypes(ctx), listRoomFeatures(ctx), listActiveRoomOptions(ctx)])
+    : [[], [], []];
+  const roomChoices = [
+    ...roomTypes.map((t) => ({ id: t.id, name: t.name, kind: 'TYPE' as const })),
+    ...roomList.map((r) => ({ id: r.id, name: r.name, kind: 'ROOM' as const })),
+  ];
   const jobs = hasAnyGrid ? await listGenerationJobs(ctx, yearId, 5) : [];
   const activeCount = requirements.filter((r) => r.status === 'ACTIVE').length;
   const targetVersionId = typeof sp.version === 'string' ? sp.version : undefined;
@@ -73,15 +84,15 @@ export default async function GeneratePage({
       <Flash searchParams={sp} />
       {sp.synced !== undefined ? (
         <Alert tone="success">
-          {sp.synced} exigence(s) creee(s) depuis les affectations{sp.kept && sp.kept !== '0' ? `, ${sp.kept} conservee(s).` : '.'}
+          {sp.synced} exigence(s) créée(s) depuis les affectations{sp.kept && sp.kept !== '0' ? `, ${sp.kept} conservee(s).` : '.'}
         </Alert>
       ) : null}
-      {sp.updated === '1' ? <Alert tone="success">Exigence mise a jour.</Alert> : null}
-      {sp.reqdeleted === '1' ? <Alert tone="success">Exigence supprimee.</Alert> : null}
+      {sp.updated === '1' ? <Alert tone="success">Exigence mise à jour.</Alert> : null}
+      {sp.reqdeleted === '1' ? <Alert tone="success">Exigence supprimée.</Alert> : null}
 
       <PageHeader
-        title="Generation de l'emploi du temps"
-        description={`Annee ${ctx.academicYear.name}`}
+        title="Génération de l'emploi du temps"
+        description={`Année ${ctx.academicYear.name}`}
         action={
           <Link href={base}>
             <Button variant="ghost">Retour</Button>
@@ -91,8 +102,8 @@ export default async function GeneratePage({
 
       {!hasAnyGrid ? (
         <EmptyState
-          title="Horaires non configures"
-          hint="Definissez d'abord les jours et horaires de cette annee, depuis Annees scolaires."
+          title="Horaires non configurés"
+          hint="Définissez d'abord les jours et horaires de cette année, depuis Années scolaires."
         />
       ) : (
         <>
@@ -100,10 +111,10 @@ export default async function GeneratePage({
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-medium uppercase tracking-wide text-[color:var(--muted-foreground)]">
-                  Exigences pedagogiques
+                  Exigences pédagogiques
                 </h2>
                 <p className="text-xs text-[color:var(--muted-foreground)]">
-                  Le besoin a placer : matiere, cible, enseignant, nombre de seances, salle.
+                  Le besoin à placer : matière, cible, enseignant, nombre de séances, salle.
                 </p>
               </div>
               {canSync ? (
@@ -114,10 +125,16 @@ export default async function GeneratePage({
             {requirements.length === 0 ? (
               <EmptyState
                 title="Aucune exigence"
-                hint="Synchronisez depuis les affectations pour convertir les volumes horaires en seances a placer."
+                hint="Synchronisez depuis les affectations pour convertir les volumes horaires en séances à placer."
               />
             ) : (
-              <RequirementsTable slug={slug} rows={requirements} canEdit={canEdit && canDelete} />
+              <RequirementsTable
+                slug={slug}
+                rows={requirements}
+                canEdit={canEdit && canDelete}
+                roomChoices={roomChoices}
+                features={roomFeatures}
+              />
             )}
           </section>
 
@@ -144,7 +161,7 @@ export default async function GeneratePage({
                       </span>
                     </div>
                     <p className="text-xs text-[color:var(--muted-foreground)]">
-                      {j.sessions_count != null ? `${j.sessions_count} seance(s) placee(s)` : '—'}
+                      {j.sessions_count != null ? `${j.sessions_count} séance(s) placée(s)` : '—'}
                       {j.solver_status ? ` · ${j.solver_status}` : ''}
                       {j.duration_ms != null ? ` · ${(j.duration_ms / 1000).toFixed(1)} s` : ''}
                     </p>

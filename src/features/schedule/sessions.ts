@@ -45,6 +45,100 @@ type ValidatorSessionRaw = {
   schedule_session_rooms: { room_id: string }[];
 };
 
+/**
+ * Tout ce dont l'ecran a besoin, en une seule lecture.
+ *
+ * L'editeur affiche la grille ET signale les conflits : il demandait donc deux
+ * fois les memes seances, avec deux paginations completes. A l'echelle d'un
+ * lycee (2 000 seances, policy RLS couteuse par ligne) cela doublait le temps
+ * de la page — parfois jusqu'au statement_timeout. Un seul select suffit : les
+ * identifiants bruts et les libelles lisibles voyagent ensemble.
+ */
+type FullSessionRaw = {
+  id: string;
+  day_of_week: number;
+  starts_at: string;
+  ends_at: string;
+  duration_minutes: number;
+  is_locked: boolean;
+  subjects: { name: string } | null;
+  schedule_session_teachers: { teacher_id: string; teachers: { first_name: string; last_name: string } | null }[];
+  schedule_session_targets: { class_id: string | null; group_id: string | null; classes: { name: string } | null }[];
+  schedule_session_rooms: { room_id: string; rooms: { code: string } | null }[];
+};
+
+const FULL_SESSION_SELECT =
+  'id, day_of_week, starts_at, ends_at, duration_minutes, is_locked, subjects(name), ' +
+  'schedule_session_teachers(teacher_id, teachers(first_name, last_name)), ' +
+  'schedule_session_targets(class_id, group_id, classes(name)), ' +
+  'schedule_session_rooms(room_id, rooms(code))';
+
+/** La grille a afficher et la liste que verifie le validateur, d'une seule lecture. */
+export async function listSessionsWithValidator(
+  ctx: TenantContext,
+  versionId: string,
+): Promise<{ rows: SessionRow[]; validator: ValidatorSession[] }> {
+  const supabase = await createClient();
+  const data = await fetchAllRows<FullSessionRaw>((cursor) => {
+    let q = supabase
+      .from('schedule_sessions')
+      .select(FULL_SESSION_SELECT)
+      .eq('school_id', ctx.school.id)
+      .eq('schedule_version_id', versionId)
+      .order('id')
+      .limit(SCHEDULE_SESSIONS_PAGE_SIZE);
+    if (cursor) q = q.gt('id', cursor);
+    return q as unknown as PromiseLike<{ data: FullSessionRaw[] | null; error: { message: string } | null }>;
+  }, SCHEDULE_SESSIONS_PAGE_SIZE);
+
+  const rows = data.map(toSessionRow);
+  rows.sort((a, b) => a.day_of_week - b.day_of_week || a.starts_at.localeCompare(b.starts_at) || a.id.localeCompare(b.id));
+
+  const validator: ValidatorSession[] = data.map((s) => ({
+    id: s.id,
+    label: s.subjects?.name ?? 'Cours',
+    dayOfWeek: s.day_of_week,
+    startMin: hmToMin(s.starts_at),
+    endMin: hmToMin(s.ends_at),
+    teacherIds: s.schedule_session_teachers.map((t) => t.teacher_id),
+    classIds: s.schedule_session_targets.map((t) => t.class_id).filter((x): x is string => !!x),
+    groupIds: s.schedule_session_targets.map((t) => t.group_id).filter((x): x is string => !!x),
+    roomIds: s.schedule_session_rooms.map((r) => r.room_id),
+  }));
+
+  return { rows, validator };
+}
+
+/** Une ligne brute vers la ligne affichable. */
+function toSessionRow(s: {
+  id: string;
+  day_of_week: number;
+  starts_at: string;
+  ends_at: string;
+  duration_minutes: number;
+  is_locked: boolean;
+  subjects: { name: string } | null;
+  schedule_session_teachers: { teachers: { first_name: string; last_name: string } | null }[];
+  schedule_session_targets: { class_id: string | null; classes: { name: string } | null }[];
+  schedule_session_rooms: { rooms: { code: string } | null }[];
+}): SessionRow {
+  const t = s.schedule_session_teachers[0]?.teachers ?? null;
+  const target = s.schedule_session_targets[0] ?? null;
+  return {
+    id: s.id,
+    day_of_week: s.day_of_week,
+    starts_at: s.starts_at,
+    ends_at: s.ends_at,
+    duration_minutes: s.duration_minutes,
+    is_locked: s.is_locked,
+    subject_name: s.subjects?.name ?? 'Cours',
+    teacher_name: t ? `${t.last_name.toUpperCase()} ${t.first_name}` : null,
+    class_name: target?.classes?.name ?? null,
+    class_id: target?.class_id ?? null,
+    room_name: s.schedule_session_rooms[0]?.rooms?.code ?? null,
+  };
+}
+
 export async function loadValidatorSessions(ctx: TenantContext, versionId: string): Promise<ValidatorSession[]> {
   const supabase = await createClient();
   const data = await fetchAllRows<ValidatorSessionRaw>((cursor) => {
@@ -116,23 +210,7 @@ export async function listSessions(ctx: TenantContext, versionId: string): Promi
   }, SCHEDULE_SESSIONS_PAGE_SIZE);
   data.sort((a, b) => a.day_of_week - b.day_of_week || a.starts_at.localeCompare(b.starts_at) || a.id.localeCompare(b.id));
 
-  return data.map((s) => {
-    const t = s.schedule_session_teachers[0]?.teachers ?? null;
-    const target = s.schedule_session_targets[0] ?? null;
-    return {
-      id: s.id,
-      day_of_week: s.day_of_week,
-      starts_at: s.starts_at,
-      ends_at: s.ends_at,
-      duration_minutes: s.duration_minutes,
-      is_locked: s.is_locked,
-      subject_name: s.subjects?.name ?? 'Cours',
-      teacher_name: t ? `${t.last_name.toUpperCase()} ${t.first_name}` : null,
-      class_name: target?.classes?.name ?? null,
-      class_id: target?.class_id ?? null,
-      room_name: s.schedule_session_rooms[0]?.rooms?.code ?? null,
-    };
-  });
+  return data.map(toSessionRow);
 }
 
 export async function addSession(ctx: TenantContext, versionId: string, input: SessionInput): Promise<void> {
@@ -158,15 +236,15 @@ export async function addSession(ctx: TenantContext, versionId: string, input: S
     .in('id', [input.startSlotId, input.endSlotId]);
   const startSlot = slots?.find((s) => s.id === input.startSlotId);
   const endSlot = slots?.find((s) => s.id === input.endSlotId);
-  if (!startSlot || !endSlot) throw new ValidationError('Creneaux invalides.');
+  if (!startSlot || !endSlot) throw new ValidationError('Créneaux invalides.');
   if (startSlot.day_of_week !== endSlot.day_of_week) {
-    throw new ValidationError('Les deux creneaux doivent etre le meme jour.');
+    throw new ValidationError('Les deux créneaux doivent être le même jour.');
   }
   const dayOfWeek = startSlot.day_of_week;
   const startsAt = startSlot.starts_at;
   const endsAt = endSlot.ends_at;
   const duration = hmToMin(endsAt) - hmToMin(startsAt);
-  if (duration <= 0) throw new ValidationError('Le creneau de fin doit suivre celui de debut.');
+  if (duration <= 0) throw new ValidationError('Le créneau de fin doit suivre celui de début.');
 
   // Validation independante AVANT insertion
   const candidate: ValidatorSession = {
@@ -232,6 +310,6 @@ export async function deleteSession(ctx: TenantContext, sessionId: string): Prom
     .eq('school_id', ctx.school.id)
     .eq('id', sessionId);
   if (error) throw error;
-  if (!count) throw new NotFoundError('Seance introuvable.');
+  if (!count) throw new NotFoundError('Séance introuvable.');
   await audit(ctx, { action: 'schedule.session_delete', module: 'schedule', entityType: 'schedule_session', entityId: sessionId });
 }

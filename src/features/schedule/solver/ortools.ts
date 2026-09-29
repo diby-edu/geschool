@@ -59,7 +59,7 @@ export class OrToolsSolver implements ScheduleSolver {
     if (solution.contractVersion !== CONTRACT_VERSION) {
       throw new SolverError(
         'CONTRACT_MISMATCH',
-        `Version de contrat incompatible : attendu ${CONTRACT_VERSION}, recu ${solution.contractVersion}.`,
+        `Version de contrat incompatible : attendu ${CONTRACT_VERSION}, reçu ${solution.contractVersion}.`,
       );
     }
     return solution;
@@ -87,7 +87,7 @@ export class OrToolsSolver implements ScheduleSolver {
       if (cause instanceof DOMException && cause.name === 'TimeoutError') {
         throw new SolverError('TIMEOUT', 'Le solveur a depasse le delai imparti.', { cause });
       }
-      throw new SolverError('UNAVAILABLE', "Le service de generation est injoignable.", { cause });
+      throw new SolverError('UNAVAILABLE', "Le service de génération est injoignable.", { cause });
     }
 
     if (res.ok) return res;
@@ -97,13 +97,13 @@ export class OrToolsSolver implements ScheduleSolver {
   private mapError(status: number): SolverError {
     switch (status) {
       case 401:
-        return new SolverError('UNAUTHORIZED', "Authentification du solveur refusee.");
+        return new SolverError('UNAUTHORIZED', "Authentification du solveur refusée.");
       case 409:
         return new SolverError('CONTRACT_MISMATCH', 'Version de contrat incompatible.');
       case 413:
-        return new SolverError('INVALID_INPUT', 'Le probleme envoye est trop volumineux.');
+        return new SolverError('INVALID_INPUT', 'Le problème envoyé est trop volumineux.');
       case 422:
-        return new SolverError('INVALID_INPUT', "Le probleme envoye ne respecte pas le contrat.");
+        return new SolverError('INVALID_INPUT', "Le problème envoyé ne respecte pas le contrat.");
       case 504:
         return new SolverError('TIMEOUT', 'Le solveur a depasse le delai imparti.');
       default:

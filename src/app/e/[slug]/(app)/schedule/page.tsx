@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
-import { requirePageAccess } from '@/lib/permissions/guard';
+import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { getConfig, listCyclesOverview } from '@/features/schedule/config';
 import { listVersions } from '@/features/schedule/versions';
@@ -31,6 +31,7 @@ export default async function SchedulePage({
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
   requirePageAccess(ctx, 'schedule.view');
+  requireFeature(ctx, 'schedule');
   const base = `/e/${slug}/schedule`;
 
   // Enseignant sans droit de gestion : une vue globale, hebdomadaire, sans
@@ -45,7 +46,7 @@ export default async function SchedulePage({
     const slots = await getMyWeeklySchedule(ctx);
     return (
       <div className="mx-auto max-w-3xl space-y-6">
-        <PageHeader title="Mon emploi du temps" {...(ctx.academicYear ? { description: `Annee ${ctx.academicYear.name}` } : {})} />
+        <PageHeader title="Mon emploi du temps" {...(ctx.academicYear ? { description: `Année ${ctx.academicYear.name}` } : {})} />
         <MyWeekSchedule slots={slots} />
       </div>
     );
@@ -55,7 +56,7 @@ export default async function SchedulePage({
     return (
       <div className="mx-auto max-w-3xl">
         <PageHeader title="Emploi du temps" />
-        <EmptyState title="Aucune annee active" hint="Activez une annee scolaire d'abord." />
+        <EmptyState title="Aucune année active" hint="Activez une année scolaire d'abord." action={{ href: `/e/${slug}/academic-years`, label: 'Gérer les années scolaires' }} />
       </div>
     );
   }
@@ -74,17 +75,20 @@ export default async function SchedulePage({
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <Flash searchParams={sp} />
-      {sp.configured === '1' ? <Alert tone="success">Grille horaire enregistree.</Alert> : null}
+      {sp.configured === '1' ? <Alert tone="success">Grille horaire enregistrée.</Alert> : null}
       <PageHeader
         title="Emploi du temps"
-        description={`Annee ${ctx.academicYear.name}`}
+        description={`Année ${ctx.academicYear.name}`}
         action={
           <div className="flex items-center gap-2">
             {hasAnyGrid && canGenerate ? (
               <Link href={`${base}/generate`}>
-                <Button>Generer automatiquement</Button>
+                <Button>Générer automatiquement</Button>
               </Link>
             ) : null}
+            <Link href={`${base}/regles`}>
+              <Button variant="secondary">Règles</Button>
+            </Link>
             {canConfig ? (
               <Link href={`/e/${slug}/academic-years/${ctx.academicYear.id}`}>
                 <Button variant="secondary">{config ? 'Modifier les horaires' : 'Configurer les horaires'}</Button>
@@ -96,8 +100,8 @@ export default async function SchedulePage({
 
       {!hasAnyGrid ? (
         <EmptyState
-          title="Horaires non configures"
-          hint="Definissez d'abord les jours et horaires de cette annee, depuis Annees scolaires."
+          title="Horaires non configurés"
+          hint="Définissez d'abord les jours et horaires de cette année, depuis Années scolaires."
         />
       ) : (
         <section className="space-y-3">
@@ -109,7 +113,7 @@ export default async function SchedulePage({
           </div>
 
           {versions.length === 0 ? (
-            <EmptyState title="Aucune version" hint="Creez une version pour saisir l'emploi du temps." />
+            <EmptyState title="Aucune version" hint="Créez une version pour saisir l'emploi du temps." />
           ) : (
             <ul className="space-y-2">
               {versions.map((v) => (

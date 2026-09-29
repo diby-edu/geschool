@@ -50,11 +50,11 @@ export function GenerateForm({
     <Card>
       <CardContent className="space-y-4">
         <div>
-          <h2 className="text-sm font-medium">Generation automatique</h2>
+          <h2 className="text-sm font-medium">Génération automatique</h2>
           <p className="mt-1 text-xs text-[color:var(--muted-foreground)]">
             Le moteur place les {requirementCount} exigence(s) active(s) en respectant les conflits
-            enseignant / classe / groupe / salle et les disponibilites. Une nouvelle version brouillon
-            est produite ; la version publiee n&apos;est jamais modifiee.
+            enseignant / classe / groupe / salle et les disponibilités. Une nouvelle version brouillon
+            est produite ; la version publiée n&apos;est jamais modifiée.
           </p>
         </div>
 
@@ -69,8 +69,8 @@ export function GenerateForm({
               ))}
             </ul>
             <p className="mt-2 text-xs text-[color:var(--muted-foreground)]">
-              Ajustez les exigences (nombre de seances, salles), la grille horaire ou les
-              disponibilites, puis relancez.
+              Ajustez les exigences (nombre de séances, salles), la grille horaire ou les
+              disponibilités, puis relancez.
             </p>
           </div>
         ) : null}
@@ -93,7 +93,18 @@ export function GenerateForm({
               </Select>
             </Field>
           ) : null}
-          <SubmitButton disabled={requirementCount === 0}>Lancer la generation</SubmitButton>
+          {/*
+            Plusieurs variantes : chacune est un calcul complet, donc trois
+            variantes prennent trois fois le temps. On le propose, on ne
+            l'impose pas.
+          */}
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <input type="checkbox" name="variants" value="3" className="size-4" />
+            Proposer 3 variantes à comparer
+            <span className="text-xs text-[color:var(--muted-foreground)]">(trois fois plus long)</span>
+          </label>
+
+          <SubmitButton disabled={requirementCount === 0}>Lancer la génération</SubmitButton>
         </form>
       </CardContent>
     </Card>

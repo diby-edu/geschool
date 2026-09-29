@@ -6,6 +6,10 @@ import { fetchAllRows } from '@/lib/supabase/pagination';
 import type { TablesInsert } from '@/types/database';
 
 /**
+ * ANCIENNE génération, gardée seulement tant que la migration 0063 n'est pas
+ * appliquée : la base produit désormais les séances de toute l'année
+ * (public.sync_schedule_occurrences, appelée par versions.ts).
+ *
  * Materialise les occurrences datees d'une version publiee (ADR-002) : la trame
  * hebdomadaire est projetee sur le calendrier scolaire, jours de vacances et
  * feries exclus. L'appel et les absences (lot 9) s'attacheront a ces occurrences.

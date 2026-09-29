@@ -7,6 +7,7 @@ import { audit } from '@/lib/audit';
 import { ConflictError, ValidationError } from '@/lib/errors';
 import type { TablesInsert } from '@/types/database';
 import type { ScheduleConfigInput } from './schemas';
+import { buildDaySlots, readDayPlans, type DayPlan, type Pause } from './day-grid';
 
 export type TimeSlot = {
   id: string;
@@ -15,16 +16,6 @@ export type TimeSlot = {
   starts_at: string; // HH:MM:SS
   ends_at: string;
 };
-
-function toMinutes(hhmm: string): number {
-  const [h, m] = hhmm.split(':').map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
-}
-function toTime(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
-}
 
 const CONFIG_COLUMNS = 'id, name, cycle_id, working_days, day_starts_at, day_ends_at, default_session_minutes';
 
@@ -99,7 +90,13 @@ export async function getConfigForClass(ctx: TenantContext, yearId: string, clas
   return getConfigForCycle(ctx, yearId, cycleId);
 }
 
-export type CycleOverview = { id: string; name: string; configId: string | null };
+export type CycleOverview = {
+  id: string;
+  name: string;
+  configId: string | null;
+  /** Grille PROPRE au cycle, quand il en a une (pour l'afficher à côté de son nom). */
+  grid: { dayHours: DayPlan[]; breaks: Pause[] } | null;
+};
 
 /**
  * Cycles de l'etablissement avec l'etat de leur grille (propre, ou grille par
@@ -118,62 +115,60 @@ export async function listCyclesOverview(ctx: TenantContext, yearId: string): Pr
       .not('cycle_id', 'is', null),
   ]);
   const configByCycle = new Map((configs ?? []).map((c) => [c.cycle_id as string, c.id]));
-  return (cycles ?? []).map((c) => ({ id: c.id, name: c.name, configId: configByCycle.get(c.id) ?? null }));
+  return Promise.all(
+    (cycles ?? []).map(async (c) => {
+      const configId = configByCycle.get(c.id) ?? null;
+      return { id: c.id, name: c.name, configId, grid: configId ? await readGrid(ctx, configId) : null };
+    }),
+  );
 }
 
-export type DayHours = { day: number; start: string; end: string };
+export type GridPause = { day: number; start: string; end: string; label: string; kind: string };
+
+/** Pauses de la grille, jour par jour — pour les montrer dans l'emploi du temps. */
+export async function listPauses(ctx: TenantContext, configId: string): Promise<GridPause[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('time_slots')
+    .select('day_of_week, starts_at, ends_at, kind, label')
+    .eq('school_id', ctx.school.id)
+    .eq('schedule_configuration_id', configId)
+    .neq('kind', 'TEACHING')
+    .order('starts_at');
+  return ((data ?? []) as { day_of_week: number; starts_at: string; ends_at: string; kind: string; label: string | null }[]).map((r) => ({
+    day: r.day_of_week,
+    start: r.starts_at.slice(0, 5),
+    end: r.ends_at.slice(0, 5),
+    kind: r.kind,
+    label: r.label ?? (r.kind === 'LUNCH' ? 'Pause déjeuner' : 'Pause'),
+  }));
+}
+
+export type DayHours = DayPlan;
+export type BreakHours = Pause;
+
+async function readGrid(ctx: TenantContext, configId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('time_slots')
+    .select('day_of_week, starts_at, ends_at, kind, label')
+    .eq('school_id', ctx.school.id)
+    .eq('schedule_configuration_id', configId);
+  return readDayPlans((data ?? []) as { day_of_week: number; starts_at: string; ends_at: string; kind: string; label: string | null }[]);
+}
 
 /**
- * Horaire REEL de chaque jour, reconstruit a partir de la grille de creneaux
- * deja generee (min/max des time_slots TEACHING de ce jour) — jamais stocke a
- * part, pour ne jamais avoir deux sources de verite sur « l'horaire du mercredi ».
+ * Horaire REEL de chaque jour (matin, pause déjeuner, après-midi), relu dans la
+ * grille de créneaux déjà générée — jamais stocké à part, pour ne jamais avoir deux
+ * sources de vérité sur « l'horaire du mercredi ».
  */
 export async function getDayHours(ctx: TenantContext, configId: string): Promise<DayHours[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from('time_slots')
-    .select('day_of_week, starts_at, ends_at')
-    .eq('school_id', ctx.school.id)
-    .eq('schedule_configuration_id', configId)
-    .eq('kind', 'TEACHING');
-
-  const byDay = new Map<number, { start: string; end: string }>();
-  for (const row of (data ?? []) as { day_of_week: number; starts_at: string; ends_at: string }[]) {
-    const cur = byDay.get(row.day_of_week);
-    if (!cur) {
-      byDay.set(row.day_of_week, { start: row.starts_at, end: row.ends_at });
-    } else {
-      if (row.starts_at < cur.start) cur.start = row.starts_at;
-      if (row.ends_at > cur.end) cur.end = row.ends_at;
-    }
-  }
-  return Array.from(byDay.entries())
-    .map(([day, h]) => ({ day, start: h.start.slice(0, 5), end: h.end.slice(0, 5) }))
-    .sort((a, b) => a.day - b.day);
+  return (await readGrid(ctx, configId)).dayHours;
 }
 
-export type BreakHours = { start: string; end: string; label: string };
-
-/**
- * Pauses REELLES de la grille, reconstruites depuis les time_slots BREAK/LUNCH
- * deja generes (meme logique que getDayHours) — une pause identique appliquee
- * a plusieurs jours n'apparait qu'une fois.
- */
+/** Récréations de la grille (la pause déjeuner n'en fait pas partie : elle sépare matin et après-midi). */
 export async function getBreaks(ctx: TenantContext, configId: string): Promise<BreakHours[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from('time_slots')
-    .select('starts_at, ends_at, label')
-    .eq('school_id', ctx.school.id)
-    .eq('schedule_configuration_id', configId)
-    .neq('kind', 'TEACHING');
-
-  const seen = new Map<string, BreakHours>();
-  for (const row of (data ?? []) as { starts_at: string; ends_at: string; label: string | null }[]) {
-    const key = `${row.starts_at}-${row.ends_at}`;
-    if (!seen.has(key)) seen.set(key, { start: row.starts_at.slice(0, 5), end: row.ends_at.slice(0, 5), label: row.label ?? 'Pause' });
-  }
-  return Array.from(seen.values()).sort((a, b) => a.start.localeCompare(b.start));
+  return (await readGrid(ctx, configId)).breaks;
 }
 
 export async function listSlots(ctx: TenantContext, configId: string): Promise<TimeSlot[]> {
@@ -187,24 +182,6 @@ export async function listSlots(ctx: TenantContext, configId: string): Promise<T
     .order('day_of_week')
     .order('position');
   return (data ?? []) as TimeSlot[];
-}
-
-type Range = { start: number; end: number };
-
-/** Retire des intervalles de pause d'une plage [start, end) — les pauses hors plage sont ignorees. */
-function subtractBreaks(start: number, end: number, breaks: Range[]): Range[] {
-  const clipped = breaks
-    .map((b) => ({ start: Math.max(b.start, start), end: Math.min(b.end, end) }))
-    .filter((b) => b.end > b.start)
-    .sort((a, b) => a.start - b.start);
-  const ranges: Range[] = [];
-  let cursor = start;
-  for (const b of clipped) {
-    if (b.start > cursor) ranges.push({ start: cursor, end: b.start });
-    cursor = Math.max(cursor, b.end);
-  }
-  if (cursor < end) ranges.push({ start: cursor, end });
-  return ranges;
 }
 
 /**
@@ -234,7 +211,7 @@ export async function saveConfig(
       .eq('academic_year_id', yearId);
     if ((count ?? 0) > 0) {
       throw new ValidationError(
-        'Des seances existent deja : impossible de regenerer la grille. Supprimez les versions d\'abord.',
+        'Des séances existent déjà : impossible de régénérer la grille. Supprimez les versions d\'abord.',
       );
     }
     await supabase.from('schedule_configurations').delete().eq('id', existing!.id);
@@ -266,61 +243,26 @@ export async function saveConfig(
     .single();
   if (error) throw error;
 
-  // Generation des creneaux : CHAQUE jour utilise SON PROPRE debut/fin, et les
-  // pauses configurees (recreation, dejeuner) decoupent la journee en
-  // plusieurs plages TEACHING separees par des creneaux BREAK — jamais
-  // proposes au solveur ni a la saisie manuelle (kind != 'TEACHING' filtre
-  // partout ailleurs), ce qui les exclut naturellement de tout cours.
-  const breakRanges = input.breaks.map((b) => ({ start: toMinutes(b.start), end: toMinutes(b.end), label: b.label }));
+  // Génération des créneaux : chaque jour selon SON horaire (matin, après-midi),
+  // découpé par la pause déjeuner et les récréations. Pauses = créneaux BREAK /
+  // LUNCH, jamais proposés au solveur ni à la saisie (kind != 'TEACHING' filtré
+  // partout ailleurs) : aucun cours n'y est jamais placé.
   const slots: TablesInsert<'time_slots'>[] = [];
   for (const day of input.workingDays) {
     const hours = input.dayHours.find((h) => h.day === day);
-    if (!hours) continue; // deja rejete par le schema, garde-fou
-    const dayStart = toMinutes(hours.start);
-    const dayEnd = toMinutes(hours.end);
-
-    // Une pause ne s'applique a un jour que si elle y tient ENTIEREMENT — un
-    // mercredi ecourte qui coupe la recreation en deux ne doit pas produire
-    // une variante "recreation plus courte" ce jour-la (getBreaks() la
-    // confondrait avec une pause distincte) : ce jour-la, pas de recreation du
-    // tout plutot qu'une recreation partielle.
-    const dayBreaks = breakRanges.filter((b) => b.start >= dayStart && b.end <= dayEnd);
-
-    type Seg = { start: number; end: number; kind: 'TEACHING' | 'BREAK'; label?: string };
-    const segs: Seg[] = subtractBreaks(dayStart, dayEnd, dayBreaks).map((r) => ({ ...r, kind: 'TEACHING' as const }));
-    for (const b of dayBreaks) segs.push({ start: b.start, end: b.end, kind: 'BREAK', label: b.label });
-    segs.sort((a, b) => a.start - b.start);
-
-    let position = 0;
-    for (const seg of segs) {
-      if (seg.kind === 'BREAK') {
-        slots.push({
-          school_id: ctx.school.id,
-          academic_year_id: yearId,
-          schedule_configuration_id: config.id,
-          day_of_week: day,
-          position,
-          starts_at: toTime(seg.start),
-          ends_at: toTime(seg.end),
-          kind: 'BREAK',
-          label: seg.label ?? null,
-        });
-        position++;
-        continue;
-      }
-      for (let t = seg.start; t + input.slotMinutes <= seg.end; t += input.slotMinutes) {
-        slots.push({
-          school_id: ctx.school.id,
-          academic_year_id: yearId,
-          schedule_configuration_id: config.id,
-          day_of_week: day,
-          position,
-          starts_at: toTime(t),
-          ends_at: toTime(t + input.slotMinutes),
-          kind: 'TEACHING',
-        });
-        position++;
-      }
+    if (!hours) continue; // déjà rejeté par le schéma, garde-fou
+    for (const slot of buildDaySlots(hours, input.breaks, input.slotMinutes)) {
+      slots.push({
+        school_id: ctx.school.id,
+        academic_year_id: yearId,
+        schedule_configuration_id: config.id,
+        day_of_week: day,
+        position: slot.position,
+        starts_at: `${slot.start}:00`,
+        ends_at: `${slot.end}:00`,
+        kind: slot.kind,
+        label: slot.label,
+      });
     }
   }
   if (slots.length > 0) {
@@ -350,7 +292,7 @@ export async function deleteConfig(ctx: TenantContext, configId: string): Promis
       .select('id', { count: 'exact', head: true })
       .or(`start_slot_id.in.(${slotIds.join(',')}),end_slot_id.in.(${slotIds.join(',')})`);
     if ((count ?? 0) > 0) {
-      throw new ConflictError('Des seances utilisent cette grille : impossible de la supprimer.');
+      throw new ConflictError('Des séances utilisent cette grille : impossible de la supprimer.');
     }
   }
 

@@ -81,19 +81,19 @@ export function detectConflicts(
       // Enseignant
       const t = shared(a.teacherIds, new Set(b.teacherIds));
       if (t) {
-        conflicts.push(conflict('TEACHER', a, b, t, `Enseignant en double : « ${a.label} » et « ${b.label} » au meme moment.`));
+        conflicts.push(conflict('TEACHER', a, b, t, `Enseignant en double : « ${a.label} » et « ${b.label} » au même moment.`));
       }
 
       // Salle
       const r = shared(a.roomIds, new Set(b.roomIds));
       if (r) {
-        conflicts.push(conflict('ROOM', a, b, r, `Salle occupee : « ${a.label} » et « ${b.label} » utilisent la meme salle au meme moment.`));
+        conflicts.push(conflict('ROOM', a, b, r, `Salle occupee : « ${a.label} » et « ${b.label} » utilisent la même salle au même moment.`));
       }
 
       // Groupe strict (meme group_id)
       const g = shared(a.groupIds, new Set(b.groupIds));
       if (g) {
-        conflicts.push(conflict('GROUP', a, b, g, `Groupe en double : « ${a.label} » et « ${b.label} » au meme moment.`));
+        conflicts.push(conflict('GROUP', a, b, g, `Groupe en double : « ${a.label} » et « ${b.label} » au même moment.`));
       }
 
       // Conflit de classe : il ne nait QUE si l'un des deux cours vise la
@@ -106,7 +106,7 @@ export function detectConflicts(
       const cB = shared(b.classIds, effA); // classe entiere de B occupee par A
       const c = cA ?? cB;
       if (c && !g) {
-        conflicts.push(conflict('CLASS', a, b, c, `Classe en double : « ${a.label} » et « ${b.label} » au meme moment.`));
+        conflicts.push(conflict('CLASS', a, b, c, `Classe en double : « ${a.label} » et « ${b.label} » au même moment.`));
       }
     }
   }

@@ -14,7 +14,7 @@ export function MyWeekSchedule({ slots }: { slots: MyScheduleSlot[] }) {
   if (slots.length === 0) {
     return (
       <p className="text-sm text-[color:var(--muted-foreground)]">
-        Aucune seance dans l&apos;emploi du temps publie de l&apos;annee en cours.
+        Aucune séance dans l&apos;emploi du temps publié de l&apos;année en cours.
       </p>
     );
   }

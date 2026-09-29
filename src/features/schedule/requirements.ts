@@ -5,6 +5,7 @@ import type { TenantContext } from '@/lib/tenant/context';
 import { requireWritable } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
 import { NotFoundError, ValidationError } from '@/lib/errors';
+import { fetchAllRows } from '@/lib/supabase/pagination';
 import { getConfig, getConfigForClass, listCyclesOverview } from './config';
 import type { RequirementInput } from './schemas';
 
@@ -17,31 +18,57 @@ export type RequirementRow = {
   sessions_count: number;
   session_duration_minutes: number | null;
   room_mode: string;
+  /** « R:<uuid> » ou « T:<uuid> » : la cible de la règle, quel que soit le mode. */
+  room_target: string;
+  min_capacity: number | null;
+  required_features: string[];
   status: string;
 };
+
+// Une exigence par cours et par classe : un lycee de 5 000 eleves en compte
+// pres d'un millier. Au-dela de 1 000 lignes PostgREST tronque la reponse sans
+// rien dire, et une seule requete de cette taille avec ses relations depasse
+// le statement_timeout. Lecture par curseur, comme les seances.
+const REQUIREMENTS_PAGE_SIZE = 200;
 
 /** Exigences pedagogiques de l'annee, pretes a afficher. */
 export async function listRequirements(ctx: TenantContext, yearId: string): Promise<RequirementRow[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('teaching_requirements')
-    .select(
-      'id, weekly_minutes, sessions_count, session_duration_minutes, room_requirement_mode, status, ' +
-        'subjects(name), ' +
-        'teaching_requirement_targets(target_type, classes(name), groups(name)), ' +
-        'teaching_requirement_teachers(teachers(first_name, last_name))',
-    )
-    .eq('school_id', ctx.school.id)
-    .eq('academic_year_id', yearId)
-    .order('created_at', { ascending: true });
-  if (error) throw error;
+  type Raw = { id: string; created_at: string };
+  const data = await fetchAllRows<Raw>((cursor) => {
+    let q = supabase
+      .from('teaching_requirements')
+      .select(
+        'id, created_at, weekly_minutes, sessions_count, session_duration_minutes, room_requirement_mode, status, ' +
+          'required_room_id, required_room_type_id, preferred_room_id, preferred_room_type_id, ' +
+          'min_capacity, required_features, ' +
+          'subjects(name), ' +
+          'teaching_requirement_targets(target_type, classes(name), groups(name)), ' +
+          'teaching_requirement_teachers(teachers(first_name, last_name))',
+      )
+      .eq('school_id', ctx.school.id)
+      .eq('academic_year_id', yearId)
+      .order('id') // curseur : tri total requis (cf. lib/supabase/pagination)
+      .limit(REQUIREMENTS_PAGE_SIZE);
+    if (cursor) q = q.gt('id', cursor);
+    return q as unknown as PromiseLike<{ data: Raw[] | null; error: { message: string } | null }>;
+  }, REQUIREMENTS_PAGE_SIZE);
+  // L'ordre voulu a l'ecran est celui de creation ; il s'applique apres la
+  // lecture complete, le curseur imposant le tri par id.
+  data.sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
 
-  return ((data ?? []) as unknown as {
+  return (data as unknown as {
     id: string;
     weekly_minutes: number;
     sessions_count: number;
     session_duration_minutes: number | null;
     room_requirement_mode: string;
+    required_room_id: string | null;
+    required_room_type_id: string | null;
+    preferred_room_id: string | null;
+    preferred_room_type_id: string | null;
+    min_capacity: number | null;
+    required_features: string[] | null;
     status: string;
     subjects: { name: string } | null;
     teaching_requirement_targets: {
@@ -63,6 +90,18 @@ export async function listRequirements(ctx: TenantContext, yearId: string): Prom
     sessions_count: r.sessions_count,
     session_duration_minutes: r.session_duration_minutes,
     room_mode: r.room_requirement_mode,
+    room_target:
+      r.required_room_id !== null
+        ? `R:${r.required_room_id}`
+        : r.preferred_room_id !== null
+          ? `R:${r.preferred_room_id}`
+          : r.required_room_type_id !== null
+            ? `T:${r.required_room_type_id}`
+            : r.preferred_room_type_id !== null
+              ? `T:${r.preferred_room_type_id}`
+              : '',
+    min_capacity: r.min_capacity,
+    required_features: r.required_features ?? [],
     status: r.status,
   }));
 }
@@ -182,12 +221,17 @@ export async function updateRequirement(ctx: TenantContext, id: string, input: R
   const supabase = await createClient();
   const { error, count } = await supabase
     .from('teaching_requirements')
-    .update({
-      sessions_count: input.sessionsCount,
-      session_duration_minutes: input.sessionDurationMinutes,
-      room_requirement_mode: input.roomMode,
-      status: input.status,
-    }, { count: 'exact' })
+    .update(
+      {
+        sessions_count: input.sessionsCount,
+        session_duration_minutes: input.sessionDurationMinutes,
+        min_capacity: input.minCapacity ?? null,
+        required_features: input.requiredFeatures,
+        status: input.status,
+        ...roomRuleColumns(input.roomMode, input.roomTarget ?? ''),
+      },
+      { count: 'exact' },
+    )
     .eq('school_id', ctx.school.id)
     .eq('id', id);
   if (error) throw error;
@@ -206,4 +250,40 @@ export async function deleteRequirement(ctx: TenantContext, id: string): Promise
   if (error) throw error;
   if (!count) throw new NotFoundError('Exigence introuvable.');
   await audit(ctx, { action: 'schedule.requirement_delete', module: 'schedule', entityType: 'teaching_requirement', entityId: id });
+}
+
+/**
+ * Traduit « mode + cible » en colonnes. Les quatre colonnes de salle sont
+ * remises à zéro à chaque enregistrement : une règle en remplace une autre,
+ * elles ne s'empilent jamais (la contrainte 0069 l'exige, et c'est plus clair).
+ */
+function roomRuleColumns(
+  mode: string,
+  target: string,
+): {
+  room_requirement_mode: 'NONE' | 'PREFERRED' | 'REQUIRED_ROOM' | 'REQUIRED_TYPE';
+  required_room_id: string | null;
+  required_room_type_id: string | null;
+  preferred_room_id: string | null;
+  preferred_room_type_id: string | null;
+} {
+  const empty = {
+    required_room_id: null,
+    required_room_type_id: null,
+    preferred_room_id: null,
+    preferred_room_type_id: null,
+  };
+  const kind = target.startsWith('R:') ? 'ROOM' : target.startsWith('T:') ? 'TYPE' : null;
+  const id = kind ? target.slice(2) : null;
+
+  if (mode === 'NONE' || !kind || !id) return { room_requirement_mode: 'NONE', ...empty };
+  if (mode === 'PREFERRED') {
+    return kind === 'ROOM'
+      ? { room_requirement_mode: 'PREFERRED', ...empty, preferred_room_id: id }
+      : { room_requirement_mode: 'PREFERRED', ...empty, preferred_room_type_id: id };
+  }
+  // Obligatoire : le mode suit la nature de la cible, pas l'inverse.
+  return kind === 'ROOM'
+    ? { room_requirement_mode: 'REQUIRED_ROOM', ...empty, required_room_id: id }
+    : { room_requirement_mode: 'REQUIRED_TYPE', ...empty, required_room_type_id: id };
 }
