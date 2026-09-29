@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
-import { requirePageAccess } from '@/lib/permissions/guard';
+import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { createAnnouncementAction } from '@/features/communication/actions';
 import { AnnouncementForm } from '@/features/communication/components/AnnouncementForm';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -13,6 +13,7 @@ export default async function NewAnnouncementPage({ params }: { params: Promise<
   const { slug } = await params;
   const ctx = await getTenantContext(slug);
   requirePageAccess(ctx, 'announcements.create');
+  requireFeature(ctx, 'announcements');
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">

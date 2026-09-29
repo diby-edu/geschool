@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { publicEnv } from '@/lib/env';
+import { getClaimsWithRetry, getUserWithRetry } from '@/lib/supabase/get-user';
+import { supabaseFetch } from '@/lib/supabase/limited-fetch';
 import type { Database } from '@/types/database';
 
 /**
@@ -9,8 +11,11 @@ import type { Database } from '@/types/database';
  * l'etablissement, permissions) restent dans les layouts et les Server Actions
  * (ARCHITECTURE.md §4) : le middleware ne fait qu'aiguiller.
  *
- * `getUser()` valide le jeton aupres de Supabase et rafraichit le cookie ; ne
- * jamais le remplacer par `getSession()`, qui ne verifie rien.
+ * `getClaims()` verifie la signature du jeton (localement avec une cle
+ * asymetrique, sans appel reseau) et rafraichit le cookie ; ne jamais le
+ * remplacer par `getSession()`, qui ne verifie rien. Il ne voit pas une session
+ * coupee dont le jeton n'a pas expire : l'espace etablissement le refait
+ * (app_context), et les pages de connexion passent par `getUser()` (ci-dessous).
  */
 
 // Prefixes accessibles sans session
@@ -35,6 +40,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     publicEnv.NEXT_PUBLIC_SUPABASE_URL,
     publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
+      global: { fetch: supabaseFetch },
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -50,18 +56,17 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const claims = await getClaimsWithRetry(supabase);
 
   const { pathname, search } = request.nextUrl;
 
   // Premiere connexion imposee : tant que must_change_password est vrai, tout
   // est inatteignable sauf la page de definition du mot de passe et la
   // deconnexion (ADR-006). Le drapeau vient du JWT (app_metadata), donc aucun
-  // acces base ici.
-  const mustChange = user?.app_metadata?.must_change_password === true;
-  if (user && mustChange && pathname !== '/first-login' && !pathname.startsWith('/auth')) {
+  // acces base ici ; un drapeau pose APRES l'emission du jeton est rattrape par
+  // le layout de l'espace etablissement (app_context le lit a la source).
+  const mustChange = claims?.app_metadata?.must_change_password === true;
+  if (claims && mustChange && pathname !== '/first-login' && !pathname.startsWith('/auth')) {
     const url = request.nextUrl.clone();
     url.pathname = '/first-login';
     url.search = '';
@@ -69,19 +74,25 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   }
 
   // Route protegee sans session -> connexion, avec retour prevu
-  if (!user && !isPublicPath(pathname)) {
+  if (!claims && !isPublicPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.search = `?next=${encodeURIComponent(pathname + search)}`;
     return NextResponse.redirect(url);
   }
 
-  // Deja connecte et deja a jour : la page de connexion n'a plus lieu d'etre
-  if (user && !mustChange && (pathname === '/login' || pathname === '/first-login')) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/';
-    url.search = '';
-    return NextResponse.redirect(url);
+  // Deja connecte et deja a jour : la page de connexion n'a plus lieu d'etre.
+  // Verification complete ici (pages rares) : un jeton encore valide dont la
+  // session a ete coupee (acces suspendu) renverrait sinon la personne vers « / »
+  // a chaque tentative de reconnexion, jusqu'a l'expiration du jeton.
+  if (claims && !mustChange && (pathname === '/login' || pathname === '/first-login')) {
+    const user = await getUserWithRetry(supabase);
+    if (user && user.app_metadata?.must_change_password !== true) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/';
+      url.search = '';
+      return NextResponse.redirect(url);
+    }
   }
 
   return response;

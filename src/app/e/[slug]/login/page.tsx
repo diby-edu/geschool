@@ -34,10 +34,9 @@ export default async function SchoolLoginPage({ params }: { params: Promise<{ sl
           </div>
           <Card>
             <CardHeader>
-              <CardTitle>Espace de l&apos;etablissement</CardTitle>
+              <CardTitle>Espace de l&apos;établissement</CardTitle>
               <CardDescription>
-                Parents, eleves et personnel. Utilisez votre telephone, votre matricule ou votre
-                email.
+                Parents et enseignants. Utilisez votre téléphone ou votre email.
               </CardDescription>
             </CardHeader>
             <CardContent>

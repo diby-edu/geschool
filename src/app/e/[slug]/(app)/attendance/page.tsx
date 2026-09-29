@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
-import { requirePageAccess } from '@/lib/permissions/guard';
+import { requirePageAccessAny, requireFeature } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { listOccurrences } from '@/features/attendance/occurrences';
 import { getCurrentCoursesForTeacher } from '@/features/attendance/current';
@@ -29,7 +29,9 @@ export default async function AttendancePage({
   const { slug } = await params;
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
-  requirePageAccess(ctx, 'attendance.view');
+  // « Toutes les présences » inclut l'accès au module.
+  requirePageAccessAny(ctx, ['attendance.view', 'attendance.view_all']);
+  requireFeature(ctx, 'attendance');
   const base = `/e/${slug}/attendance`;
 
   // Enseignant sans vision d'ensemble (censeur/surveillant/direction) : le

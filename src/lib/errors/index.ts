@@ -59,7 +59,7 @@ export class AuthorizationError extends AppError {
 }
 
 export class NotFoundError extends AppError {
-  constructor(message = 'Cet element est introuvable.') {
+  constructor(message = 'Cet élément est introuvable.') {
     super('NOT_FOUND', message, 404);
   }
 }
@@ -86,7 +86,7 @@ export class RateLimitError extends AppError {
 
 /** Etablissement suspendu, ou annee scolaire cloturee. */
 export class TenantReadOnlyError extends AppError {
-  constructor(message = "Cet etablissement est en lecture seule : aucune modification n'est possible.") {
+  constructor(message = "Cet établissement est en lecture seule : aucune modification n'est possible.") {
     super('TENANT_READ_ONLY', message, 423);
   }
 }

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
-import { requirePageAccess } from '@/lib/permissions/guard';
+import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { createClient } from '@/lib/supabase/server';
 import { listJustifications } from '@/features/attendance/justifications';
 import { submitJustificationAction, decideJustificationAction } from '@/features/attendance/actions';
@@ -28,6 +28,7 @@ export default async function JustificationsPage({
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
   requirePageAccess(ctx, 'attendance.justify');
+  requireFeature(ctx, 'attendance');
   const base = `/e/${slug}/attendance`;
 
   const justifications = await listJustifications(ctx);

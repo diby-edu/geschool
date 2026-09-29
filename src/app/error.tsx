@@ -22,7 +22,7 @@ export default function GlobalError({
     <main className="flex min-h-dvh flex-col items-center justify-center gap-3 px-4 text-center">
       <h1 className="text-xl font-semibold tracking-tight">Une erreur est survenue</h1>
       <p className="max-w-sm text-sm text-[color:var(--muted-foreground)]">
-        Quelque chose s&apos;est mal passe. Reessayez ; si le probleme persiste, contactez le
+        Quelque chose s&apos;est mal passe. Réessayez ; si le problème persiste, contactez le
         support.
       </p>
       <Button className="mt-2" onClick={reset}>

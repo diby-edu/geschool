@@ -64,6 +64,29 @@ export async function asUser<T>(
   }
 }
 
+/**
+ * Comme `asUser`, mais DANS une transaction deja ouverte par l'appelant : la
+ * portee est un savepoint, annule a la fin. Sert aux scenarios qui montent leur
+ * propre jeu de donnees dans une transaction unique, annulee en bloc (rien n'est
+ * jamais valide en base, meme si le test s'interrompt).
+ */
+export async function asUserInTx<T>(
+  db: Db,
+  userId: string,
+  fn: (tx: Db) => Promise<T>,
+): Promise<T> {
+  await db.query('savepoint as_user');
+  try {
+    await db.query('set local role authenticated');
+    await db.query(`set local request.jwt.claims = '${JSON.stringify({ sub: userId })}'`);
+    return await fn(db);
+  } finally {
+    // Le retour au savepoint defait aussi le changement de role et les ecritures.
+    await db.query('rollback to savepoint as_user');
+    await db.query('release savepoint as_user');
+  }
+}
+
 /** Lignes visibles par cet utilisateur pour la requete donnee. */
 export async function countAs(
   db: Db,
@@ -139,7 +162,7 @@ export type Fixture = {
 
 const PREFIX = 'rlstest';
 
-async function createAuthUser(db: Db, email: string): Promise<string> {
+export async function createAuthUser(db: Db, email: string): Promise<string> {
   const { rows } = await db.query(
     `insert into auth.users (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
      values (gen_random_uuid(), '00000000-0000-0000-0000-000000000000',
@@ -158,7 +181,7 @@ async function grantRole(db: Db, membershipId: string, roleCode: string): Promis
   );
 }
 
-async function addMember(db: Db, schoolId: string, userId: string, roleCode: string): Promise<string> {
+export async function addMember(db: Db, schoolId: string, userId: string, roleCode: string): Promise<string> {
   const { rows } = await db.query(
     `insert into school_memberships (school_id, user_id, status)
      values ($1, $2, 'ACTIVE') returning id`,

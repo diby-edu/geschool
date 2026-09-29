@@ -128,7 +128,8 @@ export function AppelGrid({
   if (students.length === 0) return <Alert tone="info">Aucun élève inscrit dans cette classe.</Alert>;
 
   return (
-    <div className="space-y-3">
+    // Saisie de l'appel en cours (souvent hors ligne) : pas de rafraichissement automatique.
+    <div className="space-y-3" data-live-hold>
       {message ? <Alert tone={message.tone}>{message.text}</Alert> : null}
       {pending > 0 ? <Alert tone="info">{pending} appel(s) en attente de synchronisation.</Alert> : null}
 

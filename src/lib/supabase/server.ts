@@ -3,6 +3,8 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { publicEnv } from '@/lib/env';
+import { getUserWithRetry } from '@/lib/supabase/get-user';
+import { supabaseFetch } from '@/lib/supabase/limited-fetch';
 import type { Database } from '@/types/database';
 
 /**
@@ -22,6 +24,7 @@ export async function createClient() {
     publicEnv.NEXT_PUBLIC_SUPABASE_URL,
     publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
+      global: { fetch: supabaseFetch },
       cookies: {
         getAll() {
           return cookieStore.getAll();
@@ -48,11 +51,10 @@ export async function createClient() {
  * Utilise getUser() et non getSession() : getSession() se contente de lire le
  * cookie, dont le contenu n'est pas verifie cote serveur. getUser() valide le
  * jeton aupres de Supabase. La distinction est une frontiere de securite.
+ * Une panne passagere du reseau est rejouee (voir get-user.ts) au lieu de passer
+ * pour une deconnexion.
  */
 export async function getAuthenticatedUser() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+  return getUserWithRetry(supabase);
 }

@@ -4,8 +4,6 @@ import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { registerSchoolAction } from '../actions';
 import type { FormState } from '@/lib/forms';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
 import { MODULES, formatFrancs } from '../catalog';
 
 const STEP_LABELS = ['Établissement', 'Modules', 'Votre compte'];
@@ -61,25 +59,22 @@ export function SignupWizard() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [fields, setFields] = useState<Fields>({ ...EMPTY_FIELDS, ...state.values });
   const [logoName, setLogoName] = useState<string | null>(null);
-  const [autoCode, setAutoCode] = useState(false);
   const [tracks, setTracks] = useState<Set<string>>(new Set(['GENERAL']));
   const [modules, setModules] = useState<Set<string>>(new Set(['SCOL']));
-  const [parentEnabled, setParentEnabled] = useState(false);
 
   function setField(name: keyof Fields, value: string) {
     setFields((f) => ({ ...f, [name]: value }));
   }
 
-  const canParent = modules.size > 0;
   const total = MODULES.filter((m) => modules.has(m.code)).reduce((s, m) => s + m.price, 0);
   const benefits: string[] = MODULES.filter((m) => modules.has(m.code)).flatMap((m) => m.benefits);
-  if (canParent && parentEnabled) benefits.push(PARENT_BENEFIT);
+  // L'Espace Parent est inclus pour tous les etablissements : ce n'est plus un choix.
+  benefits.push(PARENT_BENEFIT);
 
   const step1Valid =
     fields.name.trim() !== '' &&
     fields.city.trim() !== '' &&
     fields.neighborhood.trim() !== '' &&
-    (autoCode || fields.registrationNumber.trim() !== '') &&
     tracks.size > 0;
   const step2Valid = modules.size > 0;
 
@@ -112,7 +107,7 @@ export function SignupWizard() {
         <section className="mkt-wiz-panel" style={{ display: step === 1 ? undefined : 'none' }}>
           <span className="mkt-wiz-eyebrow">1 · Votre établissement</span>
           <h1 className="mkt-display">Présentez votre établissement</h1>
-          <p className="sub">Ces informations seront visibles par vos enseignants, élèves et parents.</p>
+          <p className="sub">Ces informations seront visibles par vos enseignants et vos parents.</p>
 
           <div className="mkt-wiz-photo-row">
             <label className="mkt-wiz-photo-drop" style={{ cursor: 'pointer' }}>
@@ -170,34 +165,18 @@ export function SignupWizard() {
           </div>
 
           <label className="mkt-wiz-field">
-            <span className="lbl">Code officiel de l&apos;école</span>
+            <span className="lbl">Code officiel de l&apos;école (facultatif)</span>
             <input
               type="text"
               name="registrationNumber"
               placeholder="Ex. 000206"
               value={fields.registrationNumber}
               onChange={(e) => setField('registrationNumber', e.target.value)}
-              disabled={autoCode}
             />
             <p className="mkt-wiz-hint">
-              Ce code vous a été délivré par le Ministère. Pas encore reçu le vôtre ? Cochez la case juste en dessous.
+              Le code délivré par le Ministère, s&apos;il existe. Il n&apos;est pas nécessaire pour utiliser l&apos;application :
+              votre code de connexion (6 chiffres) vous est attribué automatiquement à la création.
             </p>
-            <div className="mkt-wiz-check-row">
-              <Checkbox
-                name="autoGenerateCode"
-                checked={autoCode}
-                onChange={(e) => setAutoCode(e.target.checked)}
-                style={{ marginTop: 3 }}
-              />
-              <div>
-                <div className="t">Attribuez-moi un code établissement provisoire</div>
-                <div className="d">
-                  Il permet d&apos;activer dès maintenant les comptes de votre équipe. Échangez-le contre le vrai code du
-                  Ministère dès que vous l&apos;obtenez, depuis Paramètres → Identité.
-                </div>
-                {autoCode ? <div className="mkt-wiz-code-generated">Généré à la création</div> : null}
-              </div>
-            </div>
             {err.registrationNumber ? <p className="mkt-wiz-hint" style={{ color: '#d1476b' }}>{err.registrationNumber[0]}</p> : null}
           </label>
 
@@ -262,7 +241,7 @@ export function SignupWizard() {
                 </div>
               ))}
 
-              <div className={`mkt-wiz-parent-panel ${canParent ? '' : 'locked'}`}>
+              <div className="mkt-wiz-parent-panel">
                 <div className="icon">👨‍👩‍👧</div>
                 <div className="mbody">
                   <div className="ptitle">
@@ -270,19 +249,9 @@ export function SignupWizard() {
                   </div>
                   <div className="pdesc">
                     Chaque famille suit les notes et la présence de son enfant pour <b>2 000 F/an</b>, réglés directement
-                    par elle en Mobile Money — aucun coût pour votre établissement. Vous gardez la main : activable et
-                    désactivable à volonté.
+                    par elle en Mobile Money — aucun coût pour votre établissement. Inclus dans toutes les inscriptions.
                   </div>
-                  {!canParent ? (
-                    <div className="plockmsg">Activez d&apos;abord un module ci-contre pour ouvrir l&apos;Espace Parent.</div>
-                  ) : null}
                 </div>
-                <Switch
-                  name="parentPortalEnabled"
-                  checked={canParent && parentEnabled}
-                  disabled={!canParent}
-                  onChange={(e) => setParentEnabled(e.target.checked)}
-                />
               </div>
             </div>
 
@@ -312,12 +281,10 @@ export function SignupWizard() {
                   </div>
                 ))
               )}
-              {canParent && parentEnabled ? (
-                <div className="mkt-wiz-sline free">
-                  <span>Espace Parent (payé par les familles)</span>
-                  <span className="sprice">0 F</span>
-                </div>
-              ) : null}
+              <div className="mkt-wiz-sline free">
+                <span>Espace Parent (payé par les familles)</span>
+                <span className="sprice">0 F</span>
+              </div>
               <div className="mkt-wiz-stotal">
                 <span className="tl">Total / an</span>
                 <span className="tv">{fmt(total)}</span>

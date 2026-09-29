@@ -8,6 +8,7 @@ import { PaymentForm } from '@/features/billing/components/PaymentForm';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Alert } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
+import { BackToSettings } from '@/features/settings/components/BackToSettings';
 
 export const metadata: Metadata = { title: 'Facturation' };
 
@@ -15,7 +16,10 @@ const SUB_STATUS: Record<string, string> = {
   TRIALING: 'Essai', ACTIVE: 'Actif', PAST_DUE: 'Impayé', SUSPENDED: 'Suspendu', CANCELLED: 'Annulé',
 };
 const PAY_STATUS: Record<string, string> = {
-  PENDING: 'En attente', PAID: 'Payé', FAILED: 'Échoué', REFUNDED: 'Remboursé', CANCELLED: 'Annulé',
+  PENDING: 'Déclaré, à confirmer', PAID: 'Confirmé', FAILED: 'Échoué', REFUNDED: 'Remboursé', CANCELLED: 'Refusé',
+};
+const PAY_METHOD: Record<string, string> = {
+  MOBILE_MONEY: 'Mobile Money', BANK_TRANSFER: 'Virement', CASH: 'Espèces', CARD: 'Carte', OTHER: 'Autre',
 };
 
 export default async function FacturationPage({
@@ -35,8 +39,13 @@ export default async function FacturationPage({
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      {sp.paid === '1' ? <Alert tone="success">Paiement enregistré.</Alert> : null}
-      <PageHeader title="Facturation" description={ctx.school.name} />
+      {sp.paid === '1' ? (
+        <Alert tone="success">
+          {ctx.isPlatformAdmin ? 'Paiement enregistré.' : 'Paiement déclaré : il apparaîtra comme confirmé dès que la plateforme l’aura vérifié.'}
+        </Alert>
+      ) : null}
+      <PageHeader title="Facturation" description={ctx.school.name} action={<BackToSettings ctx={ctx} />}
+      />
 
       <Card>
         <CardContent className="space-y-1 py-4 text-sm">
@@ -110,7 +119,7 @@ export default async function FacturationPage({
           <ul className="space-y-1 text-sm">
             {payments.map((p) => (
               <li key={p.id} className="flex justify-between rounded-[--radius-card] border px-3 py-2">
-                <span>{new Date(p.created_at).toLocaleDateString('fr-FR')} · {p.method}{p.reference ? ` · ${p.reference}` : ''}</span>
+                <span>{new Date(p.created_at).toLocaleDateString('fr-FR')} · {PAY_METHOD[p.method] ?? p.method}{p.reference ? ` · ${p.reference}` : ''}</span>
                 <span className="font-medium">{p.amount.toLocaleString('fr-FR')} {p.currency} · {PAY_STATUS[p.status] ?? p.status}</span>
               </li>
             ))}
@@ -121,11 +130,13 @@ export default async function FacturationPage({
       {canManage ? (
         <Card>
           <CardContent>
-            <h2 className="mb-3 text-sm font-medium">Enregistrer un paiement</h2>
+            <h2 className="mb-3 text-sm font-medium">{ctx.isPlatformAdmin ? 'Enregistrer un paiement' : 'Déclarer un paiement'}</h2>
             <p className="mb-3 text-xs text-[color:var(--muted-foreground)]">
-              Consigne un paiement déjà reçu (mobile money, espèces, virement). Aucun prélèvement n’est effectué.
+              {ctx.isPlatformAdmin
+                ? 'Consigne un paiement déjà reçu (mobile money, espèces, virement). Aucun prélèvement n’est effectué.'
+                : 'Signalez un paiement déjà effectué (mobile money, virement, espèces) avec sa référence : la plateforme le vérifie puis le confirme. Aucun prélèvement n’est effectué.'}
             </p>
-            <PaymentForm action={recordPaymentAction.bind(null, slug)} />
+            <PaymentForm action={recordPaymentAction.bind(null, slug)} canSetStatus={ctx.isPlatformAdmin} />
           </CardContent>
         </Card>
       ) : null}

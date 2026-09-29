@@ -23,6 +23,7 @@ function toRow(input: SubjectInput) {
     color: input.color || null,
     default_coefficient: input.defaultCoefficient,
     is_active: input.isActive,
+    tracks: input.tracks,
   };
 }
 
@@ -37,7 +38,7 @@ export async function createSubject(ctx: TenantContext, input: SubjectInput): Pr
     .single();
 
   if (error) {
-    if (error.code === '23505') throw new ConflictError('Une matiere porte deja ce code.');
+    if (error.code === '23505') throw new ConflictError('Une matière porte déjà ce code.');
     throw error;
   }
 
@@ -68,10 +69,10 @@ export async function updateSubject(
     .maybeSingle();
 
   if (error) {
-    if (error.code === '23505') throw new ConflictError('Une matiere porte deja ce code.');
+    if (error.code === '23505') throw new ConflictError('Une matière porte déjà ce code.');
     throw error;
   }
-  if (!data) throw new NotFoundError('Cette matiere est introuvable.');
+  if (!data) throw new NotFoundError('Cette matière est introuvable.');
 
   await audit(ctx, {
     action: 'subjects.update',
@@ -96,12 +97,12 @@ export async function deleteSubject(ctx: TenantContext, id: string): Promise<voi
     // Reference par un programme, une affectation, une evaluation…
     if (error.code === '23503') {
       throw new ConflictError(
-        'Cette matiere est utilisee (programme, affectation ou evaluation) et ne peut pas etre supprimee. Desactivez-la plutot.',
+        'Cette matière est utilisée (programme, affectation ou évaluation) et ne peut pas être supprimée. Desactivez-la plutôt.',
       );
     }
     throw error;
   }
-  if (!count) throw new NotFoundError('Cette matiere est introuvable.');
+  if (!count) throw new NotFoundError('Cette matière est introuvable.');
 
   await audit(ctx, {
     action: 'subjects.delete',

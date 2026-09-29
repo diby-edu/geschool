@@ -32,7 +32,7 @@ export function YearForm({
             <Input id="name" name="name" defaultValue={v.name} required autoFocus />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Debut" htmlFor="startsOn" required errors={err.startsOn}>
+            <Field label="Début" htmlFor="startsOn" required errors={err.startsOn}>
               <Input id="startsOn" name="startsOn" type="date" defaultValue={v.startsOn} required />
             </Field>
             <Field label="Fin" htmlFor="endsOn" required errors={err.endsOn}>

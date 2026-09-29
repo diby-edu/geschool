@@ -11,7 +11,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name,
     short_name: name,
-    description: "Plateforme de gestion d'etablissements scolaires",
+    description: "Plateforme de gestion d'établissements scolaires",
     start_url: '/',
     display: 'standalone',
     background_color: '#faf8f5',

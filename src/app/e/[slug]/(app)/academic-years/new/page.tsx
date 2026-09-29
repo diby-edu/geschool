@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { YearForm } from '@/features/academic-years/components/YearForm';
 import { createYearAction } from '@/features/academic-years/actions';
 
-export const metadata: Metadata = { title: 'Nouvelle annee scolaire' };
+export const metadata: Metadata = { title: 'Nouvelle année scolaire' };
 
 export default async function NewYearPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -16,14 +16,14 @@ export default async function NewYearPage({ params }: { params: Promise<{ slug: 
   return (
     <div className="mx-auto max-w-xl">
       <PageHeader
-        title="Nouvelle annee scolaire"
+        title="Nouvelle année scolaire"
         action={
           <Link href={`/e/${slug}/academic-years`} className="text-sm text-[color:var(--muted-foreground)] hover:underline">
             Retour
           </Link>
         }
       />
-      <YearForm action={createYearAction.bind(null, slug)} submitLabel="Creer l'annee" />
+      <YearForm action={createYearAction.bind(null, slug)} submitLabel="Créer l'année" />
     </div>
   );
 }

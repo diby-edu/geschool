@@ -23,6 +23,17 @@ export const schoolLoginSchema = z.object({
   password: z.string().min(1, 'Mot de passe requis.'),
 });
 
+export const schoolCodeLoginSchema = z.object({
+  // Le code se dicte et se recopie : espaces et tirets tolerés (« 482 913 »).
+  code: z
+    .string()
+    .transform((v) => v.replace(/[\s.-]/g, ''))
+    .pipe(z.string().regex(/^\d{6}$/, 'Le code école comporte 6 chiffres.')),
+  identifier: z.string().min(1, 'Identifiant requis.'),
+  password: z.string().min(1, 'Mot de passe requis.'),
+  next: z.string().optional(),
+});
+
 export const firstLoginSchema = z
   .object({
     password: passwordSchema,
@@ -38,5 +49,6 @@ export const passwordResetRequestSchema = z.object({
 });
 
 export type EmailLoginInput = z.infer<typeof emailLoginSchema>;
+export type SchoolCodeLoginInput = z.infer<typeof schoolCodeLoginSchema>;
 export type SchoolLoginInput = z.infer<typeof schoolLoginSchema>;
 export type FirstLoginInput = z.infer<typeof firstLoginSchema>;

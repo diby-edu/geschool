@@ -199,18 +199,6 @@
 .mkt-wiz-photo-row { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
 .mkt-wiz-photo-row .txt { font-size: 0.82rem; color: var(--mkt-muted); }
 
-.mkt-wiz-check-row {
-  display: flex; gap: 12px; align-items: flex-start; background: var(--mkt-soft);
-  border: 1px solid var(--mkt-stroke); border-radius: 14px; padding: 14px 16px; margin-top: 4px;
-}
-.mkt-wiz-check-row .t { font-size: 0.88rem; font-weight: 600; }
-.mkt-wiz-check-row .d { font-size: 0.8rem; color: var(--mkt-muted); margin-top: 2px; }
-.mkt-wiz-code-generated {
-  margin-top: 10px; font-size: 0.82rem; font-weight: 700; color: var(--mkt-teal);
-  background: rgba(18, 169, 155, 0.12); border-radius: 8px; padding: 6px 10px; width: fit-content;
-  font-family: monospace; letter-spacing: 0.03em;
-}
-
 .mkt-wiz-order-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 6px; }
 @media (max-width: 640px) { .mkt-wiz-order-grid { grid-template-columns: 1fr; } }
 .mkt-wiz-order-card {
@@ -248,13 +236,11 @@
 .mkt-wiz-module-card.on .check { background: var(--mkt-brand); border-color: var(--mkt-brand); color: #fff; }
 
 .mkt-wiz-parent-panel { border: 2px dashed var(--mkt-stroke); border-radius: 16px; padding: 20px; margin-top: 22px; display: flex; gap: 14px; transition: opacity 0.2s; }
-.mkt-wiz-parent-panel.locked { opacity: 0.5; }
 .mkt-wiz-parent-panel .icon { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 1.3rem; background: rgba(242, 167, 27, 0.2); flex-shrink: 0; }
 .mkt-wiz-parent-panel .mbody { flex: 1; }
 .mkt-wiz-parent-panel .ptitle { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.98rem; flex-wrap: wrap; }
 .mkt-wiz-badge-free { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; background: rgba(22, 160, 106, 0.16); color: var(--mkt-green); padding: 3px 8px; border-radius: 999px; }
 .mkt-wiz-parent-panel .pdesc { font-size: 0.82rem; color: var(--mkt-muted); margin-top: 5px; line-height: 1.5; }
-.mkt-wiz-parent-panel .plockmsg { font-size: 0.78rem; color: var(--mkt-amber); margin-top: 8px; font-weight: 600; }
 
 .mkt-wiz-summary { background: linear-gradient(165deg, var(--mkt-soft), var(--mkt-card)); border: 1px solid var(--mkt-stroke); border-radius: 18px; padding: 22px; position: sticky; top: 20px; }
 .mkt-wiz-trial-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(242, 167, 27, 0.18); color: #92650a; font-size: 0.74rem; font-weight: 800; padding: 6px 10px; border-radius: 999px; margin-bottom: 14px; }

@@ -18,7 +18,7 @@ export function PasswordResetForm() {
       </div>
       <SubmitButton className="w-full">Envoyer le lien</SubmitButton>
       <p className="text-center text-sm text-[color:var(--muted-foreground)]">
-        Parents et eleves : contactez l&apos;etablissement pour reinitialiser votre acces.
+        Parents et élèves : contactez l&apos;établissement pour réinitialiser votre accès.
       </p>
     </form>
   );

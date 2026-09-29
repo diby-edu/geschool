@@ -23,7 +23,7 @@ export default async function NewTeacherPage({ params }: { params: Promise<{ slu
           </Link>
         }
       />
-      <TeacherForm action={createTeacherAction.bind(null, slug)} submitLabel="Creer l'enseignant" />
+      <TeacherForm action={createTeacherAction.bind(null, slug)} submitLabel="Créer l'enseignant" />
     </div>
   );
 }

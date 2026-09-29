@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
-import { requirePageAccess } from '@/lib/permissions/guard';
+import { requirePageAccessAny, requireFeature } from '@/lib/permissions/guard';
 import { listAbsences } from '@/features/attendance/queries';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,7 +23,9 @@ export default async function AbsencesPage({
   const { slug } = await params;
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
-  requirePageAccess(ctx, 'attendance.view');
+  // « Toutes les présences » inclut l'accès au module.
+  requirePageAccessAny(ctx, ['attendance.view', 'attendance.view_all']);
+  requireFeature(ctx, 'attendance');
   const base = `/e/${slug}/attendance`;
 
   const today = new Date();

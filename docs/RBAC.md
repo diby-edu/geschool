@@ -35,12 +35,16 @@ toutes ses actions journalisées avec `actor_is_platform_admin = true`.
 
 | Code | Rôle | Vocation |
 |---|---|---|
-| `SCHOOL_ADMIN` | Administrateur | Configuration, utilisateurs, accès, tout le périmètre |
-| `DIRECTOR` | Directeur / Proviseur | Direction pédagogique, validation, publication |
+| `SCHOOL_ADMIN` | Fondateur | A créé l'établissement : tous les droits, non modifiables |
+| `DIRECTOR` | Directeur / Proviseur | Direction pédagogique, validation, signature et publication des bulletins |
+| `DEPUTY_DIRECTOR` | Directeur adjoint | Seconde le directeur ; sans facturation, rôles ni clôture d'année |
 | `CENSOR` | Censeur | Emploi du temps, discipline, suivi pédagogique |
+| `EDUCATION_INSPECTOR` | Inspecteur d'éducation | Supérieur hiérarchique des éducateurs |
+| `HEAD_SUPERVISOR` | Surveillant général | Vie scolaire : absences, retards, discipline, transmission des accès |
+| `SUPERVISOR` | Éducateur | Absences, retards, discipline, transmission des accès |
 | `SECRETARY` | Secrétaire | Inscriptions, dossiers, documents |
-| `SUPERVISOR` | Éducateur / Surveillant | Absences, retards, discipline, transmission des accès |
-| `ACCOUNTANT` | Comptable | Facturation et paiements de l'établissement |
+| `IT_ADMIN` | Informaticien | Comptes et accès ; aucun accès aux notes ni aux bulletins |
+| `ACCOUNTANT` | Comptable | *Non proposé* : le produit ne gère pas l'argent des inscriptions (ligne conservée) |
 | `TEACHER` | Enseignant | Ses classes, ses groupes, ses évaluations, ses appels |
 | `PARENT` | Parent / Tuteur | Ses enfants uniquement |
 | `STUDENT` | Élève | Ses propres données uniquement |
@@ -48,9 +52,17 @@ toutes ses actions journalisées avec `actor_is_platform_admin = true`.
 Les rôles sont **cumulables** : un censeur qui enseigne porte `CENSOR` et `TEACHER`, et l'union
 de leurs permissions s'applique.
 
-Un établissement peut **cloner** un rôle système pour en ajuster les permissions sans toucher
-au modèle partagé (§15 de l'additif comptes : « ne pas donner automatiquement tous les droits
-à tous les éducateurs »).
+Chaque établissement dispose de **ses propres copies** des fonctions du personnel
+(`roles.school_id` renseigné, migration 0050, `app.ensure_school_roles`) : le fondateur coche et
+décoche leurs droits depuis « Rôles et droits » sans toucher au modèle partagé. La base résout les
+droits par `membership_roles -> role_permissions` : une copie est donc respectée partout, RLS
+comprise.
+
+Garde-fous **en base** (déclencheurs, migration 0050) : le rôle Fondateur est complet et
+intouchable ; on ne peut accorder à un rôle, ni attribuer à quelqu'un, un droit qu'on ne possède
+pas soi-même (pas d'auto-promotion). Le bulletin suit `reports.validate` → `reports.sign` →
+`reports.publish`, chaque étape exigeant son droit. Le catalogue proposé à cocher
+(`src/lib/permissions/catalog.ts`) ne contient que des droits qui ont un effet réel.
 
 ---
 
@@ -257,7 +269,9 @@ Attribution par défaut du seed. Chaque établissement peut la modifier.
 | `schedule.generate` | ✓ | ✓ | ✓ | — | — | — | — | — |
 | `schedule.publish` | ✓ | ✓ | — | — | — | — | — | — |
 | `assessments.create` | ✓ | ✓ | — | — | — | ✓ | — | — |
-| `grades.create` | ✓ | ✓ | — | — | — | siennes | — | — |
+| `assessments.update` | ✓ | ✓ | — | — | — | siennes¹ | — | — |
+| `assessments.delete` | ✓ | ✓ | — | — | — | siennes¹ | — | — |
+| `grades.create` | ✓ | ✓ | — | — | — | siennes¹ | — | — |
 | `grades.validate` | ✓ | ✓ | ✓ | — | — | — | — | — |
 | `grades.view` | ✓ | ✓ | ✓ | — | — | siennes | enfants | soi |
 | `attendance.create` | ✓ | ✓ | ✓ | — | ✓ | ses cours | — | — |
@@ -272,12 +286,23 @@ Attribution par défaut du seed. Chaque établissement peut la modifier.
 « classe », « siennes », « enfants », « soi » désignent un périmètre restreint, pas une permission
 plus faible : la permission est bien accordée, mais l'étape 6 de la résolution la borne.
 
+¹ **Exception : ici la permission n'est pas accordée au rôle `TEACHER`.** `app.has_permission` ignore la
+portée : détenir `assessments.update`, `assessments.delete` ou `grades.create`, c'est pouvoir sur
+**toute** l'école. Le rôle les a détenues avec la portée `CLASS` (indicative) jusqu'à la migration
+0051, et un enseignant pouvait alors modifier, supprimer et noter dans l'évaluation d'un collègue
+(356 évaluations sur 364 dans l'audit du 2026-09-20). L'enseignant agit sur **ses** évaluations par
+**propriété** (`teacher_id`, `app.owns_assessment` dans les policies, `assessmentAccess` côté
+application), pas par permission ; la permission générale reste celle de la direction. Règle pour
+tout droit à portée restreinte : ne pas l'accorder au rôle tant que la base ne borne pas elle-même
+l'objet visé.
+
 ---
 
 ## 6. Règles particulières
 
 **Enseignant.** Il crée et modifie **ses** évaluations et **ses** notes. Il ne peut pas modifier
-celles d'un collègue, même sur la même classe. Après `grades.validate` par la direction, une note
+celles d'un collègue, même sur la même classe : c'est la propriété de l'évaluation qui l'y autorise
+(voir la note ¹ du §5), non une permission. Après `grades.validate` par la direction, une note
 devient non modifiable par l'enseignant : seul un porteur de `grades.update` avec périmètre
 `SCHOOL` peut intervenir, et la modification est auditée.
 
@@ -339,3 +364,68 @@ Super Admin
 
 Une table tenant dépourvue de policy `select`, `insert`, `update` ou `delete` fait **échouer la
 suite** : c'est le garde-fou qui empêche qu'une nouvelle table arrive un jour sans RLS.
+
+## Tableau de bord de la direction : lectures agrégées (migrations 0055 et 0056)
+
+Les chiffres du tableau de bord (suivi du jour, moyennes et bulletins) sont lus par des
+**fonctions SQL** `public.dashboard_*` qui vérifient UN droit puis agrègent en base : lues
+sous RLS, les mêmes requêtes multiplient le coût par dix. Un enseignant, l'administrateur
+d'un autre établissement et un anonyme sont refusés (testé sous les identités réelles).
+
+| Section | Fonctions | Droit exigé |
+|---|---|---|
+| Suivi du jour (appels, présence, Top 5, classes à surveiller, assiduité) | `dashboard_day_*`, `dashboard_top_missed_calls`, `dashboard_teacher_call_detail`, `dashboard_low_attendance_classes`, `dashboard_weekly_attendance` | `attendance.view_all` |
+| Téléphone dans le détail d'un enseignant | `dashboard_teacher_call_detail` | en plus `teachers.view` (sinon renvoyé vide) |
+| Moyennes et bulletins | `dashboard_grading_overview`, `dashboard_grading_pending` | `grades.view_all` (direction, censeur, inspecteur — **pas** `reports.view`, que l'enseignant possède) |
+| Dates et ouverture / fermeture de la période de calcul | mise à jour de `academic_periods` | `academic_years.manage` (RLS) |
+| « J'ai terminé mes moyennes » | `average_completions` | propriétaire de l'affectation, fenêtre ouverte (RLS + déclencheur) ; lecture : propriétaire ou `grades.view_all` |
+
+Règles de calcul : une séance est « attendue » à la **fin** de son créneau ; les élèves comptés
+sont ceux des séances terminées et appelées ; une classe dont l'appel n'est pas fait n'est
+comptée ni présente ni absente (« sans appel »).
+
+## Tableaux de bord par fonction (migration 0060)
+
+Le **fondateur** garde le tableau complet ci-dessus. Chaque autre fonction du personnel a
+le sien (`src/features/dashboard/profiles.ts`), et l'espace Enseignant et l'espace Parent
+ont chacun leur tableau. Règles, testées dans `profiles.test.ts` :
+
+1. **Les droits décident, dans les deux sens.** Chaque indicateur et chaque bloc déclare le
+   droit qui protège ses données. Décoché dans « Rôles et droits », il disparaît (jamais
+   affiché à zéro) ; coché, il apparaît, **quelle que soit la fonction** — comme dans le menu.
+2. **La fonction fixe l'ordre** : ses indicateurs principaux (tableau ci-dessous) d'abord,
+   puis ceux qu'ouvrent les autres droits cochés, groupés par thème.
+3. **Plusieurs fonctions : plusieurs thèmes principaux**, chaque indicateur une seule fois.
+
+| Fonction | Thème principal | Indicateurs principaux |
+|---|---|---|
+| Directeur, directeur adjoint | Pédagogie | notes à arrêter, notes en retard, moyenne de l'établissement, classes sous 10, bulletins à valider, emploi du temps publié |
+| Censeur | Assiduité | appels faits / non faits, absents, retards, classes à surveiller |
+| Surveillant général | Vie scolaire | absents, retards, justificatifs en attente, élèves absents sur 30 jours |
+| Éducateur | Suivi des élèves | appels du jour, absents, retards, justificatifs, identifiants à envoyer |
+| Inspecteur d'éducation | Qualité pédagogique | évaluations de la période, enseignants sans évaluation, moyenne, moyennes terminées, programme renseigné |
+| Secrétaire | Inscriptions | élèves inscrits, nouvelles inscriptions, comptes parents à activer, identifiants à envoyer, justificatifs |
+| Informaticien | Comptes | accès non activés, comptes parents, envois en échec, accès suspendus, enseignants sans accès |
+
+Nouvelles fonctions SQL (même principe : un droit vérifié, puis agrégat en base) :
+
+| Fonction | Droit exigé |
+|---|---|
+| `dashboard_class_averages` (moyenne générale par classe, même règle que `class_period_ranking`) | `grades.view_all` |
+| `dashboard_assessment_activity` (évaluations de la période par enseignant) | `assessments.view` |
+| `dashboard_top_absent_students` (élèves les plus absents) | `attendance.view_all` |
+
+**Aperçu** : depuis « Rôles et droits », « Voir son tableau de bord » affiche le tableau d'une
+fonction calculé avec ses SEULS droits (réservé à `users.assign_roles` ; ne montre jamais
+plus que ce que voit déjà la personne qui regarde).
+
+## Étapes des circuits et coordonnées (migration 0059)
+
+Chaque étape d'un circuit exige son propre droit, dans la base (déclencheurs de garde, comme
+les bulletins) : clôturer / rouvrir une évaluation `grades.validate`, la publier
+`grades.publish`, clôturer une année `academic_years.close`, la rouvrir
+`academic_years.reopen`, publier un emploi du temps `schedule.publish`, valider un appel
+`attendance.validate`. Une annonce ne peut naître publiée qu'avec `announcements.publish`.
+Les coordonnées des enseignants (téléphone, e-mail, adresse, date de naissance, notes) ne se
+lisent plus dans la table : `teacher_contacts()` exige `teachers.view` (ou sa propre fiche).
+Tests : `tests/rls/step-rights.test.ts`.

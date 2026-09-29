@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import { STAFF_FUNCTIONS } from '@/lib/permissions/roles';
 import type { TablesInsert } from '@/types/database';
 
 /**
@@ -43,7 +44,10 @@ export async function resolveAudienceUserIds(schoolId: string, audience: { all?:
       continue;
     }
     const codes = m.membership_roles.map((mr) => mr.roles?.code).filter((c): c is string => !!c);
-    if (codes.some((c) => wantRoles.has(c))) ids.add(m.user_id);
+    // « Personnel administratif » (code SCHOOL_ADMIN) vise TOUTES les fonctions du
+    // personnel : directeur, censeur, secrétaire, informaticien…, pas seulement le fondateur.
+    const isStaff = codes.some((c) => c === 'SCHOOL_ADMIN' || (STAFF_FUNCTIONS as readonly string[]).includes(c));
+    if (codes.some((c) => wantRoles.has(c)) || (wantRoles.has('SCHOOL_ADMIN') && isStaff)) ids.add(m.user_id);
   }
   return [...ids];
 }

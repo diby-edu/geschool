@@ -3,6 +3,8 @@ import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
 import { getMyTeacherId, getMyPublishedSessions } from '@/features/schedule/my-schedule';
+import { schoolToday } from '@/features/dashboard/time';
+import { clock, coversNow } from './day-phase';
 
 /**
  * Detection du « cours actuel » d'un enseignant (module Presence, cahier des
@@ -24,71 +26,81 @@ export type CurrentCourseOption = {
   registerStatus: string | null;
 };
 
-function toMinutes(hm: string): number {
-  const [h, m] = hm.slice(0, 5).split(':').map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
-}
+/** Séance datée de l'enseignant, pour un jour donné (tableau de bord, cours actuel). */
+export type TeacherDaySession = CurrentCourseOption & { startsIso: string; endsIso: string };
 
-export async function getCurrentCoursesForTeacher(ctx: TenantContext): Promise<CurrentCourseOption[]> {
-  const teacherId = await getMyTeacherId(ctx);
-  if (!teacherId) return [];
-
+/**
+ * Séances de CE jour de la version publiée où l'enseignant intervient, avec
+ * l'état de leur appel. Horaires : instants complets (une séance déplacée garde
+ * ses horaires de remplacement), affichés dans le fuseau de l'établissement.
+ */
+export async function listMySessionsOn(ctx: TenantContext, teacherId: string, day: string): Promise<TeacherDaySession[]> {
   const sessions = await getMyPublishedSessions(ctx, teacherId);
   if (sessions.length === 0) return [];
-  const sessionIds = sessions.map((s) => s.id);
 
   const supabase = await createClient();
-  const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-
   const { data } = await supabase
     .from('session_occurrences')
     .select(
-      'id, starts_at, ends_at, schedule_session_id, ' +
+      'id, starts_at, ends_at, override_starts_at, override_ends_at, ' +
         'schedule_sessions(subjects(name), schedule_session_targets(class_id, classes(name)))',
     )
-    .in('schedule_session_id', sessionIds)
-    .eq('occurs_on', today)
+    .eq('school_id', ctx.school.id)
+    .in('schedule_session_id', sessions.map((s) => s.id))
+    .eq('occurs_on', day)
     .eq('status', 'SCHEDULED');
 
   const rows = (data ?? []) as unknown as {
     id: string;
     starts_at: string;
     ends_at: string;
+    override_starts_at: string | null;
+    override_ends_at: string | null;
     schedule_sessions: {
       subjects: { name: string } | null;
       schedule_session_targets: { class_id: string | null; classes: { name: string } | null }[];
     } | null;
   }[];
+  if (rows.length === 0) return [];
 
-  const current = rows.filter((r) => {
-    const start = toMinutes(r.starts_at) - GRACE_MINUTES;
-    const end = toMinutes(r.ends_at) + GRACE_MINUTES;
-    return nowMinutes >= start && nowMinutes <= end;
-  });
-  if (current.length === 0) return [];
-
-  const ids = current.map((r) => r.id);
   const { data: regs } = await supabase
     .from('attendance_registers')
     .select('session_occurrence_id, status')
     .eq('school_id', ctx.school.id)
-    .in('session_occurrence_id', ids);
+    .in('session_occurrence_id', rows.map((r) => r.id));
   const statusByOcc = new Map((regs ?? []).map((r) => [r.session_occurrence_id, r.status]));
 
-  return current
+  const tz = ctx.school.timezone;
+  return rows
     .map((r) => {
       const target = r.schedule_sessions?.schedule_session_targets?.[0] ?? null;
+      const startsIso = r.override_starts_at ?? r.starts_at;
+      const endsIso = r.override_ends_at ?? r.ends_at;
       return {
         occurrenceId: r.id,
         classId: target?.class_id ?? null,
         klass: target?.classes?.name ?? '—',
         subject: r.schedule_sessions?.subjects?.name ?? 'Cours',
-        startsAt: r.starts_at.slice(0, 5),
-        endsAt: r.ends_at.slice(0, 5),
+        startsIso,
+        endsIso,
+        startsAt: clock(startsIso, tz),
+        endsAt: clock(endsIso, tz),
         registerStatus: statusByOcc.get(r.id) ?? null,
       };
     })
-    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    .sort((a, b) => a.startsIso.localeCompare(b.startsIso));
+}
+
+export async function getCurrentCoursesForTeacher(ctx: TenantContext): Promise<CurrentCourseOption[]> {
+  const teacherId = await getMyTeacherId(ctx);
+  if (!teacherId) return [];
+
+  // « Aujourd'hui » et « maintenant » : ceux de l'établissement, comparés en
+  // instants complets (l'ancienne comparaison de chaînes « HH:MM » sur des
+  // horodatages ne trouvait jamais le cours en cours).
+  const now = new Date();
+  const sessions = await listMySessionsOn(ctx, teacherId, schoolToday(ctx.school.timezone, now));
+  return sessions
+    .filter((s) => coversNow(s.startsIso, s.endsIso, now, GRACE_MINUTES))
+    .map(({ startsIso: _s, endsIso: _e, ...course }) => course);
 }

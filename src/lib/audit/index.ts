@@ -81,7 +81,7 @@ export async function audit(ctx: TenantContext, entry: AuditEntry): Promise<void
       ip: entry.ip ?? null,
       user_agent: entry.userAgent ?? null,
     });
-    if (error) console.error('[audit] insertion refusee', error.message);
+    if (error) console.error('[audit] insertion refusée', error.message);
   } catch (error) {
     console.error('[audit] erreur inattendue', error);
   }

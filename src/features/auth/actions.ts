@@ -1,16 +1,21 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { createClient, getAuthenticatedUser } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { publicEnv } from '@/lib/env';
 import {
   emailLoginSchema,
   schoolLoginSchema,
+  schoolCodeLoginSchema,
   firstLoginSchema,
   passwordResetRequestSchema,
 } from './schemas';
-import { resolveAuthEmail, resolveSchoolBySlug } from './service';
+import { SCHOOL_CODE_COOKIE } from './constants';
+import { normalizeIdentifier } from '@/lib/auth/identifier';
+import { attemptKey, clearFailures, isLockedOut, LOCKED_MESSAGE, recordFailure } from '@/services/login-lockout';
+import { resolveAuthEmail, resolveSchoolBySlug, resolveSchoolByCode } from './service';
 
 /**
  * Etat renvoye a un formulaire (useActionState) EN CAS D'ERREUR seulement.
@@ -23,6 +28,16 @@ import { resolveAuthEmail, resolveSchoolBySlug } from './service';
 export type AuthState = { error?: string };
 
 const GENERIC = 'Identifiant ou mot de passe incorrect.';
+
+/**
+ * Cle de verrouillage d'une connexion par ecole. L'identifiant est normalise
+ * (« 07 11 22 33 44 » et « +2250711223344 » sont la meme cle) : varier la
+ * ecriture du numero ne doit pas permettre de contourner le compteur.
+ */
+function schoolAttemptKey(schoolRef: string, identifier: string, country: string): string {
+  const normalized = normalizeIdentifier(identifier, country);
+  return attemptKey('school', schoolRef, normalized.ok ? normalized.value : identifier);
+}
 
 function safeNext(next: unknown): string {
   // N'accepte qu'un chemin interne, jamais une URL absolue (open redirect)
@@ -44,12 +59,19 @@ export async function loginWithEmail(_prev: AuthState, formData: FormData): Prom
     return { error: parsed.error.issues[0]?.message ?? 'Saisie invalide.' };
   }
 
+  const key = attemptKey('email', parsed.data.email);
+  if (await isLockedOut(key)) return { error: LOCKED_MESSAGE };
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({
     email: parsed.data.email,
     password: parsed.data.password,
   });
-  if (error) return { error: GENERIC };
+  if (error) {
+    await recordFailure(key);
+    return { error: GENERIC };
+  }
+  await clearFailures(key);
 
   redirect(safeNext(parsed.data.next));
 }
@@ -74,6 +96,9 @@ export async function loginWithSchoolIdentifier(
   const school = await resolveSchoolBySlug(parsed.data.slug);
   if (!school) return { error: GENERIC };
 
+  const key = schoolAttemptKey(school.id, parsed.data.identifier, school.countryCode);
+  if (await isLockedOut(key)) return { error: LOCKED_MESSAGE };
+
   const authEmail = await resolveAuthEmail(school.id, parsed.data.identifier, school.countryCode);
 
   const supabase = await createClient();
@@ -84,9 +109,62 @@ export async function loginWithSchoolIdentifier(
     email: authEmail ?? `inconnu-${crypto.randomUUID()}@${'accounts.invalid'}`,
     password: parsed.data.password,
   });
-  if (error || !authEmail) return { error: GENERIC };
+  if (error || !authEmail) {
+    await recordFailure(key);
+    return { error: GENERIC };
+  }
+  await clearFailures(key);
 
   redirect(`/e/${parsed.data.slug}`);
+}
+
+// ---------------------------------------------------------------------------
+// Connexion par code ecole + telephone/email (enseignant, parent)
+// ---------------------------------------------------------------------------
+
+const GENERIC_CODE = 'Code école, identifiant ou mot de passe incorrect.';
+
+export async function loginWithSchoolCode(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const parsed = schoolCodeLoginSchema.safeParse({
+    code: formData.get('code') ?? '',
+    identifier: formData.get('identifier'),
+    password: formData.get('password'),
+    next: formData.get('next') ?? undefined,
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Saisie invalide.' };
+  }
+
+  const school = await resolveSchoolByCode(parsed.data.code);
+  // Ecole inconnue : les echecs sont comptes sous le code saisi (aucune difference visible).
+  const key = schoolAttemptKey(school?.id ?? parsed.data.code, parsed.data.identifier, school?.countryCode ?? 'CI');
+  if (await isLockedOut(key)) return { error: LOCKED_MESSAGE };
+
+  const authEmail = school ? await resolveAuthEmail(school.id, parsed.data.identifier, school.countryCode) : null;
+
+  const supabase = await createClient();
+  // Anti-enumeration : meme parcours et meme message, que le code ecole, le
+  // compte ou le mot de passe soit faux — une connexion est toujours tentee.
+  const { error } = await supabase.auth.signInWithPassword({
+    email: authEmail ?? `inconnu-${crypto.randomUUID()}@accounts.invalid`,
+    password: parsed.data.password,
+  });
+  if (error || !authEmail || !school) {
+    await recordFailure(key);
+    return { error: GENERIC_CODE };
+  }
+  await clearFailures(key);
+
+
+  (await cookies()).set(SCHOOL_CODE_COOKIE, parsed.data.code, {
+    path: '/',
+    maxAge: 60 * 60 * 24 * 400,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  });
+
+  const next = safeNext(parsed.data.next);
+  redirect(next.startsWith(`/e/${school.slug}`) ? next : `/e/${school.slug}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -115,8 +193,8 @@ export async function completeFirstLogin(
     return {
       error:
         pwError.message.includes('should be different') || pwError.message.includes('different from')
-          ? 'Choisissez un mot de passe different de celui recu.'
-          : 'Impossible de definir le mot de passe. Reessayez.',
+          ? 'Choisissez un mot de passe différent de celui reçu.'
+          : 'Impossible de définir le mot de passe. Réessayez.',
     };
   }
 
@@ -175,7 +253,7 @@ export async function requestPasswordReset(
   const parsed = passwordResetRequestSchema.safeParse({ email: formData.get('email') });
   // Reponse toujours identique : ne jamais reveler si l'adresse existe.
   if (!parsed.success) {
-    return { error: 'Si cette adresse est connue, un lien vient de vous etre envoye.' };
+    return { error: 'Si cette adresse est connue, un lien vient de vous être envoyé.' };
   }
 
   const supabase = await createClient();
@@ -183,7 +261,7 @@ export async function requestPasswordReset(
     redirectTo: `${publicEnv.NEXT_PUBLIC_APP_URL}/auth/callback?next=/first-login`,
   });
 
-  return { error: 'Si cette adresse est connue, un lien vient de vous etre envoye.' };
+  return { error: 'Si cette adresse est connue, un lien vient de vous être envoyé.' };
 }
 
 // ---------------------------------------------------------------------------

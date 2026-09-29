@@ -5,7 +5,8 @@ import { getTenantContext } from '@/lib/tenant/context';
 import { requireWritable } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
 import { runFormAction, type FormState } from '@/lib/forms';
-import { processDelivery, resetAndSend } from '@/services/credentials';
+import { processDelivery, resendCredentials, resetAndSend } from '@/services/credentials';
+import { suspendAccess, reactivateAccess } from '@/services/access-status';
 import { audit } from '@/lib/audit';
 
 /**
@@ -63,5 +64,32 @@ export async function bulkSendAction(slug: string, _p: FormState, _fd: FormData)
     }
     await audit(ctx, { action: 'access.bulk_send', module: 'access', after: { count: pending?.length ?? 0 } });
     redirect(`/e/${slug}/access?bulk=1`);
+  });
+}
+
+export async function suspendAction(slug: string, userId: string, _p: FormState, _fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    await suspendAccess(ctx, userId);
+    redirect(`/e/${slug}/access?suspended=1`);
+  });
+}
+
+export async function reactivateAction(slug: string, userId: string, _p: FormState, _fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    await reactivateAccess(ctx, userId);
+    redirect(`/e/${slug}/access?reactivated=1`);
+  });
+}
+
+/** Renvoie les identifiants d'un acces pas encore active (nouveau mot de passe temporaire). */
+export async function resendAction(slug: string, userId: string, _p: FormState, _fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    requireWritable(ctx, 'access_accounts.resend');
+    await resendCredentials(ctx, userId);
+    await audit(ctx, { action: 'access.resend', module: 'access', entityType: 'user', entityId: userId });
+    redirect(`/e/${slug}/access?resent=1`);
   });
 }

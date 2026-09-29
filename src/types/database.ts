@@ -79,6 +79,10 @@ export type Database = {
           status: Database['public']['Enums']["academic_period_status"]
           created_at: string
           updated_at: string
+          grading_starts_on: string | null
+          grading_ends_on: string | null
+          grading_override: string | null
+          tracks: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[] | null
         }
         Insert: {
           id?: string
@@ -94,6 +98,10 @@ export type Database = {
           status?: Database['public']['Enums']["academic_period_status"]
           created_at?: string
           updated_at?: string
+          grading_starts_on?: string | null
+          grading_ends_on?: string | null
+          grading_override?: string | null
+          tracks?: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[] | null
         }
         Update: {
           id?: string
@@ -109,6 +117,10 @@ export type Database = {
           status?: Database['public']['Enums']["academic_period_status"]
           created_at?: string
           updated_at?: string
+          grading_starts_on?: string | null
+          grading_ends_on?: string | null
+          grading_override?: string | null
+          tracks?: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[] | null
         }
         Relationships: []
       }
@@ -389,8 +401,6 @@ export type Database = {
           grading_scale_id: string
           max_score: number
           coefficient: number
-          is_eliminatory: boolean
-          eliminatory_threshold: number | null
           status: Database['public']['Enums']["assessment_status"]
           published_at: string | null
           created_at: string
@@ -413,8 +423,6 @@ export type Database = {
           grading_scale_id: string
           max_score: number
           coefficient?: number
-          is_eliminatory?: boolean
-          eliminatory_threshold?: number | null
           status?: Database['public']['Enums']["assessment_status"]
           published_at?: string | null
           created_at?: string
@@ -437,8 +445,6 @@ export type Database = {
           grading_scale_id?: string
           max_score?: number
           coefficient?: number
-          is_eliminatory?: boolean
-          eliminatory_threshold?: number | null
           status?: Database['public']['Enums']["assessment_status"]
           published_at?: string | null
           created_at?: string
@@ -583,6 +589,33 @@ export type Database = {
           user_agent?: string | null
           request_id?: string | null
           created_at?: string
+        }
+        Relationships: []
+      }
+      average_completions: {
+        Row: {
+          id: string
+          school_id: string
+          academic_period_id: string
+          teaching_assignment_id: string
+          completed_by: string | null
+          completed_at: string
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          academic_period_id: string
+          teaching_assignment_id: string
+          completed_by?: string | null
+          completed_at?: string
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          academic_period_id?: string
+          teaching_assignment_id?: string
+          completed_by?: string | null
+          completed_at?: string
         }
         Relationships: []
       }
@@ -833,6 +866,7 @@ export type Database = {
           is_active: boolean
           created_at: string
           updated_at: string
+          track: Database['public']['Enums']["education_track"]
         }
         Insert: {
           id?: string
@@ -843,6 +877,7 @@ export type Database = {
           is_active?: boolean
           created_at?: string
           updated_at?: string
+          track?: Database['public']['Enums']["education_track"]
         }
         Update: {
           id?: string
@@ -851,6 +886,169 @@ export type Database = {
           name?: string
           sequence?: number
           is_active?: boolean
+          created_at?: string
+          updated_at?: string
+          track?: Database['public']['Enums']["education_track"]
+        }
+        Relationships: []
+      }
+      discipline_incident_types: {
+        Row: {
+          id: string
+          school_id: string
+          code: string
+          name: string
+          points: number
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          code: string
+          name: string
+          points?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          code?: string
+          name?: string
+          points?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      discipline_incidents: {
+        Row: {
+          id: string
+          school_id: string
+          academic_year_id: string
+          student_id: string
+          class_id: string | null
+          incident_type_id: string
+          occurred_on: string
+          occurred_at: string | null
+          description: string
+          status: Database['public']['Enums']["discipline_incident_status"]
+          reported_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          academic_year_id: string
+          student_id: string
+          class_id?: string | null
+          incident_type_id: string
+          occurred_on: string
+          occurred_at?: string | null
+          description?: string
+          status?: Database['public']['Enums']["discipline_incident_status"]
+          reported_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          academic_year_id?: string
+          student_id?: string
+          class_id?: string | null
+          incident_type_id?: string
+          occurred_on?: string
+          occurred_at?: string | null
+          description?: string
+          status?: Database['public']['Enums']["discipline_incident_status"]
+          reported_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      discipline_sanction_types: {
+        Row: {
+          id: string
+          school_id: string
+          code: string
+          name: string
+          needs_dates: boolean
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          code: string
+          name: string
+          needs_dates?: boolean
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          code?: string
+          name?: string
+          needs_dates?: boolean
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      discipline_sanctions: {
+        Row: {
+          id: string
+          school_id: string
+          incident_id: string | null
+          student_id: string
+          sanction_type_id: string
+          decided_on: string
+          starts_on: string | null
+          ends_on: string | null
+          notes: string
+          status: Database['public']['Enums']["discipline_sanction_status"]
+          decided_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          incident_id?: string | null
+          student_id: string
+          sanction_type_id: string
+          decided_on?: string
+          starts_on?: string | null
+          ends_on?: string | null
+          notes?: string
+          status?: Database['public']['Enums']["discipline_sanction_status"]
+          decided_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          incident_id?: string | null
+          student_id?: string
+          sanction_type_id?: string
+          decided_on?: string
+          starts_on?: string | null
+          ends_on?: string | null
+          notes?: string
+          status?: Database['public']['Enums']["discipline_sanction_status"]
+          decided_by?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1230,6 +1428,7 @@ export type Database = {
           is_active: boolean
           created_at: string
           updated_at: string
+          diploma: string | null
         }
         Insert: {
           id?: string
@@ -1241,6 +1440,7 @@ export type Database = {
           is_active?: boolean
           created_at?: string
           updated_at?: string
+          diploma?: string | null
         }
         Update: {
           id?: string
@@ -1252,6 +1452,28 @@ export type Database = {
           is_active?: boolean
           created_at?: string
           updated_at?: string
+          diploma?: string | null
+        }
+        Relationships: []
+      }
+      login_attempts: {
+        Row: {
+          id: string
+          attempt_key: string
+          ip_address: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          attempt_key: string
+          ip_address?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          attempt_key?: string
+          ip_address?: string | null
+          created_at?: string
         }
         Relationships: []
       }
@@ -1751,6 +1973,8 @@ export type Database = {
           published_at: string | null
           created_at: string
           updated_at: string
+          signed_by: string | null
+          signed_at: string | null
         }
         Insert: {
           id?: string
@@ -1776,6 +2000,8 @@ export type Database = {
           published_at?: string | null
           created_at?: string
           updated_at?: string
+          signed_by?: string | null
+          signed_at?: string | null
         }
         Update: {
           id?: string
@@ -1801,6 +2027,8 @@ export type Database = {
           published_at?: string | null
           created_at?: string
           updated_at?: string
+          signed_by?: string | null
+          signed_at?: string | null
         }
         Relationships: []
       }
@@ -1900,6 +2128,45 @@ export type Database = {
         }
         Relationships: []
       }
+      room_closures: {
+        Row: {
+          id: string
+          school_id: string
+          room_id: string
+          academic_year_id: string
+          starts_on: string
+          ends_on: string
+          reason: string
+          created_at: string
+          updated_at: string
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          room_id: string
+          academic_year_id: string
+          starts_on: string
+          ends_on: string
+          reason: string
+          created_at?: string
+          updated_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          room_id?: string
+          academic_year_id?: string
+          starts_on?: string
+          ends_on?: string
+          reason?: string
+          created_at?: string
+          updated_at?: string
+          created_by?: string | null
+        }
+        Relationships: []
+      }
       room_features: {
         Row: {
           id: string
@@ -1953,6 +2220,7 @@ export type Database = {
           name: string
           created_at: string
           updated_at: string
+          tracks: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[]
         }
         Insert: {
           id?: string
@@ -1961,6 +2229,7 @@ export type Database = {
           name: string
           created_at?: string
           updated_at?: string
+          tracks?: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[]
         }
         Update: {
           id?: string
@@ -1969,6 +2238,7 @@ export type Database = {
           name?: string
           created_at?: string
           updated_at?: string
+          tracks?: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[]
         }
         Relationships: []
       }
@@ -1982,11 +2252,11 @@ export type Database = {
           capacity: number
           building: string | null
           floor: string | null
-          is_accessible: boolean
           is_active: boolean
           notes: string | null
           created_at: string
           updated_at: string
+          tracks: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[]
         }
         Insert: {
           id?: string
@@ -1997,11 +2267,11 @@ export type Database = {
           capacity?: number
           building?: string | null
           floor?: string | null
-          is_accessible?: boolean
           is_active?: boolean
           notes?: string | null
           created_at?: string
           updated_at?: string
+          tracks?: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[]
         }
         Update: {
           id?: string
@@ -2012,11 +2282,11 @@ export type Database = {
           capacity?: number
           building?: string | null
           floor?: string | null
-          is_accessible?: boolean
           is_active?: boolean
           notes?: string | null
           created_at?: string
           updated_at?: string
+          tracks?: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[]
         }
         Relationships: []
       }
@@ -2479,6 +2749,7 @@ export type Database = {
           blocks_schedule: boolean
           created_at: string
           updated_at: string
+          tracks: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[] | null
         }
         Insert: {
           id?: string
@@ -2491,6 +2762,7 @@ export type Database = {
           blocks_schedule?: boolean
           created_at?: string
           updated_at?: string
+          tracks?: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[] | null
         }
         Update: {
           id?: string
@@ -2503,6 +2775,7 @@ export type Database = {
           blocks_schedule?: boolean
           created_at?: string
           updated_at?: string
+          tracks?: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[] | null
         }
         Relationships: []
       }
@@ -2622,6 +2895,7 @@ export type Database = {
           neighborhood: string | null
           education_tracks: string[]
           parent_portal_enabled: boolean
+          login_code: string
         }
         Insert: {
           id?: string
@@ -2651,6 +2925,7 @@ export type Database = {
           neighborhood?: string | null
           education_tracks?: string[]
           parent_portal_enabled?: boolean
+          login_code?: string
         }
         Update: {
           id?: string
@@ -2680,6 +2955,7 @@ export type Database = {
           neighborhood?: string | null
           education_tracks?: string[]
           parent_portal_enabled?: boolean
+          login_code?: string
         }
         Relationships: []
       }
@@ -2733,6 +3009,75 @@ export type Database = {
           override_ends_at?: string | null
           cancellation_reason?: string | null
           generated_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      staff_profiles: {
+        Row: {
+          id: string
+          school_id: string
+          user_id: string
+          staff_number: string | null
+          first_name: string
+          last_name: string
+          gender: Database['public']['Enums']["gender"] | null
+          birth_date: string | null
+          birth_place: string | null
+          phone_e164: string | null
+          phone2_e164: string | null
+          email: string | null
+          diploma: string | null
+          diploma_detail: string | null
+          hire_date: string | null
+          employment_type: Database['public']['Enums']["employment_type"]
+          notes: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          user_id: string
+          staff_number?: string | null
+          first_name: string
+          last_name: string
+          gender?: Database['public']['Enums']["gender"] | null
+          birth_date?: string | null
+          birth_place?: string | null
+          phone_e164?: string | null
+          phone2_e164?: string | null
+          email?: string | null
+          diploma?: string | null
+          diploma_detail?: string | null
+          hire_date?: string | null
+          employment_type?: Database['public']['Enums']["employment_type"]
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          user_id?: string
+          staff_number?: string | null
+          first_name?: string
+          last_name?: string
+          gender?: Database['public']['Enums']["gender"] | null
+          birth_date?: string | null
+          birth_place?: string | null
+          phone_e164?: string | null
+          phone2_e164?: string | null
+          email?: string | null
+          diploma?: string | null
+          diploma_detail?: string | null
+          hire_date?: string | null
+          employment_type?: Database['public']['Enums']["employment_type"]
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
           updated_at?: string
         }
         Relationships: []
@@ -2920,6 +3265,7 @@ export type Database = {
           created_at: string
           updated_at: string
           created_by: string | null
+          is_state_assigned: boolean | null
         }
         Insert: {
           id?: string
@@ -2944,6 +3290,7 @@ export type Database = {
           created_at?: string
           updated_at?: string
           created_by?: string | null
+          is_state_assigned?: boolean | null
         }
         Update: {
           id?: string
@@ -2968,6 +3315,7 @@ export type Database = {
           created_at?: string
           updated_at?: string
           created_by?: string | null
+          is_state_assigned?: boolean | null
         }
         Relationships: []
       }
@@ -2985,6 +3333,7 @@ export type Database = {
           is_active: boolean
           created_at: string
           updated_at: string
+          tracks: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[]
         }
         Insert: {
           id?: string
@@ -2999,6 +3348,7 @@ export type Database = {
           is_active?: boolean
           created_at?: string
           updated_at?: string
+          tracks?: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[]
         }
         Update: {
           id?: string
@@ -3013,6 +3363,7 @@ export type Database = {
           is_active?: boolean
           created_at?: string
           updated_at?: string
+          tracks?: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[]
         }
         Relationships: []
       }
@@ -3248,6 +3599,8 @@ export type Database = {
           created_at: string
           updated_at: string
           created_by: string | null
+          diploma: string | null
+          diploma_detail: string | null
         }
         Insert: {
           id?: string
@@ -3273,6 +3626,8 @@ export type Database = {
           created_at?: string
           updated_at?: string
           created_by?: string | null
+          diploma?: string | null
+          diploma_detail?: string | null
         }
         Update: {
           id?: string
@@ -3298,6 +3653,8 @@ export type Database = {
           created_at?: string
           updated_at?: string
           created_by?: string | null
+          diploma?: string | null
+          diploma_detail?: string | null
         }
         Relationships: []
       }
@@ -3416,6 +3773,7 @@ export type Database = {
           notes: string | null
           created_at: string
           updated_at: string
+          preferred_room_type_id: string | null
         }
         Insert: {
           id?: string
@@ -3438,6 +3796,7 @@ export type Database = {
           notes?: string | null
           created_at?: string
           updated_at?: string
+          preferred_room_type_id?: string | null
         }
         Update: {
           id?: string
@@ -3460,6 +3819,7 @@ export type Database = {
           notes?: string | null
           created_at?: string
           updated_at?: string
+          preferred_room_type_id?: string | null
         }
         Relationships: []
       }
@@ -3629,8 +3989,11 @@ export type Database = {
       delivery_channel: "SMS" | "WHATSAPP" | "EMAIL" | "PRINT"
       delivery_reason: "INITIAL" | "RESET" | "RESEND"
       delivery_status: "PENDING" | "PROCESSING" | "SENT" | "DELIVERED" | "FAILED" | "CANCELLED"
+      discipline_incident_status: "OPEN" | "CLOSED"
+      discipline_sanction_status: "PLANNED" | "DONE" | "CANCELLED"
       document_owner_type: "STUDENT" | "GUARDIAN" | "TEACHER" | "CLASS" | "SCHOOL"
       document_visibility: "PRIVATE" | "SCHOOL" | "OWNER" | "GUARDIANS"
+      education_track: "GENERAL" | "TECHNIQUE" | "PROFESSIONNEL"
       employment_type: "PERMANENT" | "CONTRACT" | "HOURLY" | "INTERN" | "OTHER"
       enrollment_status: "ENROLLED" | "TRANSFERRED_OUT" | "WITHDRAWN" | "COMPLETED"
       gender: "M" | "F" | "OTHER"

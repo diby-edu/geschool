@@ -11,11 +11,18 @@ import { activityLabel } from '@/lib/audit/labels';
  */
 
 export type PlatformOverview = {
-  schools: { total: number; active: number; pending: number; suspended: number; new30d: number };
+  schools: { total: number; active: number; pending: number; suspended: number; archived: number; new30d: number };
   students: number;
   teachers: number;
   activeSubscriptions: number;
   mrr: { amount: number; currency: string } | null;
+  /** Ce qui attend une décision de la plateforme : règlements déclarés par les écoles. */
+  pendingPayments: { count: number; amount: number; currency: string | null };
+  /** Abonnements à surveiller : essais qui se terminent, échéances dépassées. */
+  trialsEndingSoon: number;
+  pastDue: number;
+  /** Écoles dont au moins un module a été coupé (formule réduite ou incident). */
+  schoolsWithDisabledModules: number;
   activity: { id: string; label: string; schoolName: string | null; at: string }[];
 };
 
@@ -30,12 +37,18 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
   const supabase = await createClient();
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
+  const in30d = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
   const [
     { data: schoolRows },
     { count: studentsCount },
     { count: teachersCount },
     { data: subRows },
     { data: activityRows },
+    { data: paymentRows },
+    { count: trialsCount },
+    { count: pastDueCount },
+    { data: disabledRows },
   ] = await Promise.all([
     supabase.from('schools').select('id, status, created_at'),
     supabase.from('students').select('id', { count: 'exact', head: true }).is('deleted_at', null),
@@ -49,6 +62,14 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
       .select('id, action, module, created_at, schools(name)')
       .order('created_at', { ascending: false })
       .limit(10),
+    supabase.from('payments').select('amount, currency').eq('status', 'PENDING'),
+    supabase
+      .from('subscriptions')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'TRIALING')
+      .lte('trial_ends_at', in30d),
+    supabase.from('subscriptions').select('id', { count: 'exact', head: true }).eq('status', 'PAST_DUE'),
+    supabase.from('school_features').select('school_id').eq('is_enabled', false),
   ]);
 
   const schools = (schoolRows ?? []) as { id: string; status: string; created_at: string }[];
@@ -57,6 +78,7 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
     active: schools.filter((s) => s.status === 'ACTIVE').length,
     pending: schools.filter((s) => s.status === 'PENDING').length,
     suspended: schools.filter((s) => s.status === 'SUSPENDED').length,
+    archived: schools.filter((s) => s.status === 'ARCHIVED').length,
     new30d: schools.filter((s) => s.created_at >= since30d).length,
   };
 
@@ -90,12 +112,26 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
     at: r.created_at,
   }));
 
+  // Les règlements déclarés attendent une confirmation : c'est le seul chiffre
+  // du tableau de bord qui appelle un GESTE, pas seulement un constat.
+  const payments = (paymentRows ?? []) as { amount: number; currency: string }[];
+  const paymentCurrencies = new Set(payments.map((p) => p.currency));
+  const pendingPayments = {
+    count: payments.length,
+    amount: Math.round(payments.reduce((sum, p) => sum + Number(p.amount), 0)),
+    currency: paymentCurrencies.size === 1 ? ([...paymentCurrencies][0] as string) : null,
+  };
+
   return {
     schools: schoolStats,
     students: studentsCount ?? 0,
     teachers: teachersCount ?? 0,
     activeSubscriptions: active.length,
     mrr,
+    pendingPayments,
+    trialsEndingSoon: trialsCount ?? 0,
+    pastDue: pastDueCount ?? 0,
+    schoolsWithDisabledModules: new Set(((disabledRows ?? []) as { school_id: string }[]).map((r) => r.school_id)).size,
     activity,
   };
 }

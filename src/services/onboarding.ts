@@ -3,6 +3,7 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizePhone } from '@/lib/auth/identifier';
 import { ConflictError, RateLimitError, ValidationError } from '@/lib/errors';
+import { grantRole } from '@/services/access-provisioning';
 
 /**
  * Orchestration de l'inscription en libre-service d'un etablissement (wizard
@@ -11,7 +12,7 @@ import { ConflictError, RateLimitError, ValidationError } from '@/lib/errors';
  * multi-instructions) mais pour un cas different : ici, le createur ET le
  * sujet du compte sont la meme personne — elle choisit son propre mot de
  * passe et n'a besoin d'aucune activation differee (contrairement aux comptes
- * eleve/parent, crees avec un secret jetable et NOT_ACTIVATED).
+ * parent/enseignant, crees avec un secret jetable et NOT_ACTIVATED).
  */
 
 export type EducationTrack = 'GENERAL' | 'TECHNIQUE' | 'PROFESSIONNEL';
@@ -23,13 +24,12 @@ export type RegisterSchoolInput = {
     name: string;
     city: string;
     neighborhood: string;
-    /** null = case "je n'ai pas de code" cochee : un code provisoire est genere. */
+    /** Code officiel du Ministere : facultatif, purement informatif (le code de connexion est genere par la base). */
     registrationNumber: string | null;
     educationTracks: EducationTrack[];
     logo: File | null;
   };
   modules: ModuleCode[];
-  parentPortalEnabled: boolean;
   director: {
     firstName: string;
     lastName: string;
@@ -43,7 +43,6 @@ export type RegisterSchoolResult = { schoolId: string; slug: string; userId: str
 
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
-const PROVISIONAL_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans caracteres ambigus (0/O, 1/I)
 
 function slugify(name: string): string {
   return name
@@ -54,12 +53,6 @@ function slugify(name: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 38);
-}
-
-function randomProvisionalCode(): string {
-  let out = '';
-  for (let i = 0; i < 8; i++) out += PROVISIONAL_CODE_CHARS[Math.floor(Math.random() * PROVISIONAL_CODE_CHARS.length)];
-  return `PROVISOIRE-${out}`;
 }
 
 export async function registerSchool(input: RegisterSchoolInput): Promise<RegisterSchoolResult> {
@@ -74,12 +67,12 @@ export async function registerSchool(input: RegisterSchoolInput): Promise<Regist
     .eq('ip_address', input.ipAddress)
     .gt('created_at', since);
   if ((count ?? 0) >= RATE_LIMIT_MAX) {
-    throw new RateLimitError(3600, "Trop de tentatives d'inscription depuis cette adresse. Reessayez dans une heure.");
+    throw new RateLimitError(3600, "Trop de tentatives d'inscription depuis cette adresse. Réessayez dans une heure.");
   }
   await admin.from('onboarding_signup_attempts').insert({ ip_address: input.ipAddress });
 
   const phone = normalizePhone(input.director.phone, 'CI');
-  if (!phone) throw new ValidationError('Numero de telephone invalide.');
+  if (!phone) throw new ValidationError('Numéro de téléphone invalide.');
 
   // 2. Compte Auth du directeur EN PREMIER (avant toute ecriture persistante
   // liee a l'ecole) : c'est le point d'echec le plus probable (email deja
@@ -97,7 +90,7 @@ export async function registerSchool(input: RegisterSchoolInput): Promise<Regist
   });
   if (authError || !authData.user) {
     if (authError?.code === 'email_exists' || /already.*registered|already.*exists/i.test(authError?.message ?? '')) {
-      throw new ConflictError('Un compte existe deja avec cette adresse email.');
+      throw new ConflictError('Un compte existe déjà avec cette adresse email.');
     }
     throw new Error(`createUser: ${authError?.message ?? 'inconnu'}`);
   }
@@ -107,7 +100,7 @@ export async function registerSchool(input: RegisterSchoolInput): Promise<Regist
   try {
     // 3. École — slug derive du nom, avec reprise sur collision.
     const base = slugify(input.school.name) || 'etablissement';
-    const registrationNumber = input.school.registrationNumber?.trim() || randomProvisionalCode();
+    const registrationNumber = input.school.registrationNumber?.trim() || null;
     let schoolRow: { id: string; slug: string } | null = null;
     for (let attempt = 0; attempt < 20 && !schoolRow; attempt++) {
       const slug = attempt === 0 ? base : `${base}-${attempt + 1}`;
@@ -121,7 +114,7 @@ export async function registerSchool(input: RegisterSchoolInput): Promise<Regist
           neighborhood: input.school.neighborhood,
           registration_number: registrationNumber,
           education_tracks: input.school.educationTracks,
-          parent_portal_enabled: input.parentPortalEnabled,
+          parent_portal_enabled: true, // Espace Parent inclus pour tous : ce n'est plus un choix de l'ecole
           country_code: 'CI',
           currency: 'XOF',
           locale: 'fr-CI',
@@ -132,7 +125,7 @@ export async function registerSchool(input: RegisterSchoolInput): Promise<Regist
       if (!error) { schoolRow = data; break; }
       if (error.code !== '23505') throw error;
     }
-    if (!schoolRow) throw new ValidationError("Impossible d'attribuer une adresse a cet etablissement.");
+    if (!schoolRow) throw new ValidationError("Impossible d'attribuer une adresse à cet établissement.");
     const schoolId = schoolRow.id;
     const slug = schoolRow.slug;
     createdSchoolId = schoolId;
@@ -153,11 +146,15 @@ export async function registerSchool(input: RegisterSchoolInput): Promise<Regist
 
     // 5. Rattachement du directeur : membership + role systeme.
     await admin.from('school_memberships').insert({ school_id: schoolId, user_id: userId, status: 'ACTIVE' });
+    // Fonctions propres a l'etablissement (droits reglables des la creation), AVANT
+    // d'attribuer celle du fondateur : elle designera ainsi la copie de l'ecole.
+    const { error: rolesError } = await admin.rpc('ensure_school_roles' as never, { p_school: schoolId } as never);
+    if (rolesError) throw new Error('ensure_school_roles: ' + rolesError.message);
     await grantRole(admin, schoolId, userId, 'SCHOOL_ADMIN');
 
     // 6. Acces — deja actif : le directeur vient de choisir son propre mot de
     // passe, aucune activation differee necessaire (contrairement aux comptes
-    // eleve/parent crees par un tiers).
+    // parent/enseignant crees par un tiers).
     await admin.from('account_access').insert({
       school_id: schoolId,
       user_id: userId,
@@ -203,7 +200,7 @@ export async function registerSchool(input: RegisterSchoolInput): Promise<Regist
       module: 'onboarding',
       entity_type: 'school',
       entity_id: schoolId,
-      after: { slug, name: input.school.name, modules: input.modules, parentPortalEnabled: input.parentPortalEnabled },
+      after: { slug, name: input.school.name, modules: input.modules, parentPortalEnabled: true },
     });
 
     return { schoolId, slug, userId };
@@ -222,29 +219,4 @@ export async function registerSchool(input: RegisterSchoolInput): Promise<Regist
     await admin.auth.admin.deleteUser(userId).catch(() => {});
     throw error;
   }
-}
-
-async function grantRole(
-  admin: ReturnType<typeof createAdminClient>,
-  schoolId: string,
-  userId: string,
-  roleCode: string,
-): Promise<void> {
-  const { data: membership } = await admin
-    .from('school_memberships')
-    .select('id')
-    .eq('school_id', schoolId)
-    .eq('user_id', userId)
-    .maybeSingle();
-  if (!membership) return;
-  const { data: role } = await admin
-    .from('roles')
-    .select('id')
-    .is('school_id', null)
-    .eq('code', roleCode)
-    .maybeSingle();
-  if (!role) return;
-  await admin
-    .from('membership_roles')
-    .upsert({ membership_id: membership.id, role_id: role.id }, { onConflict: 'membership_id,role_id', ignoreDuplicates: true });
 }

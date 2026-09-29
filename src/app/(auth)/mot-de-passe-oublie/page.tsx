@@ -9,7 +9,7 @@ export default function PasswordResetPage() {
     <Card>
       <CardHeader>
         <CardTitle>Mot de passe oublie</CardTitle>
-        <CardDescription>Un lien de reinitialisation vous sera envoye par email.</CardDescription>
+        <CardDescription>Un lien de réinitialisation vous sera envoyé par email.</CardDescription>
       </CardHeader>
       <CardContent>
         <PasswordResetForm />

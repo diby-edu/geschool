@@ -1,3 +1,4 @@
+import os from 'node:os';
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
 
@@ -25,7 +26,34 @@ const securityHeaders = [
   },
 ];
 
+/**
+ * Adresses d'où l'on a le droit d'ouvrir l'application en développement.
+ *
+ * Next.js refuse ses ressources internes (rechargement à chaud, chargement des
+ * composants client) à une page servie depuis une adresse absente de cette
+ * liste. Le symptôme est sournois : la page s'affiche normalement — elle est
+ * rendue par le serveur — mais plus rien ne réagit, car le code client n'est
+ * jamais chargé. On a vu le cas sur http://127.0.0.1:3000.
+ *
+ * On y met donc TOUJOURS les adresses locales, puis les adresses IPv4 de ce
+ * poste sur le réseau (ex. 192.168.1.25) pour ouvrir l'application depuis un
+ * téléphone du même Wi-Fi. La liste est calculée au démarrage : elle suit un
+ * changement d'adresse attribuée par la box, et redémarrer `pnpm dev` suffit à
+ * la rafraîchir. Sans effet en production.
+ */
+const loopbackOrigins = ['localhost', '127.0.0.1', '[::1]'];
+
+const lanAddresses = Object.values(os.networkInterfaces())
+  .flat()
+  .filter((a) => a && a.family === 'IPv4' && !a.internal)
+  // 169.254.x.x : adresse d'auto-configuration, signe que la box n'a rien
+  // attribué. Elle n'est joignable par aucun téléphone, inutile de l'autoriser.
+  .filter((a) => !a!.address.startsWith('169.254.'))
+  .map((a) => a!.address);
+
 const nextConfig: NextConfig = {
+  allowedDevOrigins: [...loopbackOrigins, ...lanAddresses],
+
   // Build autonome : indispensable au deploiement par artefact (ADR-014).
   // La CI compile, le VPS ne fait que recevoir .next/standalone.
   output: 'standalone',

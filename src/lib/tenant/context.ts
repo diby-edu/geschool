@@ -1,21 +1,46 @@
 import 'server-only';
 
 import { cache } from 'react';
-import { createClient, getAuthenticatedUser } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { NotFoundError, UnauthenticatedError } from '@/lib/errors';
 import type { RoleCode } from '@/lib/permissions/roles';
-import type { User } from '@supabase/supabase-js';
+import { personName } from '@/lib/person-name';
 
-/** Nom affichable, du plus explicite au plus generique. */
-function resolveDisplayName(user: User): string {
-  const meta = user.user_metadata ?? {};
-  const explicit = meta.display_name as string | undefined;
-  if (explicit && explicit.trim() !== '') return explicit;
+/** Reponse de public.app_context (migration 0057) ; null = non connecte ou session coupee. */
+type AppContextRow = {
+  user: {
+    id: string;
+    email: string | null;
+    display_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    must_change_password: boolean;
+  };
+  is_platform_admin: boolean;
+  school: {
+    id: string;
+    slug: string;
+    name: string;
+    short_name: string | null;
+    status: string;
+    logo_url: string | null;
+    primary_color: string | null;
+    locale: string;
+    timezone: string;
+    country_code: string;
+    login_code: string;
+  } | null;
+  academic_year?: { id: string; name: string } | null;
+  membership_id?: string | null;
+  roles?: string[];
+  permissions?: string[];
+  disabled_features?: string[];
+};
 
-  const full = [meta.first_name, meta.last_name].filter(Boolean).join(' ').trim();
-  if (full !== '') return full;
-
-  return user.email ?? 'Utilisateur';
+/** Nom affichable : NOM Prénoms comme dans les listes (lib/person-name.ts), sinon l'email. */
+function resolveDisplayName(user: AppContextRow['user']): string {
+  return personName(user, user.email ?? 'Utilisateur');
 }
 
 /**
@@ -38,8 +63,16 @@ export type TenantContext = {
     locale: string;
     timezone: string;
     countryCode: string;
+    /** Code ecole de connexion (6 chiffres), a communiquer aux enseignants et aux parents. */
+    loginCode: string;
   };
-  academicYear: { id: string; name: string } | null;
+  /**
+    * Année de travail : l'année COURANTE de l'établissement, ou celle choisie dans
+    * la barre du haut (cookie par établissement). `isCurrent` dit si c'est bien
+    * l'année en cours ; `status` permet d'annoncer une année clôturée (lecture seule,
+    * la base refuse déjà les écritures).
+    */
+  academicYear: { id: string; name: string; status?: string; isCurrent?: boolean } | null;
   user: {
     id: string;
     displayName: string;
@@ -50,51 +83,48 @@ export type TenantContext = {
   /** null quand un Super Admin consulte un etablissement dont il n'est pas membre */
   membership: { id: string; roles: RoleCode[] } | null;
   permissions: ReadonlySet<string>;
+  /**
+   * Modules coupés pour cet établissement (migration 0070). Vide presque
+   * toujours : un module absent de cette liste est actif.
+   */
+  disabledFeatures: ReadonlySet<string>;
 };
 
 /**
+ * UN seul appel a la base (public.app_context, migration 0057) au lieu de trois
+ * allers-retours enchaines (getUser, etablissement, puis roles/permissions/annee/
+ * appartenance) : la base est distante, chacun coutait 150 a 250 ms.
+ *
+ * La fonction applique les memes regles qu'avant : etablissement visible s'il y a
+ * appartenance active ou Super Admin (sinon 404), et session toujours ouverte
+ * (un acces suspendu est coupe tout de suite, comme le faisait getUser()).
+ * Appelee en GET : transaction en lecture seule, et relancee sans risque sur une
+ * connexion neuve si le reseau la perd (limited-fetch.ts).
+ *
  * `cache()` de React deduplique l'appel sur toute la duree d'un rendu : une
- * seule serie de requetes par requete HTTP, meme si vingt composants
- * l'utilisent.
+ * seule requete par requete HTTP, meme si vingt composants l'utilisent.
  */
 export const getTenantContext = cache(async (slug: string): Promise<TenantContext> => {
-  const user = await getAuthenticatedUser();
-  if (!user) throw new UnauthenticatedError();
-
   const supabase = await createClient();
 
-  // La RLS ne renvoie l'etablissement que s'il est visible : membre actif, ou
-  // Super Admin. Un slug inconnu, ou connu mais sans appartenance, renvoie
-  // zero ligne -> 404.
-  const { data: school } = await supabase
-    .from('schools')
-    .select('id, slug, name, short_name, status, logo_url, primary_color, locale, timezone, country_code')
-    .eq('slug', slug)
-    .maybeSingle();
+  const { data, error, status } = await supabase.rpc(
+    'app_context' as never,
+    { p_slug: slug } as never,
+    { get: true },
+  );
+  // Jeton refuse ou expire : non connecte. Toute autre erreur (reseau, base) est
+  // une vraie panne, a ne pas confondre avec « introuvable » ni « deconnecte ».
+  if (error) {
+    if (status === 401) throw new UnauthenticatedError();
+    throw new Error(`Contexte d'établissement indisponible : ${error.message}`);
+  }
 
+  const row = data as AppContextRow | null;
+  if (!row) throw new UnauthenticatedError();
+  const { user, school } = row;
   if (!school) throw new NotFoundError();
 
-  const [{ data: isAdmin }, { data: roleCodes }, { data: permCodes }, { data: year }, { data: membership }] =
-    await Promise.all([
-      supabase.rpc('is_platform_admin' as never),
-      supabase.rpc('my_role_codes' as never, { p_school: school.id } as never),
-      supabase.rpc('my_permission_codes' as never, { p_school: school.id } as never),
-      supabase
-        .from('academic_years')
-        .select('id, name')
-        .eq('school_id', school.id)
-        .eq('is_current', true)
-        .maybeSingle(),
-      supabase
-        .from('school_memberships')
-        .select('id')
-        .eq('school_id', school.id)
-        .eq('user_id', user.id)
-        .eq('status', 'ACTIVE')
-        .maybeSingle(),
-    ]);
-
-  const roles = ((roleCodes as string[] | null) ?? []) as RoleCode[];
+  const roles = (row.roles ?? []) as RoleCode[];
 
   return {
     school: {
@@ -108,16 +138,47 @@ export const getTenantContext = cache(async (slug: string): Promise<TenantContex
       locale: school.locale,
       timezone: school.timezone,
       countryCode: school.country_code,
+      loginCode: school.login_code,
     },
-    academicYear: year ? { id: year.id, name: year.name } : null,
+    academicYear: await resolveWorkingYear(supabase, slug, school.id, row.academic_year),
     user: {
       id: user.id,
       displayName: resolveDisplayName(user),
       email: user.email ?? '',
-      mustChangePassword: user.app_metadata?.must_change_password === true,
+      mustChangePassword: user.must_change_password === true,
     },
-    isPlatformAdmin: (isAdmin as boolean | null) ?? false,
-    membership: membership ? { id: membership.id, roles } : null,
-    permissions: new Set((permCodes as string[] | null) ?? []),
+    isPlatformAdmin: row.is_platform_admin === true,
+    membership: row.membership_id ? { id: row.membership_id, roles } : null,
+    permissions: new Set(row.permissions ?? []),
+    disabledFeatures: new Set(row.disabled_features ?? []),
   };
 });
+
+/** Nom du cookie qui retient l'année consultée pour cet établissement. */
+export const yearCookieName = (slug: string) => `gs-year-${slug}`;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Année de travail : celle choisie dans la barre du haut si elle appartient à
+ * l'établissement, sinon l'année courante. Un choix devenu invalide (année
+ * supprimée, autre établissement) est simplement ignoré.
+ */
+async function resolveWorkingYear(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  slug: string,
+  schoolId: string,
+  current: { id: string; name: string } | null | undefined,
+): Promise<TenantContext['academicYear']> {
+  const chosen = (await cookies()).get(yearCookieName(slug))?.value;
+  if (chosen && UUID.test(chosen) && chosen !== current?.id) {
+    const { data } = await supabase
+      .from('academic_years')
+      .select('id, name, status')
+      .eq('school_id', schoolId)
+      .eq('id', chosen)
+      .maybeSingle();
+    if (data) return { id: data.id, name: data.name, status: data.status, isCurrent: false };
+  }
+  return current ? { id: current.id, name: current.name, status: 'ACTIVE', isCurrent: true } : null;
+}

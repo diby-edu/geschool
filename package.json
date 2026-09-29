@@ -8,7 +8,7 @@
   },
   "packageManager": "pnpm@11.1.1",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0",
     "build": "next build && pnpm run build:worker",
     "build:worker": "esbuild src/workers/index.ts --bundle --platform=node --target=node22 --format=cjs --packages=external --tsconfig=tsconfig.json --outfile=.next/standalone/worker.js",
     "start": "next start",
@@ -21,6 +21,7 @@
     "test:rls": "vitest run --config vitest.rls.config.mts",
     "test:e2e": "playwright test",
     "db:check": "node scripts/db-check.mjs",
+    "net:check": "node scripts/net-check.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "db:status": "node scripts/migrate.mjs --status",
     "db:types": "node scripts/gen-types.mjs",
@@ -48,6 +49,7 @@
     "recharts": "^3.10.1",
     "server-only": "^0.0.1",
     "tailwind-merge": "^3.6.0",
+    "undici": "^7.29.1",
     "zod": "^4.6.2"
   },
   "devDependencies": {

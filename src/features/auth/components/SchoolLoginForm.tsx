@@ -2,28 +2,32 @@
 
 import { useActionState } from 'react';
 import { Input, Label } from '@/components/ui/input';
-import { Alert } from '@/components/ui/alert';
 import { loginWithSchoolIdentifier, type AuthState } from '../actions';
 import { SubmitButton } from './SubmitButton';
+import { FormError } from './FormError';
 
 export function SchoolLoginForm({ slug }: { slug: string }) {
   const [state, action] = useActionState<AuthState, FormData>(loginWithSchoolIdentifier, {});
 
   return (
-    <form action={action} className="space-y-4">
+    <form noValidate action={action} className="space-y-4">
+      {/* noValidate : sur téléphone, la bulle « Veuillez renseigner ce champ »
+          s'affiche derrière le clavier et disparaît aussitôt — on a l'impression
+          que le bouton ne fait rien. Le serveur renvoie le même contrôle, et son
+          message s'affiche en clair, amené sous les yeux. */}
       <input type="hidden" name="slug" value={slug} />
 
-      {state.error ? <Alert tone="error">{state.error}</Alert> : null}
+      <FormError message={state.error} />
 
       <div>
-        <Label htmlFor="identifier">Telephone, matricule ou email</Label>
+        <Label htmlFor="identifier">Téléphone ou email</Label>
         <Input
           id="identifier"
           name="identifier"
           autoComplete="username"
           required
           autoFocus
-          placeholder="Ex. 01 01 01 01 01"
+          placeholder="Ex. 07 00 00 00 00"
         />
       </div>
 

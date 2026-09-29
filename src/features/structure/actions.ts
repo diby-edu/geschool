@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
 import { runFormAction, formValues, type FormState } from '@/lib/forms';
 import { cycleSchema, levelSchema } from './schemas';
-import { createCycle, deleteCycle, createLevel, deleteLevel } from './service';
+import { createCycle, deleteCycle, createLevel, deleteLevel , applyOfficialLevels } from './service';
 
 const withValues =
   (fd: FormData) =>
@@ -14,7 +14,15 @@ const withValues =
 export async function createCycleAction(slug: string, _p: FormState, fd: FormData): Promise<FormState> {
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
-    await createCycle(ctx, cycleSchema.parse({ code: fd.get('code'), name: fd.get('name'), sequence: fd.get('sequence') ?? 0 }));
+    await createCycle(
+      ctx,
+      cycleSchema.parse({
+        code: fd.get('code'),
+        name: fd.get('name'),
+        sequence: fd.get('sequence') ?? 0,
+        track: fd.get('track') ?? 'GENERAL',
+      }),
+    );
     redirect(`/e/${slug}/structure?created=1`);
   }).then(withValues(fd));
 }
@@ -35,6 +43,7 @@ export async function createLevelAction(slug: string, _p: FormState, fd: FormDat
       code: fd.get('code'),
       name: fd.get('name'),
       sequence: fd.get('sequence') ?? 0,
+      diploma: fd.get('diploma') ?? '',
     }));
     redirect(`/e/${slug}/structure?created=1`);
   }).then(withValues(fd));
@@ -45,5 +54,19 @@ export async function deleteLevelAction(slug: string, id: string, _p: FormState,
     const ctx = await getTenantContext(slug);
     await deleteLevel(ctx, id);
     redirect(`/e/${slug}/structure?deleted=1`);
+  });
+}
+
+/** Bouton « Charger les niveaux officiels » d'un ordre d'enseignement. */
+export async function applyOfficialLevelsAction(
+  slug: string,
+  track: 'TECHNIQUE' | 'PROFESSIONNEL',
+  _p: FormState,
+  _fd: FormData,
+): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    const r = await applyOfficialLevels(ctx, track);
+    redirect(`/e/${slug}/structure?niveaux=${r.levels}`);
   });
 }

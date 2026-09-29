@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
-import { requirePageAccess } from '@/lib/permissions/guard';
+import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { listAnnouncements } from '@/features/communication/announcements';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
@@ -24,6 +24,7 @@ export default async function AnnouncementsPage({
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
   requirePageAccess(ctx, 'announcements.view');
+  requireFeature(ctx, 'announcements');
   const base = `/e/${slug}/annonces`;
 
   const announcements = await listAnnouncements(ctx);

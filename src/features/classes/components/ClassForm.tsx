@@ -9,18 +9,20 @@ import { Card, CardContent } from '@/components/ui/card';
 import { SubmitButton } from '@/features/auth/components/SubmitButton';
 import type { FormState } from '@/lib/forms';
 
-type Values = Partial<Record<'levelId' | 'code' | 'name' | 'capacity' | 'headTeacherId', string>>;
+type Values = Partial<Record<'levelId' | 'code' | 'name' | 'capacity' | 'headTeacherId' | 'mainRoomId', string>>;
 
 export function ClassForm({
   action,
   levels,
   teachers,
+  rooms = [],
   defaultValues = {},
   submitLabel,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   levels: { id: string; name: string }[];
   teachers: { id: string; name: string }[];
+  rooms?: { id: string; name: string }[];
   defaultValues?: Values;
   submitLabel: string;
 }) {
@@ -51,7 +53,7 @@ export function ClassForm({
             <Field label="Code" htmlFor="code" required errors={err.code} hint="Ex. 4E1">
               <Input id="code" name="code" defaultValue={v.code} required />
             </Field>
-            <Field label="Capacite" htmlFor="capacity" errors={err.capacity}>
+            <Field label="Capacité" htmlFor="capacity" errors={err.capacity}>
               <Input id="capacity" name="capacity" type="number" min="0" defaultValue={v.capacity ?? '40'} />
             </Field>
           </div>
@@ -66,6 +68,22 @@ export function ClassForm({
               {teachers.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field
+            label="Salle de classe"
+            htmlFor="mainRoomId"
+            errors={err.mainRoomId}
+            hint={rooms.length === 0 ? 'Aucune salle : créez-les dans Paramètres > Salles.' : 'Salle où la classe a cours par défaut.'}
+          >
+            <Select id="mainRoomId" name="mainRoomId" defaultValue={v.mainRoomId ?? ''}>
+              <option value="">— Aucune —</option>
+              {rooms.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
                 </option>
               ))}
             </Select>

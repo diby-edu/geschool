@@ -7,7 +7,7 @@ import type { Tables } from '@/types/database';
 
 export type SubjectRow = Pick<
   Tables<'subjects'>,
-  'id' | 'code' | 'name' | 'short_name' | 'category' | 'color' | 'default_coefficient' | 'is_active'
+  'id' | 'code' | 'name' | 'short_name' | 'category' | 'color' | 'default_coefficient' | 'is_active' | 'tracks'
 >;
 
 const SORT_COLUMNS = ['code', 'name', 'default_coefficient'] as const;
@@ -20,7 +20,7 @@ export async function listSubjects(
   const supabase = await createClient();
   let query = supabase
     .from('subjects')
-    .select('id, code, name, short_name, category, color, default_coefficient, is_active', {
+    .select('id, code, name, short_name, category, color, default_coefficient, is_active, tracks', {
       count: 'exact',
     })
     .eq('school_id', ctx.school.id);
@@ -44,7 +44,7 @@ export async function getSubject(ctx: TenantContext, id: string): Promise<Subjec
   const supabase = await createClient();
   const { data } = await supabase
     .from('subjects')
-    .select('id, code, name, short_name, category, color, default_coefficient, is_active')
+    .select('id, code, name, short_name, category, color, default_coefficient, is_active, tracks')
     .eq('school_id', ctx.school.id)
     .eq('id', id)
     .maybeSingle();

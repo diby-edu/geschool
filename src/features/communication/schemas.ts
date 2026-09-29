@@ -4,9 +4,8 @@ import { z } from 'zod';
 export const AUDIENCE_ROLES = [
   { code: 'ALL', label: 'Tout l’établissement' },
   { code: 'PARENT', label: 'Parents' },
-  { code: 'STUDENT', label: 'Élèves' },
   { code: 'TEACHER', label: 'Enseignants' },
-  { code: 'SCHOOL_ADMIN', label: 'Administration' },
+  { code: 'SCHOOL_ADMIN', label: 'Personnel administratif' },
 ] as const;
 
 export const announcementSchema = z

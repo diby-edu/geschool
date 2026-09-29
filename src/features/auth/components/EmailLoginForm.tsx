@@ -2,18 +2,22 @@
 
 import { useActionState } from 'react';
 import { Input, Label } from '@/components/ui/input';
-import { Alert } from '@/components/ui/alert';
 import { loginWithEmail, type AuthState } from '../actions';
 import { SubmitButton } from './SubmitButton';
+import { FormError } from './FormError';
 
 export function EmailLoginForm({ next }: { next?: string | undefined }) {
   const [state, action] = useActionState<AuthState, FormData>(loginWithEmail, {});
 
   return (
-    <form action={action} className="space-y-4">
+    <form noValidate action={action} className="space-y-4">
+      {/* noValidate : sur téléphone, la bulle « Veuillez renseigner ce champ »
+          s'affiche derrière le clavier et disparaît aussitôt — on a l'impression
+          que le bouton ne fait rien. Le serveur renvoie le même contrôle, et son
+          message s'affiche en clair, amené sous les yeux. */}
       {next ? <input type="hidden" name="next" value={next} /> : null}
 
-      {state.error ? <Alert tone="error">{state.error}</Alert> : null}
+      <FormError message={state.error} />
 
       <div>
         <Label htmlFor="email">Adresse email</Label>

@@ -44,7 +44,7 @@ async function main(): Promise<void> {
   console.warn(
     `[worker] demarre — schema "${env.PGBOSS_SCHEMA}", concurrence ${env.WORKER_CONCURRENCY}`,
   );
-  console.warn('[worker] aucune file enregistree a ce stade (lots 5, 7 et 10).');
+  console.warn('[worker] aucune file enregistrée à ce stade (lots 5, 7 et 10).');
 
   // Arret propre : laisser les jobs en cours se terminer plutot que les
   // interrompre a mi-parcours. Un envoi de SMS coupe en deux se traduirait par
@@ -53,7 +53,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     if (stopping) return;
     stopping = true;
-    console.warn(`[worker] ${signal} recu, arret en cours...`);
+    console.warn(`[worker] ${signal} reçu, arret en cours...`);
     try {
       await boss.stop({ graceful: true, timeout: 30_000 });
       console.warn('[worker] arrete proprement.');

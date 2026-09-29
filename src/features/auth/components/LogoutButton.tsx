@@ -16,7 +16,7 @@ export function LogoutButton() {
   return (
     <form action={logout} onSubmit={clearOfflineCache}>
       <Button type="submit" variant="ghost" size="sm">
-        Se deconnecter
+        Se déconnecter
       </Button>
     </form>
   );

@@ -124,7 +124,7 @@ let serverCache: z.infer<typeof serverSchema> | null = null;
 function readServerEnv() {
   if (typeof window !== 'undefined') {
     throw new Error(
-      "serverEnv a ete lu depuis le navigateur. C'est une fuite de secret : utiliser publicEnv.",
+      "serverEnv a été lu depuis le navigateur. C'est une fuite de secret : utiliser publicEnv.",
     );
   }
 

@@ -28,7 +28,7 @@ test('connexion du personnel par email -> tableau de bord etablissement', async 
   await page.waitForURL(/\/e\/demo\/dashboard/, { timeout: 15_000 });
   await expect(page.getByRole('heading', { name: 'Tableau de bord' })).toBeVisible();
   // Vue personnel : les statistiques, pas la vue famille
-  await expect(page.getByText('Eleves')).toBeVisible();
+  await expect(page.getByText('Élèves')).toBeVisible();
   await expect(page.getByText('Administrateur')).toBeVisible();
 });
 

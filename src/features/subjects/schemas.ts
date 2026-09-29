@@ -23,9 +23,11 @@ export const subjectSchema = z.object({
     .or(z.literal('')),
   defaultCoefficient: z.coerce
     .number({ error: 'Coefficient invalide.' })
-    .positive('Le coefficient doit etre positif.')
-    .max(100, 'Coefficient trop eleve.'),
+    .positive('Le coefficient doit être positif.')
+    .max(100, 'Coefficient trop élève.'),
   isActive: z.coerce.boolean().default(true),
+  /** Ordres où la matière est enseignée : une matière commune les coche tous. */
+  tracks: z.array(z.enum(['GENERAL', 'TECHNIQUE', 'PROFESSIONNEL'])).min(1, 'Choisissez au moins un ordre d’enseignement.'),
 });
 
 export type SubjectInput = z.infer<typeof subjectSchema>;

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
-import { requirePageAccess } from '@/lib/permissions/guard';
+import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { getAnnouncement } from '@/features/communication/announcements';
 import { AnnouncementForm } from '@/features/communication/components/AnnouncementForm';
@@ -32,6 +32,7 @@ export default async function AnnouncementDetailPage({
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
   requirePageAccess(ctx, 'announcements.view');
+  requireFeature(ctx, 'announcements');
   const base = `/e/${slug}/annonces`;
 
   const a = await getAnnouncement(ctx, id);

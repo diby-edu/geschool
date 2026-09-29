@@ -29,7 +29,7 @@ export async function resolveAuthEmail(
   } as never);
 
   if (error) {
-    console.error('[auth] resolution echouee', error.message);
+    console.error('[auth] résolution échouée', error.message);
     return null;
   }
   return (data as string | null) ?? null;
@@ -51,6 +51,24 @@ export async function resolveSchoolBySlug(
 
   if (!data || data.status === 'ARCHIVED') return null;
   return { id: data.id, name: data.name, countryCode: data.country_code, logoUrl: data.logo_url };
+}
+
+/**
+ * Etablissement a partir de son code ecole (6 chiffres), hors session : page de
+ * connexion unique. Ne renvoie que le strict necessaire a la connexion.
+ */
+export async function resolveSchoolByCode(
+  code: string,
+): Promise<{ id: string; slug: string; name: string; countryCode: string } | null> {
+  const admin = createAdminClient('auth.resolve_login');
+  const { data } = await admin
+    .from('schools')
+    .select('id, slug, name, country_code, status')
+    .eq('login_code', code)
+    .maybeSingle();
+
+  if (!data || data.status === 'ARCHIVED') return null;
+  return { id: data.id, slug: data.slug, name: data.name, countryCode: data.country_code };
 }
 
 /**

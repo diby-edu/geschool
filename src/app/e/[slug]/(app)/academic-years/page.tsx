@@ -11,8 +11,9 @@ import { Flash } from '@/components/ui/flash';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ConfirmSubmit } from '@/components/ui/confirm-submit';
+import { BackToSettings } from '@/features/settings/components/BackToSettings';
 
-export const metadata: Metadata = { title: 'Annees scolaires' };
+export const metadata: Metadata = { title: 'Années scolaires' };
 
 export default async function AcademicYearsPage({
   params,
@@ -36,19 +37,22 @@ export default async function AcademicYearsPage({
     <div className="mx-auto max-w-3xl">
       <Flash searchParams={sp} />
       <PageHeader
-        title="Annees scolaires"
-        description="Une seule annee est active a la fois."
+        title="Années scolaires"
+        description="Une seule année est active à la fois."
         action={
-          canManage ? (
+          <div className="flex items-center gap-3">
+            <BackToSettings ctx={ctx} />
+            {canManage ? (
             <Link href={`${base}/new`}>
-              <Button>Nouvelle annee</Button>
+              <Button>Nouvelle année</Button>
             </Link>
-          ) : null
+            ) : null}
+          </div>
         }
       />
 
       {years.length === 0 ? (
-        <EmptyState title="Aucune annee scolaire" hint="Creez une annee pour commencer a configurer l'etablissement." />
+        <EmptyState title="Aucune année scolaire" hint="Créez une année pour commencer à configurer l'établissement." />
       ) : (
         <ul className="space-y-2">
           {years.map((y) => (
@@ -77,14 +81,14 @@ export default async function AcademicYearsPage({
                         action={activateYearAction.bind(null, slug, y.id)}
                         label="Activer"
                         variant="secondary"
-                        confirmMessage={`Activer l'annee « ${y.name} » ? Elle deviendra l'annee courante.`}
+                        confirmMessage={`Activer l'année « ${y.name} » ? Elle deviendra l'année courante.`}
                       />
                     ) : null}
                     {canClose && y.status === 'ACTIVE' ? (
                       <ConfirmSubmit
                         action={closeYearAction.bind(null, slug, y.id)}
-                        label="Cloturer"
-                        confirmMessage={`Cloturer l'annee « ${y.name} » ? Ses donnees passeront en lecture seule.`}
+                        label="Clôturer"
+                        confirmMessage={`Clôturer l'année « ${y.name} » ? Ses données passeront en lecture seule.`}
                       />
                     ) : null}
                     {canReopen && y.status === 'CLOSED' ? (
@@ -92,7 +96,7 @@ export default async function AcademicYearsPage({
                         action={reopenYearAction.bind(null, slug, y.id)}
                         label="Rouvrir"
                         variant="secondary"
-                        confirmMessage={`Rouvrir l'annee « ${y.name} » ?`}
+                        confirmMessage={`Rouvrir l'année « ${y.name} » ?`}
                       />
                     ) : null}
                   </div>

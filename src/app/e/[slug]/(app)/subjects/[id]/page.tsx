@@ -6,11 +6,12 @@ import { requirePageAccess } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { getSubject } from '@/features/subjects/queries';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { schoolTracks } from '@/features/structure/queries';
 import { SubjectForm } from '@/features/subjects/components/SubjectForm';
 import { ConfirmSubmit } from '@/components/ui/confirm-submit';
 import { updateSubjectAction, deleteSubjectAction } from '@/features/subjects/actions';
 
-export const metadata: Metadata = { title: 'Modifier la matiere' };
+export const metadata: Metadata = { title: 'Modifier la matière' };
 
 export default async function EditSubjectPage({
   params,
@@ -24,6 +25,7 @@ export default async function EditSubjectPage({
   const subject = await getSubject(ctx, id);
   if (!subject) notFound();
 
+  const tracks = await schoolTracks(ctx);
   const action = updateSubjectAction.bind(null, slug, id);
   const del = deleteSubjectAction.bind(null, slug, id);
 
@@ -43,6 +45,8 @@ export default async function EditSubjectPage({
         action={action}
         submitLabel="Enregistrer"
         defaultActive={subject.is_active}
+        schoolTracks={tracks}
+        defaultTracks={subject.tracks as string[]}
         defaultValues={{
           code: subject.code,
           name: subject.name,
@@ -55,15 +59,15 @@ export default async function EditSubjectPage({
 
       {hasPermission(ctx, 'subjects.delete') ? (
         <div className="rounded-[--radius-card] border border-dashed p-4">
-          <p className="mb-2 text-sm font-medium">Supprimer cette matiere</p>
+          <p className="mb-2 text-sm font-medium">Supprimer cette matière</p>
           <p className="mb-3 text-sm text-[color:var(--muted-foreground)]">
-            Action definitive. Impossible si la matiere est deja utilisee (programme, affectation,
-            evaluation) ; dans ce cas, desactivez-la plutot.
+            Action definitive. Impossible si la matière est déjà utilisée (programme, affectation,
+            évaluation) ; dans ce cas, desactivez-la plutôt.
           </p>
           <ConfirmSubmit
             action={del}
             label="Supprimer"
-            confirmMessage={`Supprimer definitivement la matiere « ${subject.name} » ?`}
+            confirmMessage={`Supprimer definitivement la matière « ${subject.name} » ?`}
           />
         </div>
       ) : null}

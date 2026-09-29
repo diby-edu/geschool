@@ -45,7 +45,7 @@ export function AssignmentForm({
                 ))}
               </Select>
             </Field>
-            <Field label="Matiere" htmlFor="subjectId" required errors={err.subjectId}>
+            <Field label="Matière" htmlFor="subjectId" required errors={err.subjectId}>
               <Select id="subjectId" name="subjectId" required defaultValue="">
                 <option value="" disabled>
                   —

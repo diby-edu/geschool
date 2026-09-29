@@ -16,6 +16,8 @@ function parse(formData: FormData) {
     defaultCoefficient: formData.get('defaultCoefficient'),
     // Case a cocher : absente = decochee = false
     isActive: formData.get('isActive') != null,
+    // Ordres d'enseignement cochés ; un établissement à un seul ordre le poste en champ caché.
+    tracks: formData.getAll('tracks').map(String),
   });
 }
 
