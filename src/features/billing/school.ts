@@ -75,12 +75,16 @@ export async function listMyPayments(ctx: TenantContext): Promise<PaymentRow[]> 
 }
 
 /**
- * Enregistre un paiement DÉJÀ REÇU (mobile money, espèces, virement...). C'est
- * un acte de comptabilité : aucun transfert de fonds n'est initié ici. RLS :
- * réservé au Super Admin ou à un porteur de billing.manage.
+ * Paiement DÉJÀ EFFECTUÉ (mobile money, espèces, virement...) : un acte de
+ * comptabilité, aucun transfert de fonds n'est initié ici.
+ *
+ * L'établissement le DÉCLARE : statut « en attente », quel que soit le statut
+ * demandé, jusqu'à ce que la plateforme le confirme ou le refuse (migration 0058,
+ * qui l'impose aussi dans la base). Seul le Super Admin choisit le statut.
  */
 export async function recordPayment(ctx: TenantContext, input: PaymentInput): Promise<void> {
   requireWritable(ctx, 'billing.manage');
+  const status = ctx.isPlatformAdmin ? input.status : 'PENDING';
   const supabase = await createClient();
   const sub = await getSchoolSubscription(ctx.school.id);
   const { error } = await supabase.from('payments').insert({
@@ -89,12 +93,17 @@ export async function recordPayment(ctx: TenantContext, input: PaymentInput): Pr
     amount: input.amount,
     currency: input.currency.toUpperCase(),
     method: input.method,
-    status: input.status,
+    status,
     provider_reference: input.reference || null,
     notes: input.notes || null,
     recorded_by: ctx.user.id,
-    paid_at: input.status === 'PAID' ? new Date().toISOString() : null,
+    paid_at: status === 'PAID' ? new Date().toISOString() : null,
   });
   if (error) throw error;
-  await audit(ctx, { action: 'billing.payment_record', module: 'billing', entityType: 'payment', after: { amount: input.amount, method: input.method, status: input.status } });
+  await audit(ctx, {
+    action: ctx.isPlatformAdmin ? 'billing.payment_record' : 'billing.payment_declare',
+    module: 'billing',
+    entityType: 'payment',
+    after: { amount: input.amount, method: input.method, status, reference: input.reference || null },
+  });
 }

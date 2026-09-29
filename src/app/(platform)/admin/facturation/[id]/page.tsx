@@ -3,7 +3,15 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { listPlans, getSchoolSubscription } from '@/features/billing/platform';
-import { assignSubscriptionAction } from '@/features/billing/actions';
+import { assignSubscriptionAction, settlePaymentAction } from '@/features/billing/actions';
+import { ConfirmSubmit } from '@/components/ui/confirm-submit';
+
+const PAY_STATUS: Record<string, string> = {
+  PENDING: 'Déclaré, à confirmer', PAID: 'Confirmé', FAILED: 'Échoué', REFUNDED: 'Remboursé', CANCELLED: 'Refusé',
+};
+const PAY_METHOD: Record<string, string> = {
+  MOBILE_MONEY: 'Mobile Money', BANK_TRANSFER: 'Virement', CASH: 'Espèces', CARD: 'Carte', OTHER: 'Autre',
+};
 import { SubscriptionForm } from '@/features/billing/components/SubscriptionForm';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Alert } from '@/components/ui/alert';
@@ -30,7 +38,7 @@ export default async function SchoolBillingPage({
   const [plans, sub] = await Promise.all([listPlans(), getSchoolSubscription(id)]);
   const { data: payments } = await supabase
     .from('payments')
-    .select('id, amount, currency, method, status, created_at')
+    .select('id, amount, currency, method, status, created_at, provider_reference, notes')
     .eq('school_id', id)
     .order('created_at', { ascending: false })
     .limit(10);
@@ -38,6 +46,8 @@ export default async function SchoolBillingPage({
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       {sp.assigned === '1' ? <Alert tone="success">Abonnement mis à jour.</Alert> : null}
+      {sp.confirmed === '1' ? <Alert tone="success">Paiement confirmé.</Alert> : null}
+      {sp.rejected === '1' ? <Alert tone="success">Paiement refusé.</Alert> : null}
       <PageHeader title={`Facturation — ${school.name}`} action={<Link href="/admin/etablissements"><Button variant="ghost">Retour</Button></Link>} />
 
       <Card>
@@ -87,9 +97,32 @@ export default async function SchoolBillingPage({
         ) : (
           <ul className="space-y-1 text-sm">
             {(payments ?? []).map((p) => (
-              <li key={p.id} className="flex justify-between rounded-[--radius-card] border px-3 py-2">
-                <span>{new Date(p.created_at).toLocaleDateString('fr-FR')} · {p.method}</span>
-                <span className="font-medium">{Number(p.amount).toLocaleString('fr-FR')} {p.currency} · {p.status}</span>
+              <li key={p.id} className="space-y-2 rounded-[--radius-card] border px-3 py-2">
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span>
+                    {new Date(p.created_at).toLocaleDateString('fr-FR')} · {PAY_METHOD[p.method] ?? p.method}
+                    {p.provider_reference ? ` · réf. ${p.provider_reference}` : ''}
+                  </span>
+                  <span className="font-medium">
+                    {Number(p.amount).toLocaleString('fr-FR')} {p.currency} · {PAY_STATUS[p.status] ?? p.status}
+                  </span>
+                </div>
+                {p.notes ? <p className="text-xs text-[color:var(--muted-foreground)]">{p.notes}</p> : null}
+                {p.status === 'PENDING' ? (
+                  <div className="flex flex-wrap gap-2">
+                    <ConfirmSubmit
+                      action={settlePaymentAction.bind(null, id, p.id, 'PAID')}
+                      label="Confirmer"
+                      variant="secondary"
+                      confirmMessage={`Confirmer la réception de ${Number(p.amount).toLocaleString('fr-FR')} ${p.currency} ?`}
+                    />
+                    <ConfirmSubmit
+                      action={settlePaymentAction.bind(null, id, p.id, 'CANCELLED')}
+                      label="Refuser"
+                      confirmMessage="Refuser ce paiement déclaré (non reçu ou référence introuvable) ?"
+                    />
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>

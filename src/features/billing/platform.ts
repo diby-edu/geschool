@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
 import { AuthorizationError, ConflictError, NotFoundError } from '@/lib/errors';
+import { auditPlatform } from '@/lib/audit';
 import type { PlanInput, SubscriptionInput } from './schemas';
 import type { PlanRow } from './types';
 
@@ -132,4 +133,37 @@ export async function assignSubscription(schoolId: string, input: SubscriptionIn
       throw error;
     }
   }
+}
+
+/**
+ * Confirme (PAID) ou refuse (CANCELLED) un paiement DÉCLARÉ par un établissement.
+ * Seul un paiement encore « en attente » peut changer d'état : une confirmation
+ * ne se rejoue pas, un refus ne se transforme pas en paiement. RLS : mise à jour
+ * réservée au Super Admin (payments_update, 0026).
+ */
+export async function settleDeclaredPayment(
+  actorUserId: string,
+  schoolId: string,
+  paymentId: string,
+  outcome: 'PAID' | 'CANCELLED',
+): Promise<void> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('payments')
+    .update({ status: outcome, paid_at: outcome === 'PAID' ? new Date().toISOString() : null })
+    .eq('id', paymentId)
+    .eq('school_id', schoolId)
+    .eq('status', 'PENDING')
+    .select('id, amount, currency, provider_reference');
+  if (error) throw error;
+  const row = data?.[0];
+  if (!row) throw new NotFoundError('Paiement introuvable ou déjà traité.');
+  await auditPlatform(actorUserId, {
+    schoolId,
+    action: outcome === 'PAID' ? 'billing.payment_confirm' : 'billing.payment_reject',
+    module: 'billing',
+    entityType: 'payment',
+    entityId: paymentId,
+    after: { amount: row.amount, currency: row.currency, reference: row.provider_reference, status: outcome },
+  });
 }

@@ -21,7 +21,7 @@ export function CreateSchoolForm() {
         <form action={formAction} className="space-y-4">
           {state.error ? <Alert tone="error">{state.error}</Alert> : null}
 
-          <Field label="Nom de l'etablissement" htmlFor="name" required errors={err.name}>
+          <Field label="Nom de l'établissement" htmlFor="name" required errors={err.name}>
             <Input id="name" name="name" defaultValue={v.name} required autoFocus placeholder="Lycee Moderne d'Abidjan" />
           </Field>
 
@@ -62,7 +62,7 @@ export function CreateSchoolForm() {
           </Field>
 
           <div className="pt-2">
-            <SubmitButton>Creer l&apos;etablissement</SubmitButton>
+            <SubmitButton>Créer l&apos;établissement</SubmitButton>
           </div>
         </form>
       </CardContent>

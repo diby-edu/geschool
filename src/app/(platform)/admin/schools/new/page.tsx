@@ -5,7 +5,7 @@ import { createClient, getAuthenticatedUser } from '@/lib/supabase/server';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { CreateSchoolForm } from '@/features/platform-schools/components/CreateSchoolForm';
 
-export const metadata: Metadata = { title: 'Nouvel etablissement' };
+export const metadata: Metadata = { title: 'Nouvel établissement' };
 
 export default async function NewSchoolPage() {
   const user = await getAuthenticatedUser();
@@ -17,7 +17,7 @@ export default async function NewSchoolPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <PageHeader
-        title="Nouvel etablissement"
+        title="Nouvel établissement"
         description="Vous serez redirige vers son espace pour le configurer."
         action={
           <Link href="/admin/etablissements" className="text-sm text-[color:var(--muted-foreground)] hover:underline">

@@ -16,7 +16,17 @@ const STATUS_LABEL: Record<string, string> = {
   PENDING: 'En attente', PAID: 'Payé', FAILED: 'Échoué', REFUNDED: 'Remboursé', CANCELLED: 'Annulé',
 };
 
-export function PaymentForm({ action }: { action: (prev: FormState, formData: FormData) => Promise<FormState> }) {
+/**
+ * `canSetStatus` : réservé au Super Admin. L'établissement ne fait que DÉCLARER un
+ * paiement (statut « en attente », imposé aussi par le serveur et la base, 0058).
+ */
+export function PaymentForm({
+  action,
+  canSetStatus,
+}: {
+  action: (prev: FormState, formData: FormData) => Promise<FormState>;
+  canSetStatus: boolean;
+}) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const err = state.fieldErrors ?? {};
 
@@ -34,16 +44,22 @@ export function PaymentForm({ action }: { action: (prev: FormState, formData: Fo
           </Select>
         </Field>
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Field label="Statut" htmlFor="status">
-          <Select id="status" name="status" defaultValue="PAID">
-            {PAYMENT_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s] ?? s}</option>)}
-          </Select>
+      <div className={`grid gap-3 ${canSetStatus ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+        {canSetStatus ? (
+          <Field label="Statut" htmlFor="status">
+            <Select id="status" name="status" defaultValue="PAID">
+              {PAYMENT_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s] ?? s}</option>)}
+            </Select>
+          </Field>
+        ) : (
+          <input type="hidden" name="status" value="PENDING" />
+        )}
+        <Field label="Référence" htmlFor="reference" hint={canSetStatus ? undefined : 'Numéro de la transaction mobile money ou du virement'}>
+          <Input id="reference" name="reference" maxLength={120} />
         </Field>
-        <Field label="Référence" htmlFor="reference"><Input id="reference" name="reference" maxLength={120} /></Field>
         <Field label="Note" htmlFor="notes"><Input id="notes" name="notes" maxLength={500} /></Field>
       </div>
-      <SubmitButton variant="secondary" size="sm">Enregistrer le paiement</SubmitButton>
+      <SubmitButton variant="secondary" size="sm">{canSetStatus ? 'Enregistrer le paiement' : 'Déclarer le paiement'}</SubmitButton>
     </form>
   );
 }

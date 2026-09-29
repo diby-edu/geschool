@@ -4,7 +4,10 @@ import { redirect } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
 import { runFormAction, formValues, type FormState } from '@/lib/forms';
 import { planSchema, subscriptionSchema, paymentSchema } from './schemas';
-import { assertPlatformAdmin, savePlan, deletePlan, assignSubscription } from './platform';
+import { assertPlatformAdmin, savePlan, deletePlan, assignSubscription, settleDeclaredPayment } from './platform';
+import { deleteModule, saveModule } from './modules';
+import { getAuthenticatedUser } from '@/lib/supabase/server';
+import { UnauthenticatedError } from '@/lib/errors';
 import { recordPayment } from './school';
 
 // --- Plateforme (Super Admin) ------------------------------------------------
@@ -58,6 +61,23 @@ export async function assignSubscriptionAction(schoolId: string, _p: FormState, 
   }).then((s) => (s.error || s.fieldErrors ? { ...s, values: formValues(fd) } : s));
 }
 
+/** Confirme ou refuse un paiement déclaré par un établissement (Super Admin). */
+export async function settlePaymentAction(
+  schoolId: string,
+  paymentId: string,
+  outcome: 'PAID' | 'CANCELLED',
+  _p: FormState,
+  _fd: FormData,
+): Promise<FormState> {
+  return runFormAction(async () => {
+    await assertPlatformAdmin();
+    const user = await getAuthenticatedUser();
+    if (!user) throw new UnauthenticatedError();
+    await settleDeclaredPayment(user.id, schoolId, paymentId, outcome);
+    redirect(`/admin/facturation/${schoolId}?${outcome === 'PAID' ? 'confirmed' : 'rejected'}=1`);
+  });
+}
+
 // --- Établissement (billing.manage) ------------------------------------------
 
 export async function recordPaymentAction(slug: string, _p: FormState, fd: FormData): Promise<FormState> {
@@ -73,4 +93,36 @@ export async function recordPaymentAction(slug: string, _p: FormState, fd: FormD
     }));
     redirect(`/e/${slug}/facturation?paid=1`);
   }).then((s) => (s.error || s.fieldErrors ? { ...s, values: formValues(fd) } : s));
+}
+
+/** Catalogue des modules vendables (Super Admin). */
+export async function saveModuleAction(id: string | null, _p: FormState, fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    await assertPlatformAdmin();
+    const period = String(fd.get('billingPeriod') ?? 'YEARLY');
+    const price = Number(fd.get('priceAmount') ?? 0);
+    await saveModule(
+      {
+        code: String(fd.get('code') ?? '').trim().toUpperCase(),
+        name: String(fd.get('name') ?? '').trim(),
+        description: String(fd.get('description') ?? '').trim(),
+        priceAmount: Number.isFinite(price) ? Math.max(0, price) : 0,
+        currency: String(fd.get('currency') ?? 'XOF').trim() || 'XOF',
+        billingPeriod: (['MONTHLY', 'QUARTERLY', 'YEARLY', 'ONE_TIME'].includes(period)
+          ? period
+          : 'YEARLY') as 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | 'ONE_TIME',
+        isActive: fd.get('isActive') != null,
+      },
+      id ?? undefined,
+    );
+    redirect('/admin/plans?module=1');
+  }).then((s) => (s.error || s.fieldErrors ? { ...s, values: formValues(fd) } : s));
+}
+
+export async function deleteModuleAction(id: string, _p: FormState, _fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    await assertPlatformAdmin();
+    await deleteModule(id);
+    redirect('/admin/plans?module_supprime=1');
+  });
 }

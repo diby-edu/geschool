@@ -6,6 +6,8 @@ import { auditPlatform } from '@/lib/audit';
 import { runFormAction, formValues, type FormState } from '@/lib/forms';
 import { AuthorizationError, ConflictError } from '@/lib/errors';
 import { createSchoolSchema } from './schemas';
+import { setSchoolFeature } from './features';
+import type { FeatureCode } from '@/lib/modules/features';
 
 /**
  * Creation d'un etablissement — reservee au Super Admin. La RLS de `schools`
@@ -49,7 +51,7 @@ export async function createSchoolAction(_prev: FormState, formData: FormData): 
       .single();
 
     if (error) {
-      if (error.code === '23505') throw new ConflictError('Ce slug est deja utilise.');
+      if (error.code === '23505') throw new ConflictError('Ce slug est déjà utilisé.');
       throw error;
     }
 
@@ -64,4 +66,18 @@ export async function createSchoolAction(_prev: FormState, formData: FormData): 
 
     redirect(`/e/${data.slug}`);
   }).then((s) => (s.error || s.fieldErrors ? { ...s, values: formValues(formData) } : s));
+}
+
+/** Active ou coupe un module pour un établissement (Super Admin uniquement). */
+export async function setSchoolFeatureAction(
+  schoolId: string,
+  code: FeatureCode,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  return runFormAction(async () => {
+    const enabled = String(formData.get('enabled') ?? 'true') === 'true';
+    await setSchoolFeature(schoolId, code, enabled, String(formData.get('reason') ?? '').trim());
+    redirect(`/admin/etablissements/${schoolId}?module=1`);
+  });
 }

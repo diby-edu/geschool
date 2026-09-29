@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 
-export const metadata: Metadata = { title: 'Etablissements' };
+export const metadata: Metadata = { title: 'Établissements' };
 export const dynamic = 'force-dynamic';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -30,11 +30,11 @@ export default async function PlatformSchoolsPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
-        title="Etablissements"
+        title="Établissements"
         description={`${list.length} au total · ${active} actif${active > 1 ? 's' : ''}`}
         action={
           <Link href="/admin/schools/new">
-            <Button>Nouvel etablissement</Button>
+            <Button>Nouvel établissement</Button>
           </Link>
         }
       />
@@ -43,7 +43,7 @@ export default async function PlatformSchoolsPage() {
         <Card>
           <CardContent>
             <p className="text-sm text-[color:var(--muted-foreground)]">
-              Aucun etablissement. Creez-en un pour commencer.
+              Aucun établissement. Creez-en un pour commencer.
             </p>
           </CardContent>
         </Card>
@@ -54,7 +54,9 @@ export default async function PlatformSchoolsPage() {
               <Card>
                 <CardContent className="flex items-center justify-between py-3">
                   <div className="min-w-0">
-                    <p className="truncate font-medium">{s.name}</p>
+                    <Link href={`/admin/etablissements/${s.id}`} className="truncate font-medium hover:underline">
+                      {s.name}
+                    </Link>
                     <p className="truncate text-xs text-[color:var(--muted-foreground)]">
                       /e/{s.slug}
                     </p>

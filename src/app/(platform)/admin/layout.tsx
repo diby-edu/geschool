@@ -24,8 +24,12 @@ export default async function PlatformLayout({ children }: { children: React.Rea
       subtitle="Administration globale"
       nav={[
         { href: '/admin', label: 'Tableau de bord' },
-        { href: '/admin/etablissements', label: 'Etablissements' },
-        { href: '/admin/plans', label: 'Plans' },
+        { href: '/admin/etablissements', label: 'Établissements' },
+        { href: '/admin/paiements', label: 'Paiements' },
+        { href: '/admin/plans', label: 'Plans et modules' },
+        { href: '/admin/usage', label: 'Usage' },
+        { href: '/admin/administrateurs', label: 'Administrateurs' },
+        { href: '/admin/journal', label: 'Journal' },
       ]}
       user={{ displayName, roleLabel: 'Super Admin' }}
     >
