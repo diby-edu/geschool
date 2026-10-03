@@ -5,7 +5,10 @@ import { getTenantContext } from '@/lib/tenant/context';
 import { runFormAction, formValues, type FormState } from '@/lib/forms';
 import { scheduleConfigSchema, sessionSchema, requirementSchema } from './schemas';
 import { saveConfig, deleteConfig } from './config';
-import { createVersion, publishVersion, deleteVersion } from './versions';
+import { createVersion, publishVersion, deleteVersion,
+  validateVersion,
+  reopenVersion,
+} from './versions';
 import { addSession, deleteSession } from './sessions';
 import { syncRequirementsFromAssignments, updateRequirement, deleteRequirement } from './requirements';
 import { setSessionLock } from './constraints/locks';
@@ -255,5 +258,23 @@ export async function moveSessionAction(
     const ctx = await getTenantContext(slug);
     await moveSession(ctx, versionId, sessionId, slotId);
     redirect(`/e/${slug}/schedule/${versionId}?deplacee=1`);
+  });
+}
+
+/** Vérifier une version avant de la diffuser. */
+export async function validateVersionAction(slug: string, id: string, _p: FormState, fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    await validateVersion(ctx, id, String(fd.get('note') ?? ''));
+    redirect(`/e/${slug}/schedule/${id}?validee=1`);
+  });
+}
+
+/** Rendre une version vérifiée à l'atelier. */
+export async function reopenVersionAction(slug: string, id: string, _p: FormState, _fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    await reopenVersion(ctx, id);
+    redirect(`/e/${slug}/schedule/${id}?rouverte=1`);
   });
 }

@@ -12,6 +12,9 @@ import { ConfirmSubmit } from '@/components/ui/confirm-submit';
 import { updateTeacherAction, archiveTeacherAction, createTeacherAccessAction } from '@/features/teachers/actions';
 import { SimpleSubmit } from '@/components/ui/simple-submit';
 import { Flash } from '@/components/ui/flash';
+import { listTeacherRules } from '@/features/teachers/availability';
+import { AvailabilityForm, AvailabilityList } from '@/features/teachers/components/AvailabilityPanel';
+import { createAvailabilityAction, deleteAvailabilityAction } from '@/features/teachers/availability-actions';
 
 export const metadata: Metadata = { title: "Modifier l'enseignant" };
 
@@ -28,6 +31,8 @@ export default async function EditTeacherPage({
   requirePageAccess(ctx, 'teachers.update');
 
   const teacher = await getTeacher(ctx, id);
+  const contraintes = await listTeacherRules(ctx, id);
+  const canAvailability = hasPermission(ctx, 'teachers.manage_availability');
   // Une séance dure ce que dure un créneau : le service se lit dans cette unité.
   const sessionMinutes = await schoolSessionMinutes(ctx);
   if (!teacher) notFound();
@@ -99,6 +104,21 @@ export default async function EditTeacherPage({
           <p className="text-sm text-[color:var(--muted-foreground)]">Vous n&apos;avez pas le droit de créer des accès.</p>
         )}
       </div>
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-medium uppercase tracking-wide text-[color:var(--muted-foreground)]">
+          Contraintes d’emploi du temps
+        </h2>
+        <p className="text-sm text-[color:var(--muted-foreground)]">
+          Les heures où cet enseignant ne peut pas être placé — autre établissement, obligation régulière. La génération
+          s’y tient ; « à éviter » reste un souhait, pas un blocage.
+        </p>
+        <AvailabilityList
+          rules={contraintes.map((r) => ({ ...r, deleteAction: deleteAvailabilityAction.bind(null, slug, id, r.id) }))}
+          canEdit={canAvailability}
+        />
+        {canAvailability ? <AvailabilityForm action={createAvailabilityAction.bind(null, slug, id)} /> : null}
+      </section>
 
       {hasPermission(ctx, 'teachers.delete') ? (
         <div className="rounded-[--radius-card] border border-dashed p-4">

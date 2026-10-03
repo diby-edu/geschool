@@ -5,7 +5,7 @@ import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/server';
-import { getVersion } from '@/features/schedule/versions';
+import { getVersion, validationRequired } from '@/features/schedule/versions';
 import { getConfig, getConfigForClass, listSlots, listPauses, getDayHours, getBreaks } from '@/features/schedule/config';
 import { GridSummary } from '@/features/schedule/components/GridSummary';
 import { listSessionsWithValidator } from '@/features/schedule/sessions';
@@ -16,6 +16,8 @@ import {
   addSessionAction,
   deleteSessionAction,
   publishVersionAction,
+  validateVersionAction,
+  reopenVersionAction,
   toggleSessionLockAction,
 } from '@/features/schedule/actions';
 import { AddSessionForm } from '@/features/schedule/components/AddSessionForm';
@@ -26,6 +28,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { SimpleSubmit } from '@/components/ui/simple-submit';
 import { ConfirmSubmit } from '@/components/ui/confirm-submit';
 import { ClassPicker } from '@/features/schedule/components/ClassPicker';
+import { ValidationPanel } from '@/features/schedule/components/ValidationPanel';
+
+const ETAT_VERSION: Record<string, string> = {
+  DRAFT: 'Brouillon',
+  VALIDATED: 'Vérifié, prêt à publier',
+  PUBLISHED: 'Publié',
+  ARCHIVED: 'Archivé',
+};
 
 export const metadata: Metadata = { title: 'Editeur emploi du temps' };
 
@@ -89,7 +99,11 @@ export default async function ScheduleEditorPage({
   // Figer une séance reste possible sur une version publiée : c'est même là
   // que l'école le fait, juste avant de relancer une génération.
   const canLock = hasPermission(ctx, 'schedule.lock');
-  const canPublish = hasPermission(ctx, 'schedule.publish') && editable;
+  // On ne publie que ce qui a été vérifié — sauf si l'école a retiré l'étape.
+  const etapeExigee = await validationRequired(ctx);
+  const verifie = version.status === 'VALIDATED' || !etapeExigee;
+  const canPublish = hasPermission(ctx, 'schedule.publish') && editable && verifie;
+  const canValidate = hasPermission(ctx, 'schedule.validate') && editable;
 
   const slotOptions = slots.map((s) => ({ id: s.id, label: `${DAY_ABBR[s.day_of_week]} ${hm(s.starts_at)}–${hm(s.ends_at)}` }));
   const classSessions = selectedClass ? sessions.filter((s) => s.class_id === selectedClass) : [];
@@ -98,10 +112,12 @@ export default async function ScheduleEditorPage({
     <div className="mx-auto max-w-5xl space-y-6">
       <Flash searchParams={sp} />
       {sp.published === '1' ? <Alert tone="success">Emploi du temps publié. Les occurrences ont été générées.</Alert> : null}
+      {sp.validee === '1' ? <Alert tone="success">Version vérifiée. Elle peut maintenant être publiée.</Alert> : null}
+      {sp.rouverte === '1' ? <Alert tone="info">Version rouverte : elle est de nouveau modifiable.</Alert> : null}
 
       <PageHeader
         title={version.name}
-        description={`${version.status === 'PUBLISHED' ? 'Publie' : version.status === 'ARCHIVED' ? 'Archive' : 'Brouillon'} · ${sessions.length} cours`}
+        description={`${ETAT_VERSION[version.status] ?? version.status} · ${sessions.length} cours`}
         action={
           <div className="flex items-center gap-2">
             <Link href={`/e/${slug}/schedule`} className="text-sm text-[color:var(--muted-foreground)] hover:underline">
@@ -118,6 +134,17 @@ export default async function ScheduleEditorPage({
           </div>
         }
       />
+
+      {etapeExigee ? (
+        <ValidationPanel
+          validate={validateVersionAction.bind(null, slug, versionId)}
+          reopen={reopenVersionAction.bind(null, slug, versionId)}
+          status={version.status}
+          validatedAt={version.validated_at}
+          note={version.validation_note}
+          canValidate={canValidate}
+        />
+      ) : null}
 
       {version.status === 'DRAFT' && version.source === 'GENERATED' && hasPermission(ctx, 'schedule.generate') ? (
         <Alert tone="info">
