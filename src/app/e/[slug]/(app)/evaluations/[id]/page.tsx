@@ -12,6 +12,8 @@ import {
   deleteAssessmentAction,
 } from '@/features/evaluations/actions';
 import { GradeGrid } from '@/features/evaluations/components/GradeGrid';
+import { RequestCorrections } from '@/features/evaluations/components/RequestCorrections';
+import { requestCorrectionAction } from '@/features/evaluations/correction-actions';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Flash } from '@/components/ui/flash';
 import { Alert } from '@/components/ui/alert';
@@ -61,6 +63,9 @@ export default async function AssessmentDetailPage({
   const canValidate = hasPermission(ctx, 'grades.validate');
   const canPublish = hasPermission(ctx, 'grades.publish');
   const canEdit = access.update;
+  // Après clôture, la note ne se change plus directement : on la demande.
+  const canAskCorrection =
+    hasPermission(ctx, 'grades.request_change') && (rel.status === 'CLOSED' || rel.status === 'PUBLISHED');
   // Déclarer sa saisie terminée : geste du propriétaire de l'évaluation.
   const canGrade = access.grade;
   const canDelete = access.delete;
@@ -144,6 +149,19 @@ export default async function AssessmentDetailPage({
           <Alert tone="info">Vous n’avez pas le droit de saisir des notes.</Alert>
         )}
       </section>
+
+      {canAskCorrection ? (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-[color:var(--muted-foreground)]">
+            Demander une correction
+          </h2>
+          <RequestCorrections
+            students={grid.students}
+            maxScore={grid.maxScore}
+            action={requestCorrectionAction.bind(null, slug)}
+          />
+        </section>
+      ) : null}
     </div>
   );
 }

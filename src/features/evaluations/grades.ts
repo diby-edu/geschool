@@ -11,6 +11,8 @@ import { getAssessment, requireAssessmentAccess } from './assessments';
 
 export type GradeGridStudent = {
   studentId: string;
+  /** La note en base, s'il y en a une : c'est elle qu'une demande de correction vise. */
+  gradeId: string | null;
   matricule: string;
   name: string;
   photoUrl: string | null;
@@ -55,7 +57,7 @@ export async function loadGradeGrid(ctx: TenantContext, assessmentId: string): P
 
   const { data: grades } = await supabase
     .from('grades')
-    .select('student_id, score, is_absent, is_excused, comment')
+    .select('id, student_id, score, is_absent, is_excused, comment')
     .eq('school_id', ctx.school.id)
     .eq('assessment_id', assessmentId);
   const byStudent = new Map((grades ?? []).map((g) => [g.student_id, g]));
@@ -72,6 +74,7 @@ export async function loadGradeGrid(ctx: TenantContext, assessmentId: string): P
       const path = e.students?.photo_url ?? null;
       return {
         studentId: e.student_id,
+        gradeId: g?.id ?? null,
         matricule: e.students?.matricule ?? '',
         name: e.students ? `${e.students.last_name.toUpperCase()} ${e.students.first_name}` : '—',
         photoUrl: path ? (signedByPath.get(path) ?? null) : null,
