@@ -26,6 +26,10 @@ export function bulletinStateLabel(status: string, signed: boolean): string {
 
 export type BulletinItem = {
   subject: string;
+  /** Nom de l'enseignant, figé à la génération. */
+  teacher: string | null;
+  /** Le mot du palier : « Bien », « Passable »… jamais une phrase. */
+  appreciation: string | null;
   coefficient: number;
   average: number | null;
   weighted: number | null;
@@ -50,5 +54,20 @@ export type BulletinDetail = {
   absences: number;
   lateness: number;
   head_teacher_comment: string | null;
+  council_comment: string | null;
+  /** Mention calculée, et l'additif libre que le conseil ajoute à côté. */
+  distinction_label: string | null;
+  distinction_note: string | null;
+  /** Renseignés sur le SEUL dernier bulletin de l'année. */
+  annual_average: number | null;
+  annual_rank: number | null;
+  decision_label: string | null;
+  /** Nombre de rectifications APRÈS remise aux familles. 0 = document d'origine. */
+  revision: number;
+  /**
+   * Les périodes DÉJÀ passées de la même année, pour le rappel imprimé.
+   * Vide sur le premier bulletin : il n'y a rien à rappeler.
+   */
+  previous: { name: string; average: number | null; rank: number | null }[];
   items: BulletinItem[];
 };

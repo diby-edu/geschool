@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
 import { requireWritable } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
-import { ConflictError } from '@/lib/errors';
+import { ConflictError, ValidationError } from '@/lib/errors';
 
 /**
  * Transitions groupées des bulletins d'une classe pour une période.
@@ -79,4 +79,85 @@ async function transition(
   const count = data?.length ?? 0;
   await audit(ctx, { action, module: 'reports', entityType: 'report_card', after: { classId, periodId, count, to } });
   return count;
+}
+
+/**
+ * Rouvrir des bulletins déjà validés — le geste du directeur, et de lui seul.
+ *
+ * Un bulletin validé est définitif : c'est la règle. Mais une erreur reconnue
+ * doit pouvoir être corrigée, et mieux vaut une porte étroite et tracée qu'une
+ * correction faite en base par quelqu'un d'énervé.
+ *
+ * Trois effets : le bulletin redevient modifiable, il perd sa signature (il
+ * faudra revalider et resigner), et s'il avait DÉJÀ été remis aux familles, son
+ * compteur de rectifications avance — le nouveau portera la mention.
+ */
+export async function unlockBulletins(
+  ctx: TenantContext,
+  classId: string,
+  periodId: string,
+  reason: string,
+): Promise<number> {
+  requireWritable(ctx, 'reports.unlock');
+  const motif = reason.trim();
+  if (motif.length < 5) {
+    throw new ValidationError('Dites pourquoi vous rouvrez ces bulletins : le motif reste inscrit dessus.');
+  }
+  const supabase = await createClient();
+
+  const { data: cibles, error: lecture } = await supabase
+    .from('report_cards')
+    .select('id, status, revision')
+    .eq('school_id', ctx.school.id)
+    .eq('class_id', classId)
+    .eq('academic_period_id', periodId)
+    .in('status', ['VALIDATED', 'PUBLISHED']);
+  if (lecture) throw lecture;
+
+  const liste = (cibles ?? []) as { id: string; status: string; revision: number }[];
+  if (liste.length === 0) {
+    throw new ConflictError('Aucun bulletin validé ou publié à rouvrir pour cette classe.');
+  }
+
+  const commun = {
+    status: 'GENERATED' as const,
+    unlocked_at: new Date().toISOString(),
+    unlocked_by: ctx.user.id,
+    unlock_reason: motif,
+    // Rouvert, il doit repasser par la validation puis la signature.
+    signed_at: null,
+    signed_by: null,
+    published_at: null,
+  };
+
+  // Les bulletins DÉJÀ remis aux familles comptent une rectification de plus ;
+  // ceux qui n'étaient que validés n'en comptent pas : les corriger avant
+  // publication, c'est du travail normal.
+  const remis = liste.filter((b) => b.status === 'PUBLISHED');
+  const nonRemis = liste.filter((b) => b.status !== 'PUBLISHED');
+
+  if (nonRemis.length > 0) {
+    const { error } = await supabase
+      .from('report_cards')
+      .update(commun)
+      .eq('school_id', ctx.school.id)
+      .in('id', nonRemis.map((b) => b.id));
+    if (error) throw error;
+  }
+  for (const b of remis) {
+    const { error } = await supabase
+      .from('report_cards')
+      .update({ ...commun, revision: (b.revision ?? 0) + 1 })
+      .eq('school_id', ctx.school.id)
+      .eq('id', b.id);
+    if (error) throw error;
+  }
+
+  await audit(ctx, {
+    action: 'reports.unlock',
+    module: 'reports',
+    entityType: 'report_card',
+    after: { classId, periodId, count: liste.length, rectifies: remis.length, reason: motif },
+  });
+  return liste.length;
 }

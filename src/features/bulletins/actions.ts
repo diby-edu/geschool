@@ -5,7 +5,9 @@ import { getTenantContext } from '@/lib/tenant/context';
 import { runFormAction, type FormState } from '@/lib/forms';
 import { ValidationError } from '@/lib/errors';
 import { generateForClass } from './generate';
-import { validateBulletins, signBulletins, publishBulletins, unpublishBulletins } from './workflow';
+import { validateBulletins, signBulletins, publishBulletins, unpublishBulletins,
+  unlockBulletins,
+} from './workflow';
 
 function requireSelection(classId: string, periodId: string): void {
   if (!classId || !periodId) throw new ValidationError('Choisissez une classe et une période.');
@@ -49,5 +51,20 @@ export async function unpublishBulletinsAction(slug: string, classId: string, pe
     const ctx = await getTenantContext(slug);
     const n = await unpublishBulletins(ctx, classId, periodId);
     redirect(`/e/${slug}/bulletins?class=${classId}&period=${periodId}&unpublished=${n}`);
+  });
+}
+
+/** Rouvrir des bulletins validés : le motif est obligatoire, et il reste dessus. */
+export async function unlockBulletinsAction(
+  slug: string,
+  classId: string,
+  periodId: string,
+  _p: FormState,
+  fd: FormData,
+): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    const n = await unlockBulletins(ctx, classId, periodId, String(fd.get('reason') ?? ''));
+    redirect(`/e/${slug}/bulletins?class=${classId}&period=${periodId}&unlocked=${n}`);
   });
 }

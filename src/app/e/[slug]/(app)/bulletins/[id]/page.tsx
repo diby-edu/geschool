@@ -5,6 +5,7 @@ import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { getBulletin, BULLETIN_STATUS } from '@/features/bulletins/queries';
 import { BulletinView } from '@/features/bulletins/components/BulletinView';
+import { bulletinRender } from '@/features/bulletins/render';
 import { PrintButton } from '@/features/bulletins/components/PrintButton';
 import { AppreciationAssistant } from '@/features/ai/components/AppreciationAssistant';
 import { suggestAppreciationAction, saveAppreciationAction } from '@/features/ai/actions';
@@ -29,6 +30,7 @@ export default async function BulletinDetailPage({
   requireFeature(ctx, 'bulletins');
 
   const b = await getBulletin(ctx, id);
+  const rendu = await bulletinRender(ctx);
   if (!b) notFound();
 
   const canAppreciate = hasPermission(ctx, 'reports.validate') && b.status !== 'PUBLISHED';
@@ -45,7 +47,7 @@ export default async function BulletinDetailPage({
 
       {sp.appreciation === '1' ? <Alert tone="success">Appréciation enregistrée.</Alert> : null}
 
-      <BulletinView b={b} />
+      <BulletinView b={b} {...rendu} />
 
       {canAppreciate ? (
         <Card className="no-print">

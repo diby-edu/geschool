@@ -454,6 +454,45 @@ export type Database = {
         }
         Relationships: []
       }
+      attendance_alerts: {
+        Row: {
+          id: string
+          school_id: string
+          student_id: string
+          academic_period_id: string
+          kind: Database['public']['Enums']["attendance_alert_kind"]
+          threshold_hours: number
+          hours_at_alert: number
+          recipients: number
+          sms_sent: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          student_id: string
+          academic_period_id: string
+          kind: Database['public']['Enums']["attendance_alert_kind"]
+          threshold_hours: number
+          hours_at_alert: number
+          recipients?: number
+          sms_sent?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          student_id?: string
+          academic_period_id?: string
+          kind?: Database['public']['Enums']["attendance_alert_kind"]
+          threshold_hours?: number
+          hours_at_alert?: number
+          recipients?: number
+          sms_sent?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
       attendance_records: {
         Row: {
           id: string
@@ -1127,6 +1166,72 @@ export type Database = {
           checksum?: string | null
           visibility?: Database['public']['Enums']["document_visibility"]
           uploaded_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      grade_change_requests: {
+        Row: {
+          id: string
+          school_id: string
+          grade_id: string
+          assessment_id: string
+          student_id: string
+          teacher_id: string | null
+          old_score: number | null
+          old_is_absent: boolean
+          new_score: number | null
+          new_is_absent: boolean
+          reason: string
+          status: Database['public']['Enums']["grade_change_status"]
+          requested_by: string
+          requested_at: string
+          decided_by: string | null
+          decided_at: string | null
+          decision_reason: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          grade_id: string
+          assessment_id: string
+          student_id: string
+          teacher_id?: string | null
+          old_score?: number | null
+          old_is_absent?: boolean
+          new_score?: number | null
+          new_is_absent?: boolean
+          reason: string
+          status?: Database['public']['Enums']["grade_change_status"]
+          requested_by: string
+          requested_at?: string
+          decided_by?: string | null
+          decided_at?: string | null
+          decision_reason?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          grade_id?: string
+          assessment_id?: string
+          student_id?: string
+          teacher_id?: string | null
+          old_score?: number | null
+          old_is_absent?: boolean
+          new_score?: number | null
+          new_is_absent?: boolean
+          reason?: string
+          status?: Database['public']['Enums']["grade_change_status"]
+          requested_by?: string
+          requested_at?: string
+          decided_by?: string | null
+          decided_at?: string | null
+          decision_reason?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1831,6 +1936,27 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_settings: {
+        Row: {
+          namespace: string
+          settings: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          namespace: string
+          settings?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          namespace?: string
+          settings?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       push_subscriptions: {
         Row: {
           id: string
@@ -1975,6 +2101,15 @@ export type Database = {
           updated_at: string
           signed_by: string | null
           signed_at: string | null
+          annual_average: number | null
+          annual_rank: number | null
+          distinction_label: string | null
+          distinction_note: string | null
+          decision_label: string | null
+          unlocked_at: string | null
+          unlocked_by: string | null
+          unlock_reason: string | null
+          revision: number
         }
         Insert: {
           id?: string
@@ -2002,6 +2137,15 @@ export type Database = {
           updated_at?: string
           signed_by?: string | null
           signed_at?: string | null
+          annual_average?: number | null
+          annual_rank?: number | null
+          distinction_label?: string | null
+          distinction_note?: string | null
+          decision_label?: string | null
+          unlocked_at?: string | null
+          unlocked_by?: string | null
+          unlock_reason?: string | null
+          revision?: number
         }
         Update: {
           id?: string
@@ -2029,6 +2173,15 @@ export type Database = {
           updated_at?: string
           signed_by?: string | null
           signed_at?: string | null
+          annual_average?: number | null
+          annual_rank?: number | null
+          distinction_label?: string | null
+          distinction_note?: string | null
+          decision_label?: string | null
+          unlocked_at?: string | null
+          unlocked_by?: string | null
+          unlock_reason?: string | null
+          revision?: number
         }
         Relationships: []
       }
@@ -2667,6 +2820,9 @@ export type Database = {
           created_at: string
           updated_at: string
           created_by: string | null
+          validated_at: string | null
+          validated_by: string | null
+          validation_note: string | null
         }
         Insert: {
           id?: string
@@ -2684,6 +2840,9 @@ export type Database = {
           created_at?: string
           updated_at?: string
           created_by?: string | null
+          validated_at?: string | null
+          validated_by?: string | null
+          validation_note?: string | null
         }
         Update: {
           id?: string
@@ -2701,6 +2860,9 @@ export type Database = {
           created_at?: string
           updated_at?: string
           created_by?: string | null
+          validated_at?: string | null
+          validated_by?: string | null
+          validation_note?: string | null
         }
         Relationships: []
       }
@@ -3013,6 +3175,75 @@ export type Database = {
         }
         Relationships: []
       }
+      sms_messages: {
+        Row: {
+          id: string
+          school_id: string | null
+          to_e164: string
+          body: string
+          sender: string
+          provider: string
+          provider_message_id: string | null
+          status: Database['public']['Enums']["sms_status"]
+          parts: number
+          cost: number | null
+          error_code: string | null
+          error_message: string | null
+          permanent_failure: boolean
+          attempts: number
+          reference: string
+          kind: string
+          created_by: string | null
+          created_at: string
+          delivered_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          school_id?: string | null
+          to_e164: string
+          body: string
+          sender: string
+          provider: string
+          provider_message_id?: string | null
+          status?: Database['public']['Enums']["sms_status"]
+          parts?: number
+          cost?: number | null
+          error_code?: string | null
+          error_message?: string | null
+          permanent_failure?: boolean
+          attempts?: number
+          reference: string
+          kind?: string
+          created_by?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          school_id?: string | null
+          to_e164?: string
+          body?: string
+          sender?: string
+          provider?: string
+          provider_message_id?: string | null
+          status?: Database['public']['Enums']["sms_status"]
+          parts?: number
+          cost?: number | null
+          error_code?: string | null
+          error_message?: string | null
+          permanent_failure?: boolean
+          attempts?: number
+          reference?: string
+          kind?: string
+          created_by?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       staff_profiles: {
         Row: {
           id: string
@@ -3260,7 +3491,6 @@ export type Database = {
           email: string | null
           status: Database['public']['Enums']["student_status"]
           notes: string | null
-          medical_notes: string | null
           deleted_at: string | null
           created_at: string
           updated_at: string
@@ -3285,7 +3515,6 @@ export type Database = {
           email?: string | null
           status?: Database['public']['Enums']["student_status"]
           notes?: string | null
-          medical_notes?: string | null
           deleted_at?: string | null
           created_at?: string
           updated_at?: string
@@ -3310,7 +3539,6 @@ export type Database = {
           email?: string | null
           status?: Database['public']['Enums']["student_status"]
           notes?: string | null
-          medical_notes?: string | null
           deleted_at?: string | null
           created_at?: string
           updated_at?: string
@@ -3972,6 +4200,7 @@ export type Database = {
       application_status: "SUBMITTED" | "UNDER_REVIEW" | "ACCEPTED" | "REJECTED" | "ENROLLED" | "CANCELLED"
       assessment_status: "DRAFT" | "OPEN" | "CLOSED" | "PUBLISHED"
       assignment_status: "DRAFT" | "ACTIVE" | "ENDED"
+      attendance_alert_kind: "ALERT" | "SUMMONS"
       attendance_register_status: "OPEN" | "SUBMITTED" | "VALIDATED"
       attendance_status: "PRESENT" | "ABSENT" | "LATE" | "EXCUSED"
       availability_kind: "AVAILABLE" | "UNAVAILABLE" | "PREFERRED" | "AVOID"
@@ -3998,6 +4227,7 @@ export type Database = {
       enrollment_status: "ENROLLED" | "TRANSFERRED_OUT" | "WITHDRAWN" | "COMPLETED"
       gender: "M" | "F" | "OTHER"
       generation_job_status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED"
+      grade_change_status: "PENDING" | "ACCEPTED" | "REFUSED" | "APPLIED_WITHOUT_CONSENT"
       grading_scale_kind: "NUMERIC" | "LETTER"
       group_kind: "LANGUAGE" | "OPTION" | "ACTIVITY" | "PEDAGOGICAL" | "SUPPORT" | "OTHER"
       group_status: "ACTIVE" | "ARCHIVED"
@@ -4025,6 +4255,7 @@ export type Database = {
       scope_type: "GLOBAL" | "SCHOOL" | "CYCLE" | "LEVEL" | "CLASS" | "GROUP" | "SUBJECT" | "CHILDREN" | "SELF"
       session_target_type: "CLASS" | "GROUP"
       settings_namespace: "academic" | "grading" | "attendance" | "schedule" | "reporting" | "notifications" | "access"
+      sms_status: "QUEUED" | "SENT" | "DELIVERED" | "FAILED"
       solver_status: "OPTIMAL" | "FEASIBLE" | "INFEASIBLE" | "TIME_LIMIT" | "UNKNOWN"
       student_status: "ACTIVE" | "TRANSFERRED" | "GRADUATED" | "DROPPED" | "SUSPENDED" | "ARCHIVED"
       subscription_status: "TRIALING" | "ACTIVE" | "PAST_DUE" | "SUSPENDED" | "CANCELLED"

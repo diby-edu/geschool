@@ -5,6 +5,7 @@ import { getTenantContext } from '@/lib/tenant/context';
 import { requireFeature } from '@/lib/permissions/guard';
 import { getBulletin } from '@/features/bulletins/queries';
 import { BulletinView } from '@/features/bulletins/components/BulletinView';
+import { bulletinRender } from '@/features/bulletins/render';
 import { PrintButton } from '@/features/bulletins/components/PrintButton';
 import { Button } from '@/components/ui/button';
 
@@ -17,6 +18,7 @@ export default async function MonBulletinPage({ params }: { params: Promise<{ sl
 
   // RLS : ne renvoie le bulletin que s'il est PUBLIÉ et visible par l'utilisateur.
   const b = await getBulletin(ctx, id);
+  const rendu = await bulletinRender(ctx);
   if (!b || b.status !== 'PUBLISHED') notFound();
 
   return (
@@ -25,7 +27,7 @@ export default async function MonBulletinPage({ params }: { params: Promise<{ sl
         <Link href={`/e/${slug}/mes-bulletins`}><Button variant="ghost">Retour</Button></Link>
         <PrintButton />
       </div>
-      <BulletinView b={b} />
+      <BulletinView b={b} {...rendu} />
     </div>
   );
 }

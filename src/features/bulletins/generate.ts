@@ -1,6 +1,10 @@
 import 'server-only';
 import { classTrack } from '@/features/evaluations/refs';
-import { gradingParams, rpcArgs } from '@/features/evaluations/scale';
+import { gradingParams, rpcArgs, subjectArgs } from '@/features/evaluations/scale';
+import { readReportingSettings } from '@/features/reporting/settings';
+import { listGradingPeriods, isLastPeriod, periodsBefore } from '@/features/reporting/periods';
+import { annualAverages, rounder } from '@/features/reporting/annual';
+import { fillDecisionLabel, suggestDecision, tierFor } from '@/features/reporting/config';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
@@ -102,11 +106,15 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
   // Classement général (moyenne générale, rang, effectif).
   // Bareme de l'etablissement (maximum, decimales, arrondi, absences).
   const params = await gradingParams(ctx);
-  const { data: rankData } = await supabase.rpc('class_period_ranking' as never, {
+  const { data: rankData, error: rankErr } = await supabase.rpc('class_period_ranking' as never, {
     p_class: classId,
     p_period: periodId,
     ...rpcArgs(params),
   } as never);
+  // Sans ce controle, un calcul qui echoue produisait 50 bulletins vides, sans
+  // une moyenne, sans un rang — et sans le moindre message. Un bulletin faux
+  // est pire qu'un bulletin refuse.
+  if (rankErr) throw new Error(`Calcul des moyennes generales impossible : ${rankErr.message}`);
   const ranking = new Map(
     ((rankData ?? []) as unknown as { student_id: string; general_average: number | null; rank_position: number | null; class_size: number }[])
       .map((r) => [r.student_id, r]),
@@ -119,12 +127,13 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
   type SubjStat = { average: Map<string, number | null>; classAvg: number | null; min: number | null; max: number | null; rank: Map<string, number> };
   const subjStats = new Map<string, SubjStat>();
   for (const s of subjects) {
-    const { data: rows } = await supabase.rpc('class_subject_averages' as never, {
+    const { data: rows, error: subjErr } = await supabase.rpc('class_subject_averages' as never, {
       p_class: classId,
       p_period: periodId,
       p_subject: s.id,
-      ...rpcArgs(params),
+      ...subjectArgs(params),
     } as never);
+    if (subjErr) throw new Error(`Calcul des moyennes de « ${s.name} » impossible : ${subjErr.message}`);
     const list = ((rows ?? []) as unknown as { student_id: string; average: number | null }[]).map((r) => ({ student_id: r.student_id, average: r.average === null ? null : Number(r.average) }));
     const avgMap = new Map(list.map((r) => [r.student_id, r.average]));
     const values = list.map((r) => r.average).filter((a): a is number => a !== null);
@@ -144,10 +153,59 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
   // Absences / retards de la période (une requête, tally en mémoire).
   const { absences, lateness } = await countAttendance(ctx, studentIds, period.starts_on, period.ends_on);
 
+  // Les règles d'écriture de l'établissement : appréciations, mentions,
+  // décisions, coefficients de période. Rien n'est écrit à la main.
+  const reporting = await readReportingSettings(ctx);
+  const round = rounder(params.decimals, params.rounding);
+
+  // Qui enseigne quoi dans cette classe : le nom est FIGÉ sur le bulletin, il
+  // doit rester lisible même si l'enseignant quitte l'établissement.
+  const teacherBySubject = await teachersOfClass(ctx, classId, yearId);
+
+  // La dernière période de l'année porte, elle seule, la moyenne annuelle, la
+  // mention de l'année et la décision de passage. Aucun réglage : c'est le rang
+  // le plus haut dans l'ordre d'enseignement de la classe.
+  const gradingPeriods = await listGradingPeriods(ctx, yearId);
+  const isLast = isLastPeriod(gradingPeriods, track, periodId);
+  const previousPeriods = periodsBefore(gradingPeriods, track, periodId);
+  const currentSequence = gradingPeriods.find((p) => p.id === periodId)?.sequence ?? 1;
+
+  const annual = isLast
+    ? await annualAverages(
+        ctx,
+        classId,
+        previousPeriods,
+        currentSequence,
+        new Map([...ranking].map(([id, r]) => [id, r.general_average === null ? null : Number(r.general_average)])),
+        reporting.periodWeights,
+        round,
+      )
+    : null;
+
+  if (annual && annual.missingPeriods.length > 0) {
+    throw new ValidationError(
+      `Ce bulletin clôt l'année : il porte la moyenne annuelle et la décision du conseil. ` +
+        `Or aucun bulletin n'a été généré pour ${annual.missingPeriods.join(', ')}. ` +
+        'Générez-les d’abord, sinon la moyenne annuelle serait amputée d’une période.',
+    );
+  }
+
+  const nextLevel = isLast ? await nextLevelName(ctx, klass.level_id) : null;
+
   // Snapshot par élève.
   let generated = 0;
   for (const studentId of studentIds) {
     const r = ranking.get(studentId);
+    const generalAverage = r?.general_average === null || r?.general_average === undefined ? null : Number(r.general_average);
+
+    // La mention de la période : un palier, jamais une phrase choisie.
+    const mention = tierFor(reporting.termMentions, generalAverage);
+
+    // Le bilan de l'année, sur le dernier bulletin seulement.
+    const annualAverage = annual?.averages.get(studentId) ?? null;
+    const yearMention = isLast ? tierFor(reporting.yearMentions, annualAverage) : null;
+    const decision = isLast ? suggestDecision(reporting.decisions, annualAverage) : null;
+
     const { data: card, error: cardErr } = await supabase
       .from('report_cards')
       .upsert(
@@ -162,6 +220,16 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
           rank: r?.rank_position ?? null,
           class_size: classSize,
           class_average: classGeneralAvg,
+          // La mention de l'année remplace celle de la période sur le dernier
+          // bulletin : c'est le bilan qui compte, pas le dernier trimestre.
+          distinction: (yearMention ?? mention)?.code ?? 'NONE',
+          distinction_label: (yearMention ?? mention)?.label ?? null,
+          annual_average: annualAverage,
+          annual_rank: annual?.ranks.get(studentId) ?? null,
+          // Une PROPOSITION : le conseil de classe reste souverain et peut en
+          // changer avant de valider.
+          decision: decision?.code ?? null,
+          decision_label: decision ? fillDecisionLabel(decision.label, klass.name, nextLevel) : null,
           absences_count: absences.get(studentId) ?? 0,
           lateness_count: lateness.get(studentId) ?? 0,
           generated_at: new Date().toISOString(),
@@ -185,8 +253,12 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
         report_card_id: card.id,
         subject_id: s.id,
         subject_name_snapshot: s.name,
+        teacher_name_snapshot: teacherBySubject.get(s.id) ?? null,
         coefficient: s.coefficient,
         average: avg,
+        // Le mot de la colonne « Appréciation » : le palier de la moyenne de
+        // la matière, selon les seuils de l'établissement.
+        appreciation: tierFor(reporting.subjectTiers, avg)?.label ?? null,
         // Une matière facultative qui n'entre pas dans la moyenne générale
         // (réglage « bonus » ou « hors moyenne ») ne porte pas de points : sa
         // note reste affichée, mais elle ne s'ajoute pas au total. En « elle
@@ -210,6 +282,63 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * Qui enseigne quelle matière dans cette classe, sous la forme imprimée sur le
+ * bulletin. Le nom est FIGÉ à la génération : un enseignant qui part en cours
+ * d'année reste celui qui a noté ce trimestre-là.
+ */
+async function teachersOfClass(ctx: TenantContext, classId: string, yearId: string): Promise<Map<string, string>> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('teaching_assignments')
+    .select('subject_id, teachers(first_name, last_name, gender)')
+    .eq('school_id', ctx.school.id)
+    .eq('class_id', classId)
+    .eq('academic_year_id', yearId);
+
+  const out = new Map<string, string>();
+  for (const row of (data ?? []) as unknown as {
+    subject_id: string | null;
+    teachers: { first_name: string; last_name: string; gender: string | null } | null;
+  }[]) {
+    if (!row.subject_id || !row.teachers) continue;
+    // Une matière peut avoir plusieurs affectations (groupes) : la première
+    // suffit, la colonne du bulletin ne porte qu'un nom.
+    if (out.has(row.subject_id)) continue;
+    const t = row.teachers;
+    const civilite = t.gender === 'FEMALE' ? 'Mme' : t.gender === 'MALE' ? 'M.' : '';
+    out.set(row.subject_id, `${civilite} ${t.last_name} ${t.first_name}`.trim());
+  }
+  return out;
+}
+
+/**
+ * La classe d'arrivée, pour les établissements qui écrivent « Admis(e) en
+ * classe de Terminale D » plutôt que « en classe supérieure ». Le passage d'un
+ * cycle à l'autre n'est pas devinable : on renvoie alors rien, et le libellé
+ * retombe sur « supérieure ».
+ */
+async function nextLevelName(ctx: TenantContext, levelId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: current } = await supabase
+    .from('levels')
+    .select('cycle_id, sequence')
+    .eq('school_id', ctx.school.id)
+    .eq('id', levelId)
+    .maybeSingle();
+  if (!current) return null;
+  const { data: next } = await supabase
+    .from('levels')
+    .select('name')
+    .eq('school_id', ctx.school.id)
+    .eq('cycle_id', current.cycle_id)
+    .gt('sequence', current.sequence)
+    .order('sequence')
+    .limit(1)
+    .maybeSingle();
+  return next?.name ?? null;
 }
 
 async function countAttendance(

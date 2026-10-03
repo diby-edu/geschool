@@ -12,11 +12,13 @@ import {
   signBulletinsAction,
   publishBulletinsAction,
   unpublishBulletinsAction,
+  unlockBulletinsAction,
 } from '@/features/bulletins/actions';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Alert } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { UnlockForm } from '@/features/bulletins/components/UnlockForm';
 import { SimpleSubmit } from '@/components/ui/simple-submit';
 
 export const metadata: Metadata = { title: 'Bulletins' };
@@ -60,10 +62,14 @@ export default async function BulletinsPage({
   const canValidate = hasPermission(ctx, 'reports.validate');
   const canPublish = hasPermission(ctx, 'reports.publish');
   const canSign = hasPermission(ctx, 'reports.sign');
+  const canPrint = hasPermission(ctx, 'reports.print');
+  const canTemplate = hasPermission(ctx, 'reports.manage_template');
   const anyPublished = bulletins.some((b) => b.status === 'PUBLISHED');
   const anyGenerated = bulletins.some((b) => b.status === 'GENERATED');
   const anyToSign = bulletins.some((b) => b.status === 'VALIDATED' && !b.signed);
   const anyReadyToPublish = bulletins.some((b) => b.status === 'VALIDATED' && b.signed);
+  const canUnlock = hasPermission(ctx, 'reports.unlock');
+  const verrouilles = bulletins.filter((b) => b.status === 'VALIDATED' || b.status === 'PUBLISHED').length;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -118,6 +124,26 @@ export default async function BulletinsPage({
             ) : null}
             {canPublish && anyPublished ? (
               <SimpleSubmit action={unpublishBulletinsAction.bind(null, slug, classId, periodId)} label="Dépublier" small />
+            ) : null}
+            {canPrint && bulletins.length > 0 ? (
+              <Link href={`${base}/imprimer?class=${classId}&period=${periodId}`}>
+                <Button variant="secondary" size="sm">
+                  Éditer le PDF de la classe
+                </Button>
+              </Link>
+            ) : null}
+            {canTemplate ? (
+              <Link href={`${base}/modele`}>
+                <Button variant="ghost" size="sm">
+                  Modèle de bulletin
+                </Button>
+              </Link>
+            ) : null}
+            {canUnlock && verrouilles > 0 ? (
+              <UnlockForm
+                action={unlockBulletinsAction.bind(null, slug, classId, periodId)}
+                published={bulletins.filter((b) => b.status === 'PUBLISHED').length}
+              />
             ) : null}
           </div>
 
