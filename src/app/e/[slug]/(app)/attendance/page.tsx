@@ -86,6 +86,7 @@ export default async function AttendancePage({
           klass={chosen.klass}
           subject={chosen.subject}
           dateLabel={TODAY_LABEL}
+          startsAt={chosen.startsIso}
           timeLabel={`${chosen.startsAt}–${chosen.endsAt}`}
           editable={appel.editable}
           students={appel.students}

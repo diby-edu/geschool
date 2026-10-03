@@ -105,7 +105,17 @@ export async function loadAppel(ctx: TenantContext, occurrenceId: string): Promi
     students.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  const editable = !reg || reg.status === 'OPEN' || hasPermission(ctx, 'attendance.update');
+  // Modifiable tant que le creneau dure (OPEN ou deja SUBMITTED) ; ferme des
+  // que la vie scolaire a valide, ou des que le cours est termine.
+  //
+  // La fenetre du creneau compte dans l'AFFICHAGE, pas seulement a l'ecriture :
+  // sans cela l'ecran proposait de corriger un appel que le serveur refusait
+  // ensuite. L'appel ne se fait que pendant le cours — c'est aussi ce qui
+  // atteste que l'enseignant etait la.
+  const dansLeCreneau = await canActOnOccurrence(ctx, occurrenceId);
+  const editable =
+    hasPermission(ctx, 'attendance.update') ||
+    (dansLeCreneau && (!reg || reg.status === 'OPEN' || reg.status === 'SUBMITTED'));
 
   return {
     occurrenceId,
@@ -128,8 +138,14 @@ export async function submitRegister(ctx: TenantContext, registerId: string): Pr
     .eq('id', registerId)
     .maybeSingle();
   if (!reg) throw new NotFoundError('Appel introuvable.');
+  // requireCanAct verifie que le creneau couvre l'instant present : c'est LUI
+  // le verrou, pas la validation. Un enseignant qui valide en debut d'heure
+  // doit pouvoir corriger l'eleve arrive en retard, tant que le cours dure.
+  // Seul un appel deja VALIDE par la vie scolaire se ferme definitivement.
   await requireCanAct(ctx, reg.session_occurrence_id);
-  if (reg.status !== 'OPEN') throw new ConflictError('Cet appel a déjà été soumis.');
+  if (reg.status === 'VALIDATED') {
+    throw new ConflictError('Cet appel a été validé par la vie scolaire : il ne peut plus être modifié.');
+  }
   const { error } = await supabase
     .from('attendance_registers')
     .update({ status: 'SUBMITTED' })

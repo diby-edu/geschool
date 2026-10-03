@@ -10,24 +10,31 @@ import { clock, coversNow } from './day-phase';
  * Detection du « cours actuel » d'un enseignant (module Presence, cahier des
  * charges §3) : identifie automatiquement la seance de son emploi du temps
  * dont le creneau couvre l'instant present, sans lui faire choisir une
- * classe. Une marge de 10 minutes de part et d'autre absorbe les debuts /
- * fins de cours legerement decales, sans faire disparaitre le cours trop tot.
+ * classe.
+ *
+ * AUCUNE MARGE, ni avant ni apres : l'appel n'existe que pendant le cours.
+ * Une marge apres la fin ferait se contredire deux cours qui se suivent — un
+ * enseignant dont l'heure s'acheve a 8h00 marquerait un eleve absent a 8h05,
+ * alors que le suivant vient de le noter present a 8h00.
  */
 
-const GRACE_MINUTES = 10;
+const GRACE_MINUTES = 0;
 
 export type CurrentCourseOption = {
   occurrenceId: string;
   classId: string | null;
   klass: string;
   subject: string;
+  /** Heure affichee, dans le fuseau de l'etablissement (« 07:00 »). */
   startsAt: string;
   endsAt: string;
+  /** Instant complet du debut : le retard se mesure a partir de lui. */
+  startsIso: string;
   registerStatus: string | null;
 };
 
 /** Séance datée de l'enseignant, pour un jour donné (tableau de bord, cours actuel). */
-export type TeacherDaySession = CurrentCourseOption & { startsIso: string; endsIso: string };
+export type TeacherDaySession = CurrentCourseOption & { endsIso: string };
 
 /**
  * Séances de CE jour de la version publiée où l'enseignant intervient, avec
@@ -102,5 +109,5 @@ export async function getCurrentCoursesForTeacher(ctx: TenantContext): Promise<C
   const sessions = await listMySessionsOn(ctx, teacherId, schoolToday(ctx.school.timezone, now));
   return sessions
     .filter((s) => coversNow(s.startsIso, s.endsIso, now, GRACE_MINUTES))
-    .map(({ startsIso: _s, endsIso: _e, ...course }) => course);
+    .map(({ endsIso: _e, ...course }) => course);
 }

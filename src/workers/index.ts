@@ -4,13 +4,17 @@ import { serverEnv } from '@/lib/env';
 /**
  * Processus worker (PM2 : geschool-worker).
  *
- * Il consomme les files pg-boss : generation d'emploi du temps, envoi des
- * identifiants, rendu des bulletins, imports, maintenance.
+ * Il consomme les files pg-boss et fait tourner les taches recurrentes.
  *
- * AUCUN GESTIONNAIRE N'EST ENCORE ENREGISTRE. Les files arrivent avec les lots
- * qui les justifient (5, 7, 10). Le processus demarre, se connecte et attend :
- * c'est son etat normal a ce stade, et il vaut mieux le dire que simuler une
- * activite inexistante.
+ * Deux taches aujourd'hui, toutes deux quotidiennes :
+ *   * les ALERTES D'ABSENCE : compter les heures de chaque eleve sur la periode
+ *     et prevenir au franchissement des seuils regles par l'etablissement ;
+ *   * les ACCUSES DE RECEPTION SMS : demander a l'operateur ce que sont
+ *     devenus les messages partis mais non confirmes, tant que l'application
+ *     n'a pas d'adresse publique ou il puisse les pousser lui-meme.
+ *
+ * Les files de generation d'emploi du temps et d'envoi d'identifiants restent
+ * declenchees depuis l'application, pas d'ici.
  */
 
 const env = serverEnv();
@@ -44,7 +48,8 @@ async function main(): Promise<void> {
   console.warn(
     `[worker] demarre — schema "${env.PGBOSS_SCHEMA}", concurrence ${env.WORKER_CONCURRENCY}`,
   );
-  console.warn('[worker] aucune file enregistrée à ce stade (lots 5, 7 et 10).');
+
+  await enregistrerTaches(boss);
 
   // Arret propre : laisser les jobs en cours se terminer plutot que les
   // interrompre a mi-parcours. Un envoi de SMS coupe en deux se traduirait par
@@ -66,6 +71,45 @@ async function main(): Promise<void> {
 
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
   process.on('SIGINT', () => void shutdown('SIGINT'));
+}
+
+/**
+ * Les taches recurrentes.
+ *
+ * pg-boss garde l'horaire en base : meme si le worker redemarre, la tache ne
+ * se rejoue pas deux fois le meme jour. L'heure est fixee le matin, avant que
+ * l'ecole ouvre — une alerte d'absence arrivee a 3 h du matin n'est lue par
+ * personne, mais elle est prete quand le parent allume son telephone.
+ */
+async function enregistrerTaches(boss: PgBoss): Promise<void> {
+  const ALERTES = 'attendance-alerts';
+  const ACCUSES = 'sms-delivery-reports';
+
+  await boss.createQueue(ALERTES);
+  await boss.createQueue(ACCUSES);
+
+  await boss.work(ALERTES, async () => {
+    const { runAttendanceAlerts } = await import('@/services/attendance-alerts');
+    const bilan = await runAttendanceAlerts();
+    console.warn(
+      `[worker] alertes d'absence : ${bilan.alerts} alerte(s), ${bilan.summons} convocation(s), ` +
+        `${bilan.notified} personne(s) prevenue(s) sur ${bilan.schools} ecole(s)` +
+        (bilan.smsSent > 0 ? `, ${bilan.smsSent} SMS pour ${bilan.smsCost}` : ''),
+    );
+  });
+
+  await boss.work(ACCUSES, async () => {
+    const { refreshPendingStatuses } = await import('@/services/sms-log');
+    const r = await refreshPendingStatuses(200);
+    console.warn(`[worker] accuses de reception : ${r.checked} verifie(s), ${r.delivered} arrive(s), ${r.failed} echec(s)`);
+  });
+
+  // 6 h 00 et 6 h 15, heure du serveur.
+  await boss.schedule(ALERTES, '0 6 * * *');
+  await boss.schedule(ACCUSES, '15 6 * * *');
+  console.warn(
+    "[worker] taches quotidiennes enregistrees : alertes d'absence (6 h), accuses de reception (6 h 15).",
+  );
 }
 
 main().catch((error: unknown) => {

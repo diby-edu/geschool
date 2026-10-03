@@ -42,11 +42,18 @@ function StatusIndicator({ status }: { status: Status }) {
   );
 }
 
-// Une minute de retard par defaut : aucune saisie de duree dans ce parcours
-// rapide (une seule pression change l'etat). Le detail (duree exacte,
-// commentaire) reste modifiable via l'ecran classique tant que l'appel n'est
-// pas verrouille.
-const DEFAULT_LATE_MINUTES = 5;
+/**
+ * Le retard n'est pas saisi : il se DEDUIT de l'heure du creneau.
+ *
+ * Un cours de 7h a 9h, un eleve marque en retard a 8h30 : le retard vaut
+ * 1 h 30. Aucune duree en dur, aucune saisie — l'enseignant clique, l'heure
+ * fait le reste.
+ */
+function minutesDepuisLeDebut(startsAtIso: string, instant: number): number {
+  const debut = new Date(startsAtIso).getTime();
+  if (!Number.isFinite(debut)) return 0;
+  return Math.max(0, Math.round((instant - debut) / 60000));
+}
 
 function normalize(status: string): Status {
   return status === 'ABSENT' || status === 'LATE' ? status : 'PRESENT';
@@ -58,6 +65,7 @@ export function CurrentAppelCard({
   klass,
   subject,
   dateLabel,
+  startsAt,
   timeLabel,
   editable,
   students: initialStudents,
@@ -67,6 +75,8 @@ export function CurrentAppelCard({
   klass: string;
   subject: string;
   dateLabel: string;
+  /** Debut du creneau, en ISO : sert a calculer la duree du retard. */
+  startsAt: string;
   timeLabel: string;
   editable: boolean;
   students: AppelStudent[];
@@ -75,7 +85,11 @@ export function CurrentAppelCard({
   const [students, setStudents] = useState(() => initialStudents.map((s) => ({ ...s, status: normalize(s.status) })));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: 'error' | 'success' | 'info'; text: string } | null>(null);
-  const [locked, setLocked] = useState(!editable);
+  // Un appel validé reste modifiable TANT QUE LE CRÉNEAU EST EN COURS : un
+  // enseignant qui valide en début d'heure doit pouvoir corriger l'élève qui
+  // arrive en retard. Le verrou, c'est la fin du créneau, pas la validation.
+  const [validated, setValidated] = useState(false);
+  const locked = !editable;
   const [pending, setPending] = useState(() => queueLength());
 
   const flush = useCallback(async () => {
@@ -95,16 +109,25 @@ export function CurrentAppelCard({
   const absences = students.filter((s) => s.status === 'ABSENT').length;
   const lates = students.filter((s) => s.status === 'LATE').length;
 
+  // Quand un eleve passe « en retard », on retient L'INSTANT DU CLIC. Le
+  // recalculer a l'enregistrement ferait grossir le retard des eleves deja
+  // marques chaque fois que l'enseignant corrige quelqu'un d'autre.
+  const [lateAt, setLateAt] = useState<Record<string, number>>({});
+
   function cycle(studentId: string) {
     if (locked || busy) return;
     setStudents((prev) =>
-      prev.map((s) => (s.studentId === studentId ? { ...s, status: NEXT_STATUS[normalize(s.status)] } : s)),
+      prev.map((s) => {
+        if (s.studentId !== studentId) return s;
+        const next = NEXT_STATUS[normalize(s.status)];
+        if (next === 'LATE') setLateAt((m) => ({ ...m, [studentId]: Date.now() }));
+        return { ...s, status: next };
+      }),
     );
   }
 
   async function validate() {
     if (locked || busy) return;
-    if (!window.confirm("Après validation, l'appel ne pourra plus être modifié. Voulez-vous continuer ?")) return;
 
     setBusy(true);
     setMessage(null);
@@ -116,7 +139,7 @@ export function CurrentAppelCard({
       entries: students.map((s) => ({
         studentId: s.studentId,
         status: s.status,
-        minutesLate: s.status === 'LATE' ? DEFAULT_LATE_MINUTES : 0,
+        minutesLate: s.status === 'LATE' ? minutesDepuisLeDebut(startsAt, lateAt[s.studentId] ?? Date.now()) : 0,
         comment: '',
       })),
     });
@@ -124,9 +147,12 @@ export function CurrentAppelCard({
     // Valide dans les deux cas : confirme et synchronise tout de suite, ou
     // enregistre sur l'appareil pour synchronisation automatique des le
     // retour du reseau (l'enseignant n'a pas a attendre ni a reessayer).
-    setLocked(true);
+    setValidated(true);
     if (outcome.ok) {
-      setMessage({ tone: 'success', text: 'Appel validé. Il ne peut plus être modifié.' });
+      setMessage({
+        tone: 'success',
+        text: 'Appel validé. Vous pouvez encore le corriger tant que le cours n’est pas terminé.',
+      });
       router.refresh();
     } else {
       setPending(queueLength());
@@ -184,11 +210,20 @@ export function CurrentAppelCard({
       )}
 
       {locked ? (
-        <p className="text-sm text-[color:var(--muted-foreground)]">Appel validé : lecture seule.</p>
+        <p className="text-sm text-[color:var(--muted-foreground)]">
+          Le cours est terminé : l’appel est clos et ne peut plus être modifié.
+        </p>
       ) : (
-        <Button type="button" onClick={validate} disabled={busy || students.length === 0} className="w-full sm:w-auto">
-          {busy ? 'Validation…' : "Valider l'appel"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="button" onClick={validate} disabled={busy || students.length === 0} className="w-full sm:w-auto">
+            {busy ? 'Validation…' : validated ? 'Enregistrer les corrections' : "Valider l'appel"}
+          </Button>
+          {validated ? (
+            <span className="text-sm text-[color:var(--muted-foreground)]">
+              Appel validé — corrigez et enregistrez à nouveau si besoin.
+            </span>
+          ) : null}
+        </div>
       )}
     </div>
   );
