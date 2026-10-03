@@ -13,6 +13,8 @@ function parse(fd: FormData) {
     body: fd.get('body'),
     all: fd.get('all') === 'on' || fd.get('all') === 'true',
     roles: fd.getAll('roles').map(String),
+    classIds: fd.getAll('classIds').map(String),
+    levelIds: fd.getAll('levelIds').map(String),
     expiresAt: fd.get('expiresAt') ?? '',
   });
 }

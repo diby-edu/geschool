@@ -6,6 +6,7 @@ import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { getAnnouncement } from '@/features/communication/announcements';
 import { AnnouncementForm } from '@/features/communication/components/AnnouncementForm';
+import { audienceOptions } from '@/features/communication/audience-options';
 import {
   updateAnnouncementAction,
   publishAnnouncementAction,
@@ -36,6 +37,7 @@ export default async function AnnouncementDetailPage({
   const base = `/e/${slug}/annonces`;
 
   const a = await getAnnouncement(ctx, id);
+  const cibles = await audienceOptions(ctx);
   if (!a) notFound();
 
   const canPublish = hasPermission(ctx, 'announcements.publish');
@@ -68,7 +70,17 @@ export default async function AnnouncementDetailPage({
           <AnnouncementForm
             action={updateAnnouncementAction.bind(null, slug, id)}
             submitLabel="Enregistrer"
-            defaults={{ title: a.title, body: a.body, all: a.audience?.all ?? false, roles: a.audience?.roles ?? [], expiresAt: a.expires_at }}
+            classes={cibles.classes}
+            levels={cibles.levels}
+            defaults={{
+              title: a.title,
+              body: a.body,
+              all: a.audience?.all ?? false,
+              roles: a.audience?.roles ?? [],
+              classIds: a.audience?.classIds ?? [],
+              levelIds: a.audience?.levelIds ?? [],
+              expiresAt: a.expires_at,
+            }}
           />
         </section>
       ) : null}

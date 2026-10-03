@@ -3,6 +3,7 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { STAFF_FUNCTIONS } from '@/lib/permissions/roles';
 import type { TablesInsert } from '@/types/database';
+import type { Audience } from '@/features/communication/audience';
 
 /**
  * Écriture des notifications (table `notifications`).
@@ -22,8 +23,18 @@ export type NotificationInput = {
   data?: Record<string, unknown>;
 };
 
-/** Résout les destinataires d'une audience (codes de rôle, ou tout le monde). */
-export async function resolveAudienceUserIds(schoolId: string, audience: { all?: boolean; roles?: string[] }): Promise<string[]> {
+/**
+ * Résout les destinataires d'une audience.
+ *
+ * Quatre critères, qui s'additionnent : tout l'établissement, des fonctions,
+ * des classes, des niveaux. Viser une classe atteint les PERSONNES qui lui sont
+ * rattachées — les parents de ses élèves, les élèves qui ont un compte, et les
+ * enseignants qui y interviennent.
+ *
+ * Quand une fonction ET une classe sont cochées, on croise : « les parents des
+ * 6ᵉ » ne doit pas écrire à tous les parents de l'école.
+ */
+export async function resolveAudienceUserIds(schoolId: string, audience: Audience): Promise<string[]> {
   const admin = createAdminClient('notifications.send');
 
   const { data } = await admin
@@ -37,19 +48,90 @@ export async function resolveAudienceUserIds(schoolId: string, audience: { all?:
   }[];
 
   const wantRoles = new Set((audience.roles ?? []).map((r) => r.toUpperCase()));
-  const ids = new Set<string>();
+  const parRole = new Set<string>();
   for (const m of rows) {
-    if (audience.all) {
-      ids.add(m.user_id);
-      continue;
-    }
+    if (audience.all) parRole.add(m.user_id);
     const codes = m.membership_roles.map((mr) => mr.roles?.code).filter((c): c is string => !!c);
     // « Personnel administratif » (code SCHOOL_ADMIN) vise TOUTES les fonctions du
     // personnel : directeur, censeur, secrétaire, informaticien…, pas seulement le fondateur.
     const isStaff = codes.some((c) => c === 'SCHOOL_ADMIN' || (STAFF_FUNCTIONS as readonly string[]).includes(c));
-    if (codes.some((c) => wantRoles.has(c)) || (wantRoles.has('SCHOOL_ADMIN') && isStaff)) ids.add(m.user_id);
+    if (codes.some((c) => wantRoles.has(c)) || (wantRoles.has('SCHOOL_ADMIN') && isStaff)) parRole.add(m.user_id);
+  }
+  if (audience.all) return [...parRole];
+
+  const classIds = await resolveClassIds(admin, schoolId, audience);
+  if (classIds.length === 0) return [...parRole];
+
+  const parClasse = await usersOfClasses(admin, schoolId, classIds);
+  // Une fonction cochée AVEC une classe restreint : « les parents des 6ᵉ ».
+  // Sans fonction, la classe seule atteint tout le monde autour d'elle.
+  if (wantRoles.size === 0) return [...parClasse];
+  return [...parClasse].filter((id) => parRole.has(id));
+}
+
+/** Les classes visées, en dépliant les niveaux. */
+async function resolveClassIds(
+  admin: ReturnType<typeof createAdminClient>,
+  schoolId: string,
+  audience: Audience,
+): Promise<string[]> {
+  const ids = new Set(audience.classIds ?? []);
+  const levels = audience.levelIds ?? [];
+  if (levels.length > 0) {
+    const { data } = await admin.from('classes').select('id').eq('school_id', schoolId).in('level_id', levels);
+    for (const c of (data ?? []) as { id: string }[]) ids.add(c.id);
   }
   return [...ids];
+}
+
+/**
+ * Les comptes rattachés à des classes : parents des élèves inscrits, élèves
+ * eux-mêmes s'ils ont un compte, et enseignants qui y interviennent.
+ */
+async function usersOfClasses(
+  admin: ReturnType<typeof createAdminClient>,
+  schoolId: string,
+  classIds: string[],
+): Promise<Set<string>> {
+  const ids = new Set<string>();
+
+  const { data: inscrits } = await admin
+    .from('student_enrollments')
+    .select('student_id')
+    .eq('school_id', schoolId)
+    .in('class_id', classIds)
+    .eq('status', 'ENROLLED');
+  const studentIds = [...new Set((inscrits ?? []).map((e) => (e as { student_id: string }).student_id))];
+
+  if (studentIds.length > 0) {
+    const { data: eleves } = await admin
+      .from('students')
+      .select('user_id')
+      .eq('school_id', schoolId)
+      .in('id', studentIds)
+      .not('user_id', 'is', null);
+    for (const e of (eleves ?? []) as { user_id: string | null }[]) if (e.user_id) ids.add(e.user_id);
+
+    const { data: liens } = await admin
+      .from('student_guardians')
+      .select('guardians(user_id)')
+      .eq('school_id', schoolId)
+      .in('student_id', studentIds);
+    for (const l of (liens ?? []) as unknown as { guardians: { user_id: string | null } | null }[]) {
+      if (l.guardians?.user_id) ids.add(l.guardians.user_id);
+    }
+  }
+
+  const { data: profs } = await admin
+    .from('teaching_assignments')
+    .select('teachers(user_id)')
+    .eq('school_id', schoolId)
+    .in('class_id', classIds);
+  for (const t of (profs ?? []) as unknown as { teachers: { user_id: string | null } | null }[]) {
+    if (t.teachers?.user_id) ids.add(t.teachers.user_id);
+  }
+
+  return ids;
 }
 
 /** Crée une notification pour chaque destinataire (insertion groupée). */

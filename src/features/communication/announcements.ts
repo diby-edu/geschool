@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
+import { audienceLabel, readAudience, type Audience } from './audience';
 import { requireWritable } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
 import { ConflictError, NotFoundError } from '@/lib/errors';
@@ -17,12 +18,6 @@ export type AnnouncementRow = {
   expires_at: string | null;
 };
 
-type Audience = { all?: boolean; roles?: string[] };
-
-function audienceLabel(a: Audience): string {
-  if (a.all) return 'Tout l’établissement';
-  return (a.roles ?? []).join(', ') || '—';
-}
 
 export async function listAnnouncements(ctx: TenantContext): Promise<AnnouncementRow[]> {
   const supabase = await createClient();
@@ -42,7 +37,7 @@ export async function listAnnouncements(ctx: TenantContext): Promise<Announcemen
     id: a.id,
     title: a.title,
     status: a.status,
-    audience_label: audienceLabel(a.audience ?? {}),
+    audience_label: audienceLabel(readAudience(a.audience)),
     published_at: a.published_at,
     expires_at: a.expires_at,
   }));
@@ -71,7 +66,12 @@ function toRow(input: AnnouncementInput) {
   return {
     title: input.title,
     body: input.body,
-    audience: { all: input.all, roles: input.all ? [] : input.roles } as unknown as Record<string, never>,
+    audience: {
+      all: input.all,
+      roles: input.all ? [] : input.roles,
+      classIds: input.all ? [] : input.classIds,
+      levelIds: input.all ? [] : input.levelIds,
+    } as unknown as Record<string, never>,
     expires_at: input.expiresAt ? input.expiresAt : null,
   };
 }

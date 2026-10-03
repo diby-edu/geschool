@@ -4,6 +4,7 @@ import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { createAnnouncementAction } from '@/features/communication/actions';
 import { AnnouncementForm } from '@/features/communication/components/AnnouncementForm';
+import { audienceOptions } from '@/features/communication/audience-options';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 
@@ -14,11 +15,13 @@ export default async function NewAnnouncementPage({ params }: { params: Promise<
   const ctx = await getTenantContext(slug);
   requirePageAccess(ctx, 'announcements.create');
   requireFeature(ctx, 'announcements');
+  const cibles = await audienceOptions(ctx);
+
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader title="Nouvelle annonce" action={<Link href={`/e/${slug}/annonces`}><Button variant="ghost">Retour</Button></Link>} />
-      <AnnouncementForm action={createAnnouncementAction.bind(null, slug)} />
+      <AnnouncementForm action={createAnnouncementAction.bind(null, slug)} classes={cibles.classes} levels={cibles.levels} />
     </div>
   );
 }
