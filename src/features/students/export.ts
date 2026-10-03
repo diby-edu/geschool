@@ -10,7 +10,7 @@ import { STUDENT_EXPORT_HEADER } from './export-columns';
  *
  * Contenu : identité, classe et responsable principal (nom, lien, téléphone).
  * Jamais : notes médicales, observations, adresse — ce qui relève de
- * `students.view_sensitive`.
+ * Aucune donnée médicale n'est exportée : le champ a été retiré (0090).
  *
  * Lecture par la fonction `public.export_students` (migration 0052) : elle vérifie
  * UNE fois le droit `students.export`, puis lit en bloc. Lue sous RLS, la même

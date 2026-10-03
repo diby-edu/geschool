@@ -17,6 +17,8 @@ import {
   UserPlus,
   UsersRound,
   type LucideIcon,
+  MessageSquare,
+  CalendarCheck,
 } from 'lucide-react';
 import type { FeatureCode } from '@/lib/modules/features';
 
@@ -60,6 +62,13 @@ export const HUB: HubSection[] = [
         title: 'Identité de l’école',
         description: 'Nom, directeur, coordonnées, code officiel.',
         icon: School,
+        any: ['settings.update'],
+      },
+      {
+        path: 'parametres/sms',
+        title: 'Expéditeur des SMS',
+        description: 'Le nom affiché sur le téléphone des familles, et sa validation par l’opérateur.',
+        icon: MessageSquare,
         any: ['settings.update'],
       },
       {
@@ -125,6 +134,14 @@ export const HUB: HubSection[] = [
         description: 'Qui enseigne quoi, dans quelle classe.',
         icon: ClipboardList,
         any: ['assignments.view'],
+      },
+      {
+        path: 'attendance/regles',
+        title: 'Règles de présence',
+        description: 'Quand alerter la famille, qui prévenir, à partir de combien d’heures convoquer.',
+        icon: CalendarCheck,
+        any: ['settings.update'],
+        feature: 'attendance',
       },
       {
         path: 'evaluations/config',

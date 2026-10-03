@@ -192,6 +192,16 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
         hint: 'Même après clôture. Un enseignant efface déjà les siennes tant que son évaluation n’est pas clôturée.',
       },
       {
+        code: 'grades.request_change',
+        label: 'Demander la correction d’une note après clôture',
+        hint: 'Ouvre une demande adressée à l’enseignant. Tant qu’il n’a pas accepté, la note ne bouge pas.',
+      },
+      {
+        code: 'grades.override',
+        label: 'Appliquer une correction sans l’accord de l’enseignant',
+        hint: 'Geste rare, réservé à la direction : l’enseignant est prévenu et le journal porte la mention « appliqué sans son accord ».',
+      },
+      {
         code: 'grades.view_all',
         label: 'Voir les moyennes et classements de toute l’école',
         hint: 'Donne aussi, sur le tableau de bord, le bloc « Moyennes et bulletins » (avancement des enseignants, bulletins édités) pendant la période de calcul.',
@@ -239,6 +249,21 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
         hint: 'Étape entre la validation et la publication, prévue pour le directeur.',
       },
       { code: 'reports.publish', label: 'Publier les bulletins aux familles' },
+      {
+        code: 'reports.print',
+        label: 'Éditer le PDF des bulletins',
+        hint: 'Sortir les bulletins d’une classe entière, prêts à imprimer.',
+      },
+      {
+        code: 'reports.manage_template',
+        label: 'Modifier le modèle de bulletin',
+        hint: 'Les blocs de la page, les colonnes du tableau, les textes officiels, le logo.',
+      },
+      {
+        code: 'reports.unlock',
+        label: 'Rouvrir un bulletin déjà validé',
+        hint: 'Geste du directeur : le bulletin redevient modifiable, perd sa signature, et le motif reste inscrit dessus.',
+      },
     ],
   },
   {

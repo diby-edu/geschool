@@ -18,6 +18,7 @@ import { sendAction, resetAction, bulkSendAction, suspendAction, reactivateActio
 import { FilterPill, FilterTile } from '@/components/ui/filters';
 import { DataTable, type Column } from '@/components/data-table/DataTable';
 import { SearchBar } from '@/components/data-table/SearchBar';
+import Link from 'next/link';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Alert } from '@/components/ui/alert';
 import { ConfirmSubmit } from '@/components/ui/confirm-submit';
@@ -176,6 +177,11 @@ export default async function AccessPage({
         action={
           <div className="flex items-center gap-3">
             <BackToSettings ctx={ctx} />
+            {hasPermission(ctx, 'access_accounts.view_history') ? (
+              <Link href={`/e/${slug}/access/historique`} className="text-sm text-[color:var(--muted-foreground)] hover:underline">
+                Historique
+              </Link>
+            ) : null}
             {canBulk && overview.sms.pending > 0 ? (
             <SimpleSubmit action={bulkSendAction.bind(null, slug)} label={`Envoyer les ${overview.sms.pending} en attente`} />
             ) : null}
