@@ -14,7 +14,7 @@ import { AuthorizationError, NotFoundError, ValidationError } from '@/lib/errors
  * `auth.users` (migration 0003).
  */
 
-async function requireAdmin(): Promise<{ userId: string }> {
+export async function requireAdmin(): Promise<{ userId: string }> {
   const user = await getAuthenticatedUser();
   if (!user) throw new AuthorizationError();
   const supabase = await createClient();
