@@ -2,6 +2,8 @@ import 'server-only';
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getSmsProvider, generateTempPassword } from '@/lib/sms';
+import { sendAndLog } from './sms-log';
+import { readSender } from '@/features/sms/sender';
 import { formatPhoneForDisplay } from '@/lib/auth/identifier';
 import type { TenantContext } from '@/lib/tenant/context';
 import { NotFoundError, ValidationError } from '@/lib/errors';
@@ -68,15 +70,22 @@ export async function processDelivery(ctx: TenantContext, deliveryId: string): P
 
   // 2. Rendre et envoyer le SMS
   const body = renderSms(ctx, access?.login_identifier ?? delivery.recipient, tempPassword);
-  const result = await getSmsProvider().send({
+  // Le nom d'expediteur de l'etablissement, ou celui prete par la plateforme
+  // tant que le sien n'est pas valide. Le journal retient lequel a servi.
+  const expediteur = await readSender(ctx);
+  const result = await sendAndLog({
+    schoolId: ctx.school.id,
     to: delivery.recipient,
     body,
-    reference: deliveryId,
+    sender: expediteur.effective,
+    kind: 'CREDENTIALS',
+    createdBy: ctx.user.id,
+    pricePerSms: expediteur.pricePerSms,
   });
   // Le secret n'est plus utilise au-dela de ce point.
 
   if (!result.ok) {
-    await markFailed(admin, deliveryId, result.errorCode, result.errorMessage, result.permanent);
+    await markFailed(admin, deliveryId, 'SEND_FAILED', result.error ?? 'Envoi refusé', result.permanent ?? false);
     return;
   }
 
@@ -85,8 +94,8 @@ export async function processDelivery(ctx: TenantContext, deliveryId: string): P
     .from('credential_deliveries')
     .update({
       status: 'SENT',
-      provider: result.provider,
-      provider_message_id: result.providerMessageId,
+      provider: getSmsProvider().name,
+      provider_message_id: result.id,
       sent_at: new Date().toISOString(),
       attempts: delivery.attempts + 1,
     })

@@ -55,7 +55,10 @@ export type AdminOperation =
   | 'platform.seed'
   | 'onboarding.self_register'
   | 'auth.login_attempts'
-  | 'access.person_guard';
+  | 'access.person_guard'
+  // Une ecole doit connaitre le nom d'expediteur qu'elle emprunte a la
+  // plateforme, sans pouvoir lire le reste des reglages de l'editeur.
+  | 'sms.platform_sender';
 
 let cached: SupabaseClient<Database> | null = null;
 

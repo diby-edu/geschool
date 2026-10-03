@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { serverEnv } from '@/lib/env';
+import { letextoFromEnv } from './letexto';
 
 /**
  * Abstraction SMS (additif comptes §20). Le cœur du SaaS ne connait que
@@ -36,9 +37,19 @@ export function getSmsProvider(): SmsProvider {
   if (cached) return cached;
   const provider = serverEnv().SMS_PROVIDER;
   switch (provider) {
-    // Les adaptateurs reels (orange_ci, letexto, twilio) se branchent ici.
-    // Tant qu'ils ne sont pas configures, on retombe sur la console : mieux
-    // vaut un envoi visible en logs qu'un echec silencieux.
+    case 'letexto': {
+      const letexto = letextoFromEnv();
+      if (letexto) {
+        cached = letexto;
+        return cached;
+      }
+      // Choisi mais pas configure : on le DIT, puis on retombe sur la console.
+      // Un envoi visible en logs vaut mieux qu'un echec muet.
+      console.warn('[sms] SMS_PROVIDER=letexto mais aucune cle API : retour au mode console.');
+      cached = new ConsoleProvider();
+      return cached;
+    }
+    // Les autres adaptateurs (orange_ci, twilio) se branchent ici.
     case 'console':
     default:
       cached = new ConsoleProvider();

@@ -85,6 +85,14 @@ const serverSchema = z.object({
   SMS_WEBHOOK_SECRET: z.string().default(''),
   SMS_MAX_PER_MINUTE: z.coerce.number().int().min(0).default(20),
   SMS_MAX_PER_DAY: z.coerce.number().int().min(0).default(2000),
+  // Letexto. La clé et le nom d'expéditeur peuvent aussi venir des variables
+  // génériques SMS_* ; celles-ci priment quand elles sont renseignées.
+  LETEXTO_API_KEY: z.string().default(''),
+  LETEXTO_SENDER: z.string().default(''),
+  LETEXTO_BASE_URL: z.string().default(''),
+  // Adresse publique qui recevra les accusés de réception. Vide en local :
+  // Letexto ne sait pas rappeler localhost.
+  SMS_DLR_URL: z.string().default(''),
 
   CHROMIUM_EXECUTABLE_PATH: z.string().default(''),
   PDF_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(4).default(1),
