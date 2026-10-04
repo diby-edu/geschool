@@ -57,6 +57,8 @@ export const ACTION_LABELS: Record<string, string> = {
   'assessments.reopen': 'Évaluation rouverte',
   'assessments.update': 'Évaluation modifiée',
   'assignments.create': 'Affectation créée',
+  'attendance.gap_clear': 'Qualification d’un appel non fait retirée',
+  'attendance.gap_qualify': 'Appel non fait qualifié',
   'attendance.justify_decide': 'Justificatif d’absence traité',
   'attendance.justify_submit': 'Justificatif d’absence déposé',
   'attendance.save': 'Appel enregistré',

@@ -100,6 +100,7 @@ export default async function AttendancePage({
   const occurrences = await listOccurrences(ctx, date);
 
   const canJustify = hasPermission(ctx, 'attendance.justify');
+  const canSeeMissing = hasPermission(ctx, 'attendance.missing_calls') || hasPermission(ctx, 'attendance.view_all');
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -109,6 +110,9 @@ export default async function AttendancePage({
         action={
           <div className="flex items-center gap-2">
             <Link href={`${base}/absences`}><Button variant="ghost">Absences</Button></Link>
+            {canSeeMissing ? (
+              <Link href={`${base}/non-faits`}><Button variant="ghost">Appels non faits</Button></Link>
+            ) : null}
             {canJustify ? <Link href={`${base}/justificatifs`}><Button variant="secondary">Justificatifs</Button></Link> : null}
           </div>
         }

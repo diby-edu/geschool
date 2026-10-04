@@ -5,6 +5,9 @@ import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { readAttendancePolicy } from '@/features/attendance/policy';
 import { saveAttendancePolicyAction } from '@/features/attendance/policy-actions';
 import { PolicyForm } from '@/features/attendance/components/PolicyForm';
+import { GapReasonsForm } from '@/features/attendance/components/GapReasonsForm';
+import { readGapReasons } from '@/features/attendance/gaps';
+import { saveGapReasonsAction } from '@/features/attendance/gap-actions';
 import { readSenderForSchool } from '@/features/sms/platform';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Flash } from '@/components/ui/flash';
@@ -27,7 +30,11 @@ export default async function AttendancePolicyPage({
   requirePageAccess(ctx, 'settings.update');
   requireFeature(ctx, 'attendance');
 
-  const [policy, sms] = await Promise.all([readAttendancePolicy(ctx), readSenderForSchool()]);
+  const [policy, sms, gapReasons] = await Promise.all([
+    readAttendancePolicy(ctx),
+    readSenderForSchool(),
+    readGapReasons(ctx),
+  ]);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -55,6 +62,12 @@ export default async function AttendancePolicyPage({
       </Card>
 
       <Card>
+        <CardContent>
+          <GapReasonsForm action={saveGapReasonsAction.bind(null, slug)} reasons={gapReasons} />
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardContent className="space-y-2">
           <p className="text-sm font-semibold">Ce qui n’est pas réglable, et pourquoi</p>
           <ul className="space-y-1.5 text-sm text-[color:var(--muted-foreground)]">
@@ -73,8 +86,12 @@ export default async function AttendancePolicyPage({
             </li>
             <li>
               <strong className="text-[color:var(--foreground)]">Un cours sans appel n’accuse personne.</strong> Oubli,
-              absence de l’enseignant ou créneau déjà passé&nbsp;: les élèves restent « non renseignés » et n’entrent
-              pas dans le calcul des absences.
+              absence de l’enseignant ou cours non tenu&nbsp;: les élèves restent « non renseignés » et n’entrent pas
+              dans le calcul des absences. L’écran{' '}
+              <Link href={`/e/${slug}/attendance/non-faits`} className="underline">
+                Appels non faits
+              </Link>{' '}
+              les liste pour qu’on dise ce qui s’est passé&nbsp;; le droit de le faire se coche par fonction.
             </li>
           </ul>
         </CardContent>

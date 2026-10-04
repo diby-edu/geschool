@@ -234,6 +234,11 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
       { code: 'attendance.update', label: 'Corriger une présence après coup' },
       { code: 'attendance.validate', label: 'Valider les appels' },
       { code: 'attendance.justify', label: 'Traiter les justificatifs d’absence' },
+      {
+        code: 'attendance.missing_calls',
+        label: 'Suivre les appels non faits et les qualifier',
+        hint: 'Donne la liste des cours terminés sans appel, et le droit de dire ce qui s’est passé. Un appel manquant n’accuse personne : il se qualifie.',
+      },
     ],
   },
   {

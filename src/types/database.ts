@@ -493,6 +493,42 @@ export type Database = {
         }
         Relationships: []
       }
+      attendance_gaps: {
+        Row: {
+          id: string
+          school_id: string
+          session_occurrence_id: string
+          reason: string
+          note: string | null
+          reviewed_by: string | null
+          reviewed_at: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          session_occurrence_id: string
+          reason: string
+          note?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          session_occurrence_id?: string
+          reason?: string
+          note?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       attendance_records: {
         Row: {
           id: string
