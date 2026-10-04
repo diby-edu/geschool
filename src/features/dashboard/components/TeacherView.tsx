@@ -71,6 +71,9 @@ export function TeacherView({ ctx, data, sp }: { ctx: TenantContext; data: Teach
     value: fr(data.classes.length),
     sub: `${fr(data.stats.studentsCount)} ${plural(data.stats.studentsCount, 'élève', 'élèves')}`,
     module: 'eleves',
+    // L'enseignant choisit d'abord SA classe : c'est exactement ce que montre
+    // la page Notes & evaluations de son espace.
+    href: canAssessments ? `${base}/evaluations` : undefined,
   });
 
   return (
@@ -136,17 +139,24 @@ export function TeacherView({ ctx, data, sp }: { ctx: TenantContext; data: Teach
           </Card>
         ) : (
           <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {data.classes.map((c) => (
-              <li key={c.id}>
-                <Card className="py-4">
+            {data.classes.map((c) => {
+              const carte = (
+                <Card className="h-full py-4 transition hover:border-[color:var(--color-brand)]">
                   <div className="flex items-center justify-between">
                     <span className="font-bold">{c.name}</span>
                     {c.level ? <span className="text-xs text-[color:var(--muted-foreground)]">{c.level}</span> : null}
                   </div>
                   <p className="mt-1 text-sm text-[color:var(--muted-foreground)]">{c.students} {plural(c.students, 'élève', 'élèves')}</p>
                 </Card>
-              </li>
-            ))}
+              );
+              return (
+                <li key={c.id}>
+                  {/* Une classe mene a SES evaluations : sans ce lien, la liste
+                      ne servait qu'a regarder. */}
+                  {canAssessments ? <Link href={`${base}/evaluations/mine/${c.id}`}>{carte}</Link> : carte}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
