@@ -19,6 +19,13 @@ export type PlatformSms = {
   senderRequestEmail: string;
   /** Au-delà, l'envoi groupé demande une confirmation. */
   confirmAboveAmount: number;
+  /**
+   * SMS inclus par mois et par établissement, quand sa formule n'en fixe pas.
+   *
+   * À zéro, aucune limite n'est posée : tout passe. C'est le réglage à ouvrir
+   * en premier si les écoles doivent être bridées.
+   */
+  monthlyQuota: number;
 };
 
 export const DEFAULT_PLATFORM_SMS: PlatformSms = {
@@ -26,6 +33,7 @@ export const DEFAULT_PLATFORM_SMS: PlatformSms = {
   fallbackSender: 'WazzapAI',
   senderRequestEmail: '',
   confirmAboveAmount: 5000,
+  monthlyQuota: 0,
 };
 
 export async function readPlatformSms(): Promise<PlatformSms> {
@@ -73,5 +81,19 @@ function clean(raw: unknown): PlatformSms {
     fallbackSender: texte(o.fallbackSender, DEFAULT_PLATFORM_SMS.fallbackSender),
     senderRequestEmail: texte(o.senderRequestEmail, DEFAULT_PLATFORM_SMS.senderRequestEmail),
     confirmAboveAmount: nombre(o.confirmAboveAmount, DEFAULT_PLATFORM_SMS.confirmAboveAmount, 10_000_000),
+    monthlyQuota: Math.round(nombre(o.monthlyQuota, DEFAULT_PLATFORM_SMS.monthlyQuota, 1_000_000)),
   };
+}
+
+/**
+ * Le montant au-delà duquel un envoi groupé demande confirmation.
+ *
+ * Lisible par une école, contrairement au reste des réglages de l'éditeur :
+ * elle doit savoir à partir de quand l'application lui demandera de confirmer.
+ */
+export async function readConfirmThreshold(): Promise<number> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc('platform_sms_confirm_above' as never);
+  const n = Number(data);
+  return Number.isFinite(n) && n >= 0 ? n : DEFAULT_PLATFORM_SMS.confirmAboveAmount;
 }

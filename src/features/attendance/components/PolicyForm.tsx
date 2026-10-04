@@ -101,10 +101,14 @@ export function PolicyForm({
             <span className="font-semibold">Envoyer aussi un SMS au parent</span>
             <br />
             <span className="text-xs text-[color:var(--muted-foreground)]">
-              {pricePerSms > 0
-                ? `${pricePerSms} par message. Une vague vers 400 familles coûte ${(pricePerSms * 400).toLocaleString('fr-FR')}.`
-                : 'Chaque message est facturé.'}{' '}
-              Le tableau de bord, lui, ne coûte rien.
+              {pricePerSms > 0 ? (
+                <>
+                  {pricePerSms} par message. Une vague vers 400 familles coûte{' '}
+                  {(pricePerSms * 400).toLocaleString('fr-FR')}. Le tableau de bord, lui, ne coûte rien.
+                </>
+              ) : (
+                <>Le SMS ne vous est pas facturé. Il reste décoché par défaut : tout le monde n’a pas de téléphone allumé.</>
+              )}
             </span>
           </span>
         </label>

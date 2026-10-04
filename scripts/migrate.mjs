@@ -61,6 +61,18 @@ const client = new pg.Client({
 
 const sha256 = (s) => createHash('sha256').update(s).digest('hex').slice(0, 16);
 
+/**
+ * L'empreinte d'une migration, FINS DE LIGNE NORMALISEES.
+ *
+ * Sous Windows, git reecrit les CRLF en LF au moment du `git add`. Le fichier
+ * change donc sur le disque sans qu'une seule instruction SQL bouge — et le
+ * controle d'immuabilite criait a la modification a chaque commit. On compare
+ * desormais le CONTENU, pas sa representation.
+ */
+const CRLF = new RegExp(String.fromCharCode(13) + String.fromCharCode(10), 'g');
+const LF = new RegExp(String.fromCharCode(10), 'g');
+const empreinte = (sql) => sha256(sql.replace(CRLF, String.fromCharCode(10)));
+
 let applied = 0;
 
 try {
@@ -88,17 +100,30 @@ try {
 
   for (const file of files) {
     const sql = readFileSync(join(migrationsDir, file), 'utf8');
-    const checksum = sha256(sql);
+    const checksum = empreinte(sql);
     const previous = known.get(file);
 
     if (previous) {
       if (previous !== checksum) {
-        console.error(
-          `\n  ${file} a ete MODIFIE apres son application.\n` +
-            `  Une migration deja jouee est immuable : creer un nouveau fichier\n` +
-            `  plutot que d'editer celui-ci.\n`,
-        );
-        process.exit(1);
+        // Empreinte d'avant la normalisation : le SQL n'a pas bouge, seules
+        // les fins de ligne. On la remet a jour et on continue.
+        // Deux cas : l'empreinte d'origine a ete calculee sur le fichier tel
+        // qu'il etait (LF), ou sur sa version Windows (CRLF).
+        const avantNormalisation = sha256(sql);
+        const avantEnCrlf = sha256(sql.replace(LF, String.fromCharCode(13) + String.fromCharCode(10)));
+        if (previous === avantNormalisation || previous === avantEnCrlf) {
+          if (!statusOnly) {
+            await client.query('update public._migrations set checksum = $1 where name = $2', [checksum, file]);
+            console.log(`  empreinte mise a jour (fins de ligne) : ${file}`);
+          }
+        } else {
+          console.error(
+            `\n  ${file} a ete MODIFIE apres son application.\n` +
+              `  Une migration deja jouee est immuable : creer un nouveau fichier\n` +
+              `  plutot que d'editer celui-ci.\n`,
+          );
+          process.exit(1);
+        }
       }
       if (statusOnly) console.log(`  applique   ${file}`);
       continue;

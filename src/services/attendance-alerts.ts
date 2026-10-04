@@ -24,11 +24,13 @@ export type AlertRun = {
   notified: number;
   smsSent: number;
   smsCost: number;
+  /** SMS non partis : le quota du mois de l'ecole etait epuise. */
+  smsBlocked: number;
 };
 
 export async function runAttendanceAlerts(): Promise<AlertRun> {
   const admin = createAdminClient('notifications.send');
-  const bilan: AlertRun = { schools: 0, alerts: 0, summons: 0, notified: 0, smsSent: 0, smsCost: 0 };
+  const bilan: AlertRun = { schools: 0, alerts: 0, summons: 0, notified: 0, smsSent: 0, smsCost: 0, smsBlocked: 0 };
 
   const { data: ecoles } = await admin.from('schools').select('id, name, timezone').eq('status', 'ACTIVE');
   for (const ecole of (ecoles ?? []) as { id: string; name: string }[]) {
@@ -40,6 +42,7 @@ export async function runAttendanceAlerts(): Promise<AlertRun> {
     bilan.notified += traite.notified;
     bilan.smsSent += traite.smsSent;
     bilan.smsCost += traite.smsCost;
+    bilan.smsBlocked += traite.smsBlocked;
   }
   return bilan;
 }
@@ -49,7 +52,14 @@ type Compte = { total: number; unjustified: number };
 async function traiterEcole(
   admin: ReturnType<typeof createAdminClient>,
   schoolId: string,
-): Promise<{ alerts: number; summons: number; notified: number; smsSent: number; smsCost: number } | null> {
+): Promise<{
+  alerts: number;
+  summons: number;
+  notified: number;
+  smsSent: number;
+  smsCost: number;
+  smsBlocked: number;
+} | null> {
   const policy = await lirePolitique(admin, schoolId);
   if (policy.alertAfterHours <= 0 && policy.summonAfterUnjustifiedHours <= 0) return null;
   if (policy.alertRecipients.length === 0) return null;
@@ -72,6 +82,7 @@ async function traiterEcole(
   let summons = 0;
   let notified = 0;
   let smsSent = 0;
+  let smsBlocked = 0;
   let smsCost = 0;
 
   for (const [studentId, compte] of absences) {
@@ -102,9 +113,10 @@ async function traiterEcole(
       notified += envoi.notified;
       smsSent += envoi.smsSent;
       smsCost += envoi.cost;
+      smsBlocked += envoi.blocked;
     }
   }
-  return { alerts, summons, notified, smsSent, smsCost };
+  return { alerts, summons, notified, smsSent, smsCost, smsBlocked };
 }
 
 /** La période de notation qui couvre aujourd'hui. */
@@ -221,7 +233,7 @@ async function prevenir(
   heures: number,
   seuil: number,
   policy: AttendancePolicy,
-): Promise<{ notified: number; smsSent: number; cost: number }> {
+): Promise<{ notified: number; smsSent: number; cost: number; blocked: number }> {
   const { data: eleve } = await admin
     .from('students')
     .select('first_name, last_name')
@@ -247,6 +259,7 @@ async function prevenir(
 
   let smsSent = 0;
   let cost = 0;
+  let blocked = 0;
   if (policy.alertBySms && destinataires.phones.length > 0) {
     const sender = await nomExpediteur(admin, schoolId);
     for (const tel of destinataires.phones) {
@@ -259,11 +272,14 @@ async function prevenir(
         pricePerSms: await prixSms(admin),
       });
       if (r.ok) smsSent += 1;
+      // Quota epuise : la notification dans le tableau de bord est deja
+      // partie, seul le SMS manque. On le compte pour que le bilan le dise.
+      if (r.quotaBlocked) blocked += 1;
       cost += r.cost ?? 0;
     }
   }
 
-  return { notified, smsSent, cost };
+  return { notified, smsSent, cost, blocked };
 }
 
 /** Qui prévenir pour cet élève, selon les destinataires cochés. */

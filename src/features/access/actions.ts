@@ -8,6 +8,8 @@ import { runFormAction, type FormState } from '@/lib/forms';
 import { processDelivery, resendCredentials, resetAndSend } from '@/services/credentials';
 import { suspendAccess, reactivateAccess } from '@/services/access-status';
 import { audit } from '@/lib/audit';
+import { ValidationError } from '@/lib/errors';
+import { readSenderForSchool, readConfirmThreshold } from '@/features/sms/platform';
 
 /**
  * Envoie l'identifiant en attente d'un compte. Traitement synchrone : sur le
@@ -46,8 +48,12 @@ export async function resetAction(slug: string, userId: string, _p: FormState, _
 /**
  * Envoi groupe des identifiants en attente. Borne a 50 par requete pour ne pas
  * saturer le vCPU ni bloquer le navigateur ; le reste se traite au clic suivant.
+ *
+ * Un SMS se paie. Au-dela du montant fixe par l'editeur, l'envoi demande une
+ * confirmation explicite : cliquer « envoyer » ne doit pas engager cinquante
+ * mille francs sans qu'on l'ait vu passer.
  */
-export async function bulkSendAction(slug: string, _p: FormState, _fd: FormData): Promise<FormState> {
+export async function bulkSendAction(slug: string, _p: FormState, fd: FormData): Promise<FormState> {
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
     requireWritable(ctx, 'access_accounts.bulk_send');
@@ -59,12 +65,40 @@ export async function bulkSendAction(slug: string, _p: FormState, _fd: FormData)
       .in('status', ['PENDING', 'FAILED'])
       .order('created_at', { ascending: true })
       .limit(50);
+
+    const nombre = pending?.length ?? 0;
+    if (nombre === 0) redirect(`/e/${slug}/access?bulk=0`);
+
+    const { estimate, confirmAbove, pricePerSms } = await estimateBulkCost(nombre);
+    if (confirmAbove > 0 && estimate > confirmAbove && fd.get('confirmCost') !== 'oui') {
+      throw new ValidationError(
+        `Cet envoi coûtera environ ${estimate.toLocaleString('fr-FR')} ` +
+          `(${nombre} message(s) à ${pricePerSms}). Confirmez pour lancer l’envoi.`,
+      );
+    }
+
     for (const d of pending ?? []) {
       await processDelivery(ctx, d.id);
     }
-    await audit(ctx, { action: 'access.bulk_send', module: 'access', after: { count: pending?.length ?? 0 } });
-    redirect(`/e/${slug}/access?bulk=1`);
+    await audit(ctx, { action: 'access.bulk_send', module: 'access', after: { count: nombre, estimate } });
+    redirect(`/e/${slug}/access?bulk=${nombre}`);
   });
+}
+
+/**
+ * Ce que coûtera l'envoi groupé.
+ *
+ * Estimation volontairement SIMPLE : un message par destinataire, au prix
+ * unitaire. Le texte est nettoyé avant de partir, donc un SMS par personne
+ * dans l'immense majorité des cas — et une estimation basse vaut mieux qu'une
+ * promesse fausse dans l'autre sens.
+ */
+export async function estimateBulkCost(
+  count: number,
+): Promise<{ estimate: number; confirmAbove: number; pricePerSms: number }> {
+  const { pricePerSms } = await readSenderForSchool();
+  const seuil = await readConfirmThreshold();
+  return { estimate: Math.round(pricePerSms * count), confirmAbove: seuil, pricePerSms };
 }
 
 export async function suspendAction(slug: string, userId: string, _p: FormState, _fd: FormData): Promise<FormState> {

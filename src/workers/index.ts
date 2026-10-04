@@ -94,7 +94,8 @@ async function enregistrerTaches(boss: PgBoss): Promise<void> {
     console.warn(
       `[worker] alertes d'absence : ${bilan.alerts} alerte(s), ${bilan.summons} convocation(s), ` +
         `${bilan.notified} personne(s) prevenue(s) sur ${bilan.schools} ecole(s)` +
-        (bilan.smsSent > 0 ? `, ${bilan.smsSent} SMS pour ${bilan.smsCost}` : ''),
+        (bilan.smsSent > 0 ? `, ${bilan.smsSent} SMS pour ${bilan.smsCost}` : '') +
+        (bilan.smsBlocked > 0 ? `, ${bilan.smsBlocked} SMS non parti(s) : quota epuise` : ''),
     );
   });
 

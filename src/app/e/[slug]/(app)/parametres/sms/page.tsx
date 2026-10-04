@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess } from '@/lib/permissions/guard';
 import { readSender } from '@/features/sms/sender';
+import { readSmsQuota, quotaLabel, WARN_RATIO } from '@/features/sms/quota';
 import { buildDossier, dossierEmail, exemples } from '@/features/sms/dossier';
 import { saveSenderAction, markSenderRequestedAction, setSenderStatusAction } from '@/features/sms/actions';
 import { SenderForm } from '@/features/sms/components/SenderForm';
@@ -30,6 +31,7 @@ export default async function SmsSenderPage({
   requirePageAccess(ctx, 'settings.update');
 
   const sender = await readSender(ctx);
+  const quota = await readSmsQuota(ctx);
   const { row, missing } = await buildDossier(ctx);
   const jours = waitingDays(sender.requestedOn);
   const mail = dossierEmail(ctx.school.name, sender.name || sender.platformSender);
@@ -74,6 +76,52 @@ export default async function SmsSenderPage({
           </p>
         </CardContent>
       </Card>
+
+      {quota && !quota.unlimited ? (
+        <Card>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-sm font-semibold">Vos SMS ce mois-ci</p>
+              <span className="text-sm tabular-nums">
+                {quota.used.toLocaleString('fr-FR')} / {quota.limit.toLocaleString('fr-FR')}
+              </span>
+            </div>
+
+            <div
+              className="h-2 w-full overflow-hidden rounded-full"
+              style={{ backgroundColor: 'var(--surface)' }}
+              role="presentation"
+            >
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${Math.round(quota.ratio * 100)}%`,
+                  backgroundColor:
+                    quota.ratio >= 1
+                      ? 'var(--color-danger)'
+                      : quota.ratio >= WARN_RATIO
+                        ? 'var(--color-warning)'
+                        : 'var(--color-success)',
+                }}
+              />
+            </div>
+
+            <p className="text-sm text-[color:var(--muted-foreground)]">{quotaLabel(quota)}</p>
+
+            {quota.remaining === 0 ? (
+              <Alert tone="error">
+                Quota épuisé. Les alertes d’absence par SMS ne partent plus jusqu’au mois prochain.{' '}
+                <strong>Les identifiants de connexion continuent de partir</strong> — ils ne sont jamais bloqués. Pour
+                en obtenir davantage dès maintenant, contactez la plateforme.
+              </Alert>
+            ) : quota.ratio >= WARN_RATIO ? (
+              <Alert tone="warning">
+                Il vous reste {quota.remaining.toLocaleString('fr-FR')} SMS. Au-delà, seules les alertes s’arrêtent.
+              </Alert>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardContent>

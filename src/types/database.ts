@@ -3244,6 +3244,36 @@ export type Database = {
         }
         Relationships: []
       }
+      sms_quota_grants: {
+        Row: {
+          id: string
+          school_id: string
+          covers_month: string
+          quantity: number
+          reason: string | null
+          granted_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          covers_month: string
+          quantity: number
+          reason?: string | null
+          granted_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          covers_month?: string
+          quantity?: number
+          reason?: string | null
+          granted_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       staff_profiles: {
         Row: {
           id: string

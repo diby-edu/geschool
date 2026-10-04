@@ -4,6 +4,11 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { listPlans, getSchoolSubscription } from '@/features/billing/platform';
 import { assignSubscriptionAction, settlePaymentAction } from '@/features/billing/actions';
+import { grantSmsAction } from '@/features/sms/actions';
+import { listGrants, readQuotaForSchool } from '@/features/sms/grants';
+import { currentMonth, quotaLabel, WARN_RATIO } from '@/features/sms/quota';
+import { readPlatformSms } from '@/features/sms/platform';
+import { SmsGrantForm } from '@/features/sms/components/SmsGrantForm';
 import { ConfirmSubmit } from '@/components/ui/confirm-submit';
 
 const PAY_STATUS: Record<string, string> = {
@@ -35,7 +40,15 @@ export default async function SchoolBillingPage({
   const { data: school } = await supabase.from('schools').select('id, name, slug').eq('id', id).maybeSingle();
   if (!school) notFound();
 
-  const [plans, sub] = await Promise.all([listPlans(), getSchoolSubscription(id)]);
+  const mois = currentMonth();
+  const [plans, sub, quota, grants, reglagesSms] = await Promise.all([
+    listPlans(),
+    getSchoolSubscription(id),
+    readQuotaForSchool(id),
+    listGrants(id),
+    readPlatformSms(),
+  ]);
+  const grantDuMois = grants.find((g) => g.month === mois)?.quantity ?? 0;
   const { data: payments } = await supabase
     .from('payments')
     .select('id, amount, currency, method, status, created_at, provider_reference, notes')
@@ -48,6 +61,7 @@ export default async function SchoolBillingPage({
       {sp.assigned === '1' ? <Alert tone="success">Abonnement mis à jour.</Alert> : null}
       {sp.confirmed === '1' ? <Alert tone="success">Paiement confirmé.</Alert> : null}
       {sp.rejected === '1' ? <Alert tone="success">Paiement refusé.</Alert> : null}
+      {sp.sms === '1' ? <Alert tone="success">Complément de SMS enregistré.</Alert> : null}
       <PageHeader title={`Facturation — ${school.name}`} action={<Link href="/admin/etablissements"><Button variant="ghost">Retour</Button></Link>} />
 
       <Card>
@@ -87,6 +101,67 @@ export default async function SchoolBillingPage({
                 : {})}
             />
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-3">
+          <div>
+            <h2 className="text-sm font-medium">SMS du mois</h2>
+            <p className="text-sm text-[color:var(--muted-foreground)]">{quotaLabel(quota)}</p>
+          </div>
+
+          {quota.unlimited ? (
+            <Alert tone="info">
+              Aucun quota n’est posé : tous les SMS de cet établissement partent, et c’est vous qui payez l’opérateur.
+              Le nombre inclus se règle dans <Link href="/admin/sms" className="underline">les réglages SMS</Link> ou
+              dans sa formule.
+            </Alert>
+          ) : (
+            <>
+              <dl className="grid grid-cols-3 gap-3 text-sm">
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-[color:var(--muted-foreground)]">Inclus</dt>
+                  <dd className="tabular-nums">{quota.included.toLocaleString('fr-FR')}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-[color:var(--muted-foreground)]">Accordé</dt>
+                  <dd className="tabular-nums">{quota.granted.toLocaleString('fr-FR')}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-[color:var(--muted-foreground)]">Restant</dt>
+                  <dd className="tabular-nums">{quota.remaining.toLocaleString('fr-FR')}</dd>
+                </div>
+              </dl>
+              {quota.remaining === 0 ? (
+                <Alert tone="error">
+                  Quota épuisé : les alertes d’absence de cet établissement ne partent plus. Les identifiants de
+                  connexion, eux, continuent de partir.
+                </Alert>
+              ) : quota.ratio >= WARN_RATIO ? (
+                <Alert tone="warning">Plus de {Math.round(WARN_RATIO * 100)} % du quota est consommé.</Alert>
+              ) : null}
+            </>
+          )}
+
+          <SmsGrantForm
+            action={grantSmsAction.bind(null, id)}
+            month={mois}
+            current={grantDuMois}
+            price={reglagesSms.pricePerSms}
+          />
+
+          {grants.length > 0 ? (
+            <ul className="space-y-1 text-xs text-[color:var(--muted-foreground)]">
+              {grants.map((g) => (
+                <li key={g.id}>
+                  {new Date(`${g.month}T00:00:00`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })} ·{' '}
+                  {g.quantity.toLocaleString('fr-FR')} SMS
+                  {g.reason ? ` · ${g.reason}` : ''}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </CardContent>
       </Card>
 

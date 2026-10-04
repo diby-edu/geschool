@@ -1,9 +1,10 @@
 import { cn } from '@/lib/utils';
 
-type Tone = 'error' | 'info' | 'success';
+type Tone = 'error' | 'warning' | 'info' | 'success';
 
 const TONES: Record<Tone, string> = {
   error: 'border-[color:var(--color-danger)] text-[color:var(--color-danger)]',
+  warning: 'border-[color:var(--color-warning)] text-[color:var(--color-warning)]',
   info: 'border-[color:var(--color-info)] text-[color:var(--color-info)]',
   success: 'border-[color:var(--color-success)] text-[color:var(--color-success)]',
 };

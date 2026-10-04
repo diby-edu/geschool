@@ -14,9 +14,11 @@ export function PlatformSmsForm({ action, settings }: { action: Action; settings
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const [prix, setPrix] = useState(String(settings.pricePerSms));
   const [sender, setSender] = useState(settings.fallbackSender);
+  const [quota, setQuota] = useState(String(settings.monthlyQuota));
 
   const probleme = senderProblem(sender);
   const parSms = Number(prix.replace(',', '.')) || 0;
+  const parQuota = Number(quota.replace(',', '.')) || 0;
 
   return (
     <form action={formAction} className="space-y-4">
@@ -35,7 +37,17 @@ export function PlatformSmsForm({ action, settings }: { action: Action; settings
           className="w-28 rounded-xl border px-2 py-1.5 text-sm"
         />
         <p className="text-xs text-[color:var(--muted-foreground)]">
-          Sert au compteur de coût avant un envoi groupé. {parSms > 0 ? `400 destinataires coûteraient ${(parSms * 400).toLocaleString('fr-FR')}.` : ''}
+          {parSms > 0 ? (
+            <>
+              Sert au compteur de coût avant un envoi groupé. 400 destinataires coûteraient{' '}
+              {(parSms * 400).toLocaleString('fr-FR')}.
+            </>
+          ) : (
+            <>
+              <strong>À zéro, le SMS est gratuit pour les établissements</strong> : aucun coût affiché, aucune
+              confirmation demandée. C’est vous qui payez l’opérateur.
+            </>
+          )}
         </p>
       </div>
 
@@ -72,6 +84,34 @@ export function PlatformSmsForm({ action, settings }: { action: Action; settings
         />
         <p className="text-xs text-[color:var(--muted-foreground)]">
           Les dossiers vous arrivent ici&nbsp;; vous les transmettez ensuite à l’opérateur.
+        </p>
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-sm font-medium" htmlFor="quota">
+          SMS inclus par mois et par établissement
+        </label>
+        <input
+          id="quota"
+          name="monthlyQuota"
+          value={quota}
+          onChange={(e) => setQuota(e.target.value)}
+          inputMode="numeric"
+          className="w-32 rounded-xl border px-2 py-1.5 text-sm"
+        />
+        <p className="text-xs text-[color:var(--muted-foreground)]">
+          {parQuota > 0 ? (
+            <>
+              Au-delà, <strong>les alertes s’arrêtent</strong> jusqu’au mois suivant ou jusqu’à un complément accordé
+              depuis la fiche de l’établissement. Les identifiants de connexion, eux, partent toujours. Une formule
+              peut fixer son propre nombre&nbsp;: celui-ci ne sert qu’aux écoles dont la formule reste muette.
+            </>
+          ) : (
+            <>
+              <strong>À zéro, aucune limite</strong>&nbsp;: tous les SMS partent, et c’est vous qui payez l’opérateur.
+              Mettez un nombre pour border la dépense.
+            </>
+          )}
         </p>
       </div>
 

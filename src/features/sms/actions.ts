@@ -11,6 +11,7 @@ import { writePlatformSms } from './platform';
 import { readSender, writeSender } from './sender';
 import { buildDossier } from './dossier';
 import { refreshPendingStatuses } from '@/services/sms-log';
+import { grantSms } from './grants';
 import { SENDER_STATUSES, senderProblem, type SenderStatus } from './sender-types';
 
 /** Réglages SMS de l'éditeur : prix, nom d'expéditeur de secours, destinataire des dossiers. */
@@ -29,6 +30,7 @@ export async function savePlatformSmsAction(_p: FormState, fd: FormData): Promis
     await writePlatformSms(admin.userId, {
       pricePerSms: nombre('pricePerSms', 10_000),
       confirmAboveAmount: nombre('confirmAboveAmount', 10_000_000),
+      monthlyQuota: Math.round(nombre('monthlyQuota', 1_000_000)),
       fallbackSender: fallback,
       senderRequestEmail: String(fd.get('senderRequestEmail') ?? '').trim().slice(0, 160),
     });
@@ -113,5 +115,26 @@ export async function refreshStatusesAction(_p: FormState, _fd: FormData): Promi
     await requireAdmin();
     const { checked, delivered, failed } = await refreshPendingStatuses();
     redirect(`/admin/sms?verifies=${checked}&livres=${delivered}&echecs=${failed}`);
+  });
+}
+
+/**
+ * Accorder un complement de SMS a un etablissement pour un mois donne.
+ *
+ * C'est l'acte commercial qui debloque une ecole dont le quota est epuise : on
+ * l'enregistre depuis sa fiche de facturation, la ou se traitent ses paiements.
+ */
+export async function grantSmsAction(schoolId: string, _p: FormState, fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const brut = String(fd.get('quantity') ?? '').replace(/\s/g, '');
+    const quantite = Number(brut);
+    if (!Number.isFinite(quantite)) throw new ValidationError('Indiquez un nombre de SMS.');
+    await grantSms(
+      schoolId,
+      Math.round(quantite),
+      String(fd.get('month') ?? ''),
+      String(fd.get('reason') ?? ''),
+    );
+    redirect(`/admin/facturation/${schoolId}?sms=1`);
   });
 }
