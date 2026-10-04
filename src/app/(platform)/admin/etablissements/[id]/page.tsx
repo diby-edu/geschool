@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/server';
 import { listSchoolFeatures } from '@/features/platform-schools/features';
 import { listSchoolsForAdmin } from '@/features/platform/admin';
 import { SchoolStatusForm } from '@/features/platform/components/SchoolStatusForm';
-import { setSchoolFeatureAction } from '@/features/platform-schools/actions';
+import { setSchoolFeatureAction, enterSchoolAction } from '@/features/platform-schools/actions';
+import { EnterSchoolForm } from '@/features/platform-schools/components/EnterSchoolForm';
 import { FeatureToggle } from '@/features/platform-schools/components/FeatureToggle';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
@@ -56,9 +57,10 @@ export default async function PlatformSchoolPage({
         description={`/e/${school.slug} · ${STATUS_LABEL[school.status] ?? school.status}`}
         action={
           <div className="flex gap-2">
-            <Link href={`/e/${school.slug}`}>
-              <Button variant="secondary">Ouvrir son espace</Button>
-            </Link>
+            <EnterSchoolForm
+              action={enterSchoolAction.bind(null, school.id, school.slug)}
+              schoolName={school.name}
+            />
             <Link href={`/admin/journal?ecole=${school.id}`}>
               <Button variant="secondary">Journal</Button>
             </Link>

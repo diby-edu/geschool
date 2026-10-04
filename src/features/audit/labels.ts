@@ -71,6 +71,7 @@ export const ACTION_LABELS: Record<string, string> = {
   'grades.save': 'Notes enregistrées',
   'grading.seed_defaults': 'Barème par défaut installé',
   'onboarding.self_register': 'Établissement inscrit',
+  'platform.school_enter': 'Espace ouvert par la plateforme (support)',
   'platform.schools.create': 'Établissement créé par la plateforme',
   'programme.upsert': 'Programme modifié',
   'programme.apply_official': 'Grille officielle chargée',

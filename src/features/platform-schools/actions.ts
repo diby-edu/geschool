@@ -6,6 +6,7 @@ import { auditPlatform } from '@/lib/audit';
 import { runFormAction, formValues, type FormState } from '@/lib/forms';
 import { AuthorizationError, ConflictError } from '@/lib/errors';
 import { createSchoolSchema } from './schemas';
+import { requireAdmin } from '@/features/platform/admin';
 import { setSchoolFeature } from './features';
 import type { FeatureCode } from '@/lib/modules/features';
 
@@ -79,5 +80,33 @@ export async function setSchoolFeatureAction(
     const enabled = String(formData.get('enabled') ?? 'true') === 'true';
     await setSchoolFeature(schoolId, code, enabled, String(formData.get('reason') ?? '').trim());
     redirect(`/admin/etablissements/${schoolId}?module=1`);
+  });
+}
+
+/**
+ * Entrer dans l'espace d'un etablissement, pour le support.
+ *
+ * Un administrateur de la plateforme peut deja ouvrir n'importe quel espace :
+ * ses droits y sont complets. Ce qui manquait, c'est la TRACE. Entrer chez un
+ * client se consigne, comme tout le reste — et l'ecole retrouve la ligne dans
+ * son propre journal.
+ */
+export async function enterSchoolAction(
+  schoolId: string,
+  slug: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  return runFormAction(async () => {
+    const { userId } = await requireAdmin();
+    await auditPlatform(userId, {
+      action: 'platform.school_enter',
+      module: 'platform',
+      entityType: 'school',
+      entityId: schoolId,
+      schoolId,
+      after: { reason: String(formData.get('reason') ?? '').trim().slice(0, 200) || null },
+    });
+    redirect(`/e/${slug}`);
   });
 }

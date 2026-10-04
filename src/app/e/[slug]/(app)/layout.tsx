@@ -9,6 +9,7 @@ import { LiveRefresh } from '@/components/realtime/LiveRefresh';
 import { loadTopBar } from '@/features/navigation/top-bar';
 import { LIVE_TABLES } from '@/components/realtime/live-tables';
 import { roleLabel, type RoleCode } from '@/lib/permissions/roles';
+import { SupportBanner } from '@/components/layout/SupportBanner';
 
 /**
  * Garde de l'espace etablissement. getTenantContext resout le tenant depuis le
@@ -74,6 +75,9 @@ export default async function SchoolAppLayout({
       {...(ctx.isPlatformAdmin ? { back: { href: '/admin', label: 'Retour a la plateforme' } } : {})}
       user={{ displayName: ctx.user.displayName, roleLabel: roleLabel_ }}
     >
+      {/* Administrateur de la plateforme chez un client : il a tous les droits
+          sans etre membre, et rien a l'ecran ne le lui rappelait. */}
+      {ctx.isPlatformAdmin && !ctx.membership ? <SupportBanner schoolName={ctx.school.name} /> : null}
       {children}
     </AppShell>
   );

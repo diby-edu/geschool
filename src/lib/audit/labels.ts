@@ -32,6 +32,7 @@ export const ACTIVITY_LABELS: Record<string, { label: string; tone: ActivityTone
   'ai.appreciation_save': { label: 'Appréciation IA enregistrée', tone: 'good' },
   'platform.schools.create': { label: 'Nouvel établissement créé', tone: 'good' },
   'platform.sms_quota_grant': { label: 'Complément de SMS accordé', tone: 'good' },
+  'platform.school_enter': { label: 'Espace ouvert par la plateforme', tone: 'warn' },
 };
 
 export function activityLabel(action: string, module: string): { label: string; tone: ActivityTone } {
