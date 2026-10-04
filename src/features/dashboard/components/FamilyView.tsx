@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { TenantContext } from '@/lib/tenant/context';
+import { featureEnabled } from '@/lib/modules/features';
 import { Flash } from '@/components/ui/flash';
 import { formatDate } from '@/features/academic-years/labels';
 import { bannerFor } from '../sections';
@@ -19,6 +20,11 @@ const score = (n: number) => n.toLocaleString('fr-FR', { maximumFractionDigits: 
  */
 export function FamilyView({ ctx, data, sp }: { ctx: TenantContext; data: FamilyOverview; sp: Sp }) {
   const base = `/e/${ctx.school.slug}`;
+  // Une tuile ne mène quelque part que si la page existe pour cette école : un
+  // module coupé par la plateforme (0070) rend sa page introuvable, et un
+  // chiffre cliquable qui tombe sur un 404 vaut moins qu'un chiffre muet.
+  const versNotes = featureEnabled(ctx.disabledFeatures, 'grades');
+  const versPresences = featureEnabled(ctx.disabledFeatures, 'attendance');
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <Flash searchParams={sp} />
@@ -53,9 +59,9 @@ export function FamilyView({ ctx, data, sp }: { ctx: TenantContext; data: Family
               </div>
 
               <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <Tile module="notes" label="Dernière moyenne" value={s.lastAverage !== null ? score(s.lastAverage) : '—'} unit={s.lastAverage !== null ? '/ 20' : undefined} sub={s.lastAverage !== null ? 'Dernier bulletin publié' : 'Aucun bulletin publié'} min={120} size={32} />
-                <Tile module="bulletins" label="Absences" value={fr(s.absences30d)} sub="30 derniers jours" min={120} size={32} />
-                <Tile module="acces" label="Retards" value={fr(s.lates30d)} sub="30 derniers jours" min={120} size={32} />
+                <Tile module="notes" label="Dernière moyenne" value={s.lastAverage !== null ? score(s.lastAverage) : '—'} unit={s.lastAverage !== null ? '/ 20' : undefined} sub={s.lastAverage !== null ? 'Dernier bulletin publié' : 'Aucun bulletin publié'} href={versNotes ? `${base}/mes-notes?enfant=${s.id}` : undefined} min={120} size={32} />
+                <Tile module="bulletins" label="Absences" value={fr(s.absences30d)} sub="30 derniers jours" href={versPresences ? `${base}/mes-absences?enfant=${s.id}` : undefined} min={120} size={32} />
+                <Tile module="acces" label="Retards" value={fr(s.lates30d)} sub="30 derniers jours" href={versPresences ? `${base}/mes-absences?enfant=${s.id}#retards` : undefined} min={120} size={32} />
                 <Tile module="eleves" label="Bulletins" value={fr(s.bulletins)} sub={plural(s.bulletins, 'bulletin publié', 'bulletins publiés')} href={s.bulletins > 0 ? `${base}/mes-bulletins` : undefined} min={120} size={32} />
               </div>
 

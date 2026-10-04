@@ -58,7 +58,14 @@ export function buildSchoolNav(ctx: TenantContext, space: Space): NavItem[] {
   // Espace Parent : uniquement le suivi de ses enfants — jamais les modules d'un
   // autre role que la personne pourrait cumuler.
   if (space === 'parent') {
-    if (featureEnabled(ctx.disabledFeatures, 'parent_portal') && featureEnabled(ctx.disabledFeatures, 'bulletins')) {
+    const portail = featureEnabled(ctx.disabledFeatures, 'parent_portal');
+    if (portail && featureEnabled(ctx.disabledFeatures, 'grades')) {
+      nav.push({ href: `${base}/mes-notes`, label: 'Mes notes', icon: 'notes' });
+    }
+    if (portail && featureEnabled(ctx.disabledFeatures, 'attendance')) {
+      nav.push({ href: `${base}/mes-absences`, label: 'Absences et retards', icon: 'presences' });
+    }
+    if (portail && featureEnabled(ctx.disabledFeatures, 'bulletins')) {
       nav.push({ href: `${base}/mes-bulletins`, label: 'Mes bulletins', icon: 'bulletins' });
     }
     return nav;
