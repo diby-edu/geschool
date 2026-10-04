@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 
 type Trend = { direction: 'up' | 'down' | 'flat'; text: string };
@@ -30,22 +32,32 @@ function Sparkline({ values }: { values: number[] }) {
   );
 }
 
+/**
+ * Un chiffre du tableau de bord. Avec `href`, la tuile entière devient un lien :
+ * un chiffre qui appelle le clic doit mener à ce qu'il compte, sinon il ne doit
+ * pas avoir l'air cliquable.
+ */
 export function KpiCard({
   label,
   value,
   unit,
   trend,
   spark,
+  href,
 }: {
   label: string;
   value: string;
   unit?: string;
   trend?: Trend;
   spark?: number[];
+  href?: string;
 }) {
-  return (
-    <Card className="p-4">
-      <p className="text-xs font-medium text-[color:var(--muted-foreground)]">{label}</p>
+  const card = (
+    <Card className={href ? 'h-full p-4 transition-transform hover:-translate-y-0.5 motion-reduce:hover:transform-none' : 'p-4'}>
+      <p className="flex items-center justify-between gap-2 text-xs font-medium text-[color:var(--muted-foreground)]">
+        <span>{label}</span>
+        {href ? <ArrowRight className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden /> : null}
+      </p>
       <div className="mt-1 flex items-end justify-between gap-2">
         <div className="flex items-baseline gap-1">
           <span className="text-2xl font-bold tracking-tight tabular-nums">{value}</span>
@@ -62,5 +74,13 @@ export function KpiCard({
         </span>
       ) : null}
     </Card>
+  );
+
+  return href ? (
+    <Link href={href} className="block">
+      {card}
+    </Link>
+  ) : (
+    card
   );
 }

@@ -33,6 +33,7 @@ export const ACTIVITY_LABELS: Record<string, { label: string; tone: ActivityTone
   'platform.schools.create': { label: 'Nouvel établissement créé', tone: 'good' },
   'platform.sms_quota_grant': { label: 'Complément de SMS accordé', tone: 'good' },
   'platform.school_enter': { label: 'Espace ouvert par la plateforme', tone: 'warn' },
+  'platform.school_enter_direct': { label: 'Espace ouvert sans motif', tone: 'warn' },
 };
 
 export function activityLabel(action: string, module: string): { label: string; tone: ActivityTone } {

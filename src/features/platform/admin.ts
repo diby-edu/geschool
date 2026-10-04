@@ -33,8 +33,11 @@ export type SchoolAdminRow = {
   city: string | null;
   createdAt: string;
   students: number;
+  teachers: number;
   members: number;
-  subscription: { plan: string; status: string; endsOn: string | null } | null;
+  /** Modules coupés pour cette école : une formule réduite, ou un incident. */
+  disabledModules: number;
+  subscription: { plan: string; status: string; endsOn: string | null; trialEndsOn: string | null } | null;
 };
 
 /** La liste des écoles avec ce qui compte pour la plateforme : taille et abonnement. */
@@ -42,15 +45,19 @@ export async function listSchoolsForAdmin(): Promise<SchoolAdminRow[]> {
   await requireAdmin();
   const supabase = await createClient();
 
-  const [{ data: schools }, { data: students }, { data: members }, { data: subs }] = await Promise.all([
-    supabase.from('schools').select('id, slug, name, status, city, created_at').order('name'),
-    supabase.from('students').select('school_id').is('deleted_at', null),
-    supabase.from('school_memberships').select('school_id').eq('status', 'ACTIVE'),
-    supabase
-      .from('subscriptions')
-      .select('school_id, status, current_period_end, plans(name)')
-      .in('status', ['ACTIVE', 'TRIALING', 'PAST_DUE']),
-  ]);
+  const [{ data: schools }, { data: students }, { data: teachers }, { data: members }, { data: subs }, { data: off }] =
+    await Promise.all([
+      supabase.from('schools').select('id, slug, name, status, city, created_at').order('name'),
+      supabase.from('students').select('school_id').is('deleted_at', null),
+      supabase.from('teachers').select('school_id').is('deleted_at', null),
+      supabase.from('school_memberships').select('school_id').eq('status', 'ACTIVE'),
+      supabase
+        .from('subscriptions')
+        .select('school_id, status, current_period_end, trial_ends_at, plans(name)')
+        .in('status', ['ACTIVE', 'TRIALING', 'PAST_DUE']),
+      // La base ne garde que les modules COUPÉS (0070) : une ligne = un module en moins.
+      supabase.from('school_features').select('school_id').eq('is_enabled', false),
+    ]);
 
   const count = (rows: { school_id: string }[] | null) => {
     const m = new Map<string, number>();
@@ -58,16 +65,19 @@ export async function listSchoolsForAdmin(): Promise<SchoolAdminRow[]> {
     return m;
   };
   const studentsBySchool = count(students as { school_id: string }[] | null);
+  const teachersBySchool = count(teachers as { school_id: string }[] | null);
   const membersBySchool = count(members as { school_id: string }[] | null);
+  const offBySchool = count(off as { school_id: string }[] | null);
   const subBySchool = new Map(
     ((subs ?? []) as unknown as {
       school_id: string;
       status: string;
       current_period_end: string | null;
+      trial_ends_at: string | null;
       plans: { name: string } | null;
     }[]).map((s) => [
       s.school_id,
-      { plan: s.plans?.name ?? '—', status: s.status, endsOn: s.current_period_end },
+      { plan: s.plans?.name ?? '—', status: s.status, endsOn: s.current_period_end, trialEndsOn: s.trial_ends_at },
     ]),
   );
 
@@ -86,7 +96,9 @@ export async function listSchoolsForAdmin(): Promise<SchoolAdminRow[]> {
     city: s.city,
     createdAt: s.created_at,
     students: studentsBySchool.get(s.id) ?? 0,
+    teachers: teachersBySchool.get(s.id) ?? 0,
     members: membersBySchool.get(s.id) ?? 0,
+    disabledModules: offBySchool.get(s.id) ?? 0,
     subscription: subBySchool.get(s.id) ?? null,
   }));
 }

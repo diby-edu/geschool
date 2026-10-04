@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 import { getPlatformOverview } from '@/features/platform-dashboard/queries';
+import { schoolsHref } from '@/features/platform-schools/filters';
 import { Card, CardContent } from '@/components/ui/card';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { KpiCard } from '@/features/dashboard/components/KpiCard';
@@ -15,17 +17,40 @@ function formatWhen(iso: string): string {
   return `il y a ${Math.round(hours / 24)} j`;
 }
 
-function Counter({ label, value, color, hint }: { label: string; value: number; color: string; hint?: string }) {
+/**
+ * Un compteur de la plateforme. Il est TOUJOURS un lien : chaque chiffre d'ici
+ * mène à la liste qu'il compte — « Suspendus » aux écoles suspendues, « Essais
+ * qui se terminent » à ces écoles-là. Un chiffre qui appelle le clic sans mener
+ * nulle part est la pire des promesses.
+ */
+function Counter({
+  label,
+  value,
+  color,
+  hint,
+  href,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  hint?: string;
+  href: string;
+}) {
   return (
-    <Card>
-      <CardContent className="py-3">
-        <p className="text-xs font-medium text-[color:var(--muted-foreground)]">{label}</p>
-        <p className="mt-1 text-xl font-bold tabular-nums" style={{ color }}>
-          {value}
-        </p>
-        {hint ? <p className="text-xs text-[color:var(--muted-foreground)]">{hint}</p> : null}
-      </CardContent>
-    </Card>
+    <Link href={href} className="block">
+      <Card className="h-full transition-transform hover:-translate-y-0.5 motion-reduce:hover:transform-none">
+        <CardContent className="py-3">
+          <p className="flex items-center justify-between gap-2 text-xs font-medium text-[color:var(--muted-foreground)]">
+            <span>{label}</span>
+            <ArrowRight className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+          </p>
+          <p className="mt-1 text-xl font-bold tabular-nums" style={{ color }}>
+            {value}
+          </p>
+          {hint ? <p className="text-xs text-[color:var(--muted-foreground)]">{hint}</p> : null}
+        </CardContent>
+      </Card>
+    </Link>
   );
 }
 
@@ -47,19 +72,25 @@ export default async function PlatformDashboardPage() {
       ? [
           {
             label: `${overview.schools.pending} établissement(s) en attente d'activation`,
-            href: '/admin/etablissements',
+            href: schoolsHref({ statut: 'PENDING' }),
             action: 'Ouvrir',
           },
         ]
       : []),
     ...(overview.pastDue > 0
-      ? [{ label: `${overview.pastDue} abonnement(s) en retard de paiement`, href: '/admin/paiements?tout=1', action: 'Voir' }]
+      ? [
+          {
+            label: `${overview.pastDue} abonnement(s) en retard de paiement`,
+            href: schoolsHref({ abonnement: 'retard' }),
+            action: 'Voir',
+          },
+        ]
       : []),
     ...(overview.trialsEndingSoon > 0
       ? [
           {
             label: `${overview.trialsEndingSoon} essai(s) se termine(nt) dans les 30 jours`,
-            href: '/admin/etablissements',
+            href: schoolsHref({ abonnement: 'essai-bientot' }),
             action: 'Voir',
           },
         ]
@@ -74,15 +105,27 @@ export default async function PlatformDashboardPage() {
         <KpiCard
           label="Établissements"
           value={overview.schools.total.toLocaleString('fr-FR')}
+          href="/admin/etablissements"
           {...(overview.schools.new30d > 0
             ? { trend: { direction: 'up' as const, text: `+${overview.schools.new30d} ce mois-ci` } }
             : {})}
         />
-        <KpiCard label="Élèves (toutes écoles)" value={overview.students.toLocaleString('fr-FR')} />
-        <KpiCard label="Enseignants (toutes écoles)" value={overview.teachers.toLocaleString('fr-FR')} />
+        {/* Les élèves se détaillent école par école dans les statistiques ; les
+            enseignants, dans la liste des établissements. */}
+        <KpiCard
+          label="Élèves (toutes écoles)"
+          value={overview.students.toLocaleString('fr-FR')}
+          href="/admin/statistiques"
+        />
+        <KpiCard
+          label="Enseignants (toutes écoles)"
+          value={overview.teachers.toLocaleString('fr-FR')}
+          href="/admin/etablissements"
+        />
         <KpiCard
           label="Abonnements actifs"
           value={overview.activeSubscriptions.toLocaleString('fr-FR')}
+          href={schoolsHref({ abonnement: 'actif' })}
           {...(overview.mrr ? { unit: `· ${overview.mrr.amount.toLocaleString('fr-FR')} ${overview.mrr.currency}/mois` } : {})}
         />
       </div>
@@ -107,10 +150,30 @@ export default async function PlatformDashboardPage() {
       ) : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Counter label="Actifs" value={overview.schools.active} color="var(--color-success)" />
-        <Counter label="En attente" value={overview.schools.pending} color="var(--color-warning)" />
-        <Counter label="Suspendus" value={overview.schools.suspended} color="var(--color-danger)" />
-        <Counter label="Archivés" value={overview.schools.archived} color="var(--muted-foreground)" />
+        <Counter
+          label="Actifs"
+          value={overview.schools.active}
+          color="var(--color-success)"
+          href={schoolsHref({ statut: 'ACTIVE' })}
+        />
+        <Counter
+          label="En attente"
+          value={overview.schools.pending}
+          color="var(--color-warning)"
+          href={schoolsHref({ statut: 'PENDING' })}
+        />
+        <Counter
+          label="Suspendus"
+          value={overview.schools.suspended}
+          color="var(--color-danger)"
+          href={schoolsHref({ statut: 'SUSPENDED' })}
+        />
+        <Counter
+          label="Archivés"
+          value={overview.schools.archived}
+          color="var(--muted-foreground)"
+          href={schoolsHref({ statut: 'ARCHIVED' })}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -118,6 +181,7 @@ export default async function PlatformDashboardPage() {
           label="Règlements déclarés"
           value={overview.pendingPayments.count}
           color="var(--color-warning)"
+          href="/admin/paiements"
           hint={
             overview.pendingPayments.count > 0 && overview.pendingPayments.currency
               ? `${overview.pendingPayments.amount.toLocaleString('fr-FR')} ${overview.pendingPayments.currency} à confirmer`
@@ -128,12 +192,14 @@ export default async function PlatformDashboardPage() {
           label="Essais qui se terminent"
           value={overview.trialsEndingSoon}
           color="var(--color-brand)"
+          href={schoolsHref({ abonnement: 'essai-bientot' })}
           hint="Dans les 30 jours"
         />
         <Counter
           label="Écoles à formule réduite"
           value={overview.schoolsWithDisabledModules}
           color="var(--muted-foreground)"
+          href={schoolsHref({ modulesReduits: true })}
           hint="Au moins un module coupé"
         />
       </div>

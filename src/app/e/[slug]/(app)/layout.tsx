@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { isAppError } from '@/lib/errors';
 import { getTenantContext } from '@/lib/tenant/context';
+import { traceSupportEntry } from '@/lib/tenant/support-trace';
 import { AppShell } from '@/components/layout/AppShell';
 import { buildSchoolNav } from '@/features/navigation/school-nav';
 import { availableSpaces, getActiveSpace, SPACE_LABELS } from '@/features/navigation/spaces';
@@ -41,6 +42,12 @@ export default async function SchoolAppLayout({
 
   if (ctx.user.mustChangePassword) redirect('/first-login');
 
+  // Un administrateur de la plateforme chez un client : la trace se pose ICI,
+  // a l'arrivee, et non sur le bouton qui l'a amene — un lien direct, une
+  // adresse tapee ou un favori entrent par la meme porte (support-trace.ts).
+  const support = ctx.isPlatformAdmin && !ctx.membership;
+  if (support) await traceSupportEntry(ctx.user.id, ctx.school.id);
+
   const spaces = availableSpaces(ctx);
   const space = await getActiveSpace(ctx);
   const roles = ctx.membership?.roles ?? [];
@@ -77,7 +84,7 @@ export default async function SchoolAppLayout({
     >
       {/* Administrateur de la plateforme chez un client : il a tous les droits
           sans etre membre, et rien a l'ecran ne le lui rappelait. */}
-      {ctx.isPlatformAdmin && !ctx.membership ? <SupportBanner schoolName={ctx.school.name} /> : null}
+      {support ? <SupportBanner schoolName={ctx.school.name} /> : null}
       {children}
     </AppShell>
   );
