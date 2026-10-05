@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mosaïque — les trois variantes</title>
+<style>
+  :root {
+    --brand: #4a44e0;
+    --ink: #141433;
+    --muted: #6b6b8a;
+    --page: #f4f4fb;
+    --card: #ffffff;
+    --line: #e4e4f0;
+    --ok: #0a7d55;
+    --warn: #d98a00;
+    --bad: #c8245a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 80px; }
+  h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 0 0 26px; max-width: 70ch; }
+
+  .variante { margin-bottom: 44px; }
+  .vtitle { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .vtitle h2 { font-size: 19px; margin: 0; letter-spacing: -0.01em; }
+  .tag { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+         border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; color: var(--muted); }
+  .vdesc { color: var(--muted); margin: 0 0 14px; max-width: 78ch; font-size: 14px; }
+
+  /* --- La maquette d'application --------------------------------------- */
+  .app { display: grid; grid-template-columns: 190px 1fr; border-radius: 16px; overflow: hidden;
+         border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(20,20,51,.05), 0 8px 24px rgba(20,20,51,.06); }
+  .menu { padding: 14px 10px; font-size: 13px; }
+  .brandline { font-weight: 800; font-size: 13px; padding: 2px 8px 12px; letter-spacing: -0.01em; }
+  .mgroup { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; opacity: .55; padding: 12px 8px 5px; }
+  .mitem { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 9px; }
+  .dot { width: 7px; height: 7px; border-radius: 99px; flex: 0 0 auto; }
+  .main { padding: 16px; display: grid; gap: 14px; }
+
+  /* Clair */
+  .app.clair .menu { background: #fff; border-right: 1px solid var(--line); }
+  .app.clair .mitem.on { background: #ecebff; color: var(--brand); font-weight: 600; }
+  .app.clair .main { background: var(--page); }
+  /* Menu sombre (mixte) */
+  .app.mixte .menu, .app.nuit .menu { background: #15152b; color: #d8d8ea; border-right: 1px solid #23233f; }
+  .app.mixte .mitem.on, .app.nuit .mitem.on { background: rgba(139,133,255,.18); color: #b9b5ff; font-weight: 600; }
+  .app.mixte .main { background: var(--page); }
+  /* Nuit */
+  .app.nuit { border-color: #23233f; }
+  .app.nuit .main { background: #0f0f21; color: #e6e6f2; }
+
+  .hero { border-radius: 14px; padding: 14px 16px; color: #fff;
+          background: linear-gradient(135deg, #3730a3 0%, #5b50e6 100%); }
+  .hero .hi { font-size: 13px; opacity: .9; }
+  .hero .nom { font-size: 19px; font-weight: 800; letter-spacing: -0.01em; }
+  .chips { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
+  .chip b { font-size: 17px; }
+  .chip span { font-size: 11px; opacity: .85; display: block; }
+  .actions { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 11px; }
+  .act { font-size: 11.5px; background: rgba(255,255,255,.17); border-radius: 8px; padding: 4px 9px; }
+
+  .bloc { border-radius: 14px; padding: 13px 14px; }
+  .app.clair .bloc, .app.mixte .bloc { background: var(--card); border: 1px solid var(--line); }
+  .app.nuit .bloc { background: #1a1a33; border: 1px solid #2a2a4a; }
+  .blabel { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; font-weight: 800; opacity: .65; margin-bottom: 9px; }
+
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+  .tile { border-radius: 13px; padding: 11px 12px; color: #fff; min-height: 84px;
+          display: flex; flex-direction: column; justify-content: space-between; }
+  .tile .k { font-size: 10.5px; font-weight: 800; opacity: .92; }
+  .tile .v { font-size: 25px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+  .tile .s { font-size: 10.5px; opacity: .9; }
+  .t-pres { background: linear-gradient(135deg, #065f46, #0a7d55); }
+  .t-abs  { background: linear-gradient(135deg, #9f1239, #c8245a); }
+  .t-ret  { background: linear-gradient(135deg, #92400e, #b45309); }
+  .t-tx   { background: linear-gradient(135deg, #3730a3, #5b50e6); }
+  .t-ele  { background: linear-gradient(135deg, #5b21b6, #8347ea); }
+  .t-ens  { background: linear-gradient(135deg, #075985, #0a76b3); }
+  .t-acc  { background: linear-gradient(135deg, #f2a71b, #f7c04f); color: #2b1a00; }
+  .t-per  { background: linear-gradient(135deg, #86198f, #b02bbd); }
+  .app.nuit .tile { box-shadow: 0 0 22px -8px currentColor; }
+
+  .analyse { border-radius: 14px; padding: 13px 14px; }
+  .app.clair .analyse { background: var(--card); border: 1px solid var(--line); }
+  .app.mixte .analyse, .app.nuit .analyse { background: #15152b; color: #d8d8ea; border: 1px solid #23233f; }
+  .bars { display: flex; align-items: flex-end; gap: 6px; height: 54px; margin-top: 8px; }
+  .bar { flex: 1; border-radius: 4px 4px 0 0; background: linear-gradient(180deg, #5b50e6, #3730a3); }
+  .app.mixte .bar, .app.nuit .bar { background: linear-gradient(180deg, #8b85ff, #4a44e0); }
+
+  .liste { font-size: 12.5px; }
+  .ligne { display: flex; justify-content: space-between; padding: 5px 0; border-top: 1px solid var(--line); }
+  .app.nuit .ligne, .app.mixte .analyse .ligne { border-color: #2a2a4a; }
+  .ligne:first-child { border-top: 0; }
+  .pill { font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 1px 8px; }
+  .p-bad { background: #fde1e9; color: #9f1239; }
+  .p-warn { background: #fdeccb; color: #8a4b00; }
+  .app.nuit .p-bad { background: rgba(251,113,133,.16); color: #fda4af; }
+  .app.nuit .p-warn { background: rgba(251,191,36,.16); color: #fcd34d; }
+
+  .pour { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; font-size: 13.5px; }
+  .pour div { border: 1px solid var(--line); border-radius: 11px; padding: 9px 11px; background: #fff; }
+  .pour b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px; }
+  .pour .plus b { color: var(--ok); }
+  .pour .moins b { color: var(--bad); }
+
+  .final { border: 1px solid var(--line); border-radius: 14px; background: #fff; padding: 16px 18px; }
+  .final h2 { margin: 0 0 6px; font-size: 17px; }
+  .final p { margin: 0 0 8px; color: var(--muted); }
+  @media (max-width: 720px) {
+    .app { grid-template-columns: 1fr; }
+    .menu { display: none; }
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+    .pour { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Mosaïque — les trois variantes</h1>
+  <p class="sub">
+    Le contenu est le même dans les trois : bandeau d’accueil, Suivi du jour, Statistiques, Analyses.
+    Seul le <strong>décor</strong> change. Les chiffres sont ceux d’une journée ordinaire à La Renaissance
+    (800 élèves, 34 enseignants, 16 classes).
+  </p>
+
+  <!-- ====================== A — CLAIRE ====================== -->
+  <section class="variante">
+    <div class="vtitle"><h2>A — Mosaïque claire</h2><span class="tag">en place aujourd’hui</span></div>
+    <p class="vdesc">Tout en clair : menu blanc, fond bleuté, blocs pleins colorés. C’est ce que vous avez à l’écran en ce moment.</p>
+
+    <div class="app clair">
+      <nav class="menu">
+        <div class="brandline">Gestion Scolaire</div>
+        <div class="mgroup">Comptes</div>
+        <div class="mitem"><span class="dot" style="background:#b02bbd"></span>Personnel</div>
+        <div class="mitem"><span class="dot" style="background:#0a76b3"></span>Enseignants</div>
+        <div class="mitem"><span class="dot" style="background:#8347ea"></span>Élèves</div>
+        <div class="mgroup">Au quotidien</div>
+        <div class="mitem"><span class="dot" style="background:#0d7f78"></span>Emploi du temps</div>
+        <div class="mitem on"><span class="dot" style="background:#0a7d55"></span>Présences</div>
+        <div class="mitem"><span class="dot" style="background:#5b50e6"></span>Notes</div>
+        <div class="mitem"><span class="dot" style="background:#c8245a"></span>Bulletins</div>
+      </nav>
+      <div class="main">
+        <div class="hero">
+          <div class="hi">Bonjour,</div>
+          <div class="nom">Administration</div>
+          <div class="chips">
+            <span class="chip"><b>800</b><span>élèves</span></span>
+            <span class="chip"><b>34</b><span>enseignants</span></span>
+            <span class="chip"><b>16</b><span>classes</span></span>
+          </div>
+          <div class="actions"><span class="act">Inscrire un élève</span><span class="act">Ajouter un enseignant</span><span class="act">Emploi du temps</span></div>
+        </div>
+
+        <div class="bloc">
+          <div class="blabel">Suivi du jour</div>
+          <div class="tiles">
+            <div class="tile t-pres"><span class="k">Présents</span><span class="v">466</span><span class="s">sur 528 comptés</span></div>
+            <div class="tile t-abs"><span class="k">Absents</span><span class="v">34</span><span class="s">dont 12 justifiés</span></div>
+            <div class="tile t-ret"><span class="k">Retards</span><span class="v">28</span><span class="s">enregistrés</span></div>
+            <div class="tile t-tx"><span class="k">Appels faits</span><span class="v">12/18</span><span class="s">67 % des créneaux</span></div>
+          </div>
+        </div>
+
+        <div class="bloc">
+          <div class="blabel">Statistiques actuelles</div>
+          <div class="tiles">
+            <div class="tile t-ele"><span class="k">Élèves</span><span class="v">800</span><span class="s">+14 ce mois-ci</span></div>
+            <div class="tile t-ens"><span class="k">Enseignants</span><span class="v">34</span><span class="s">18 h / semaine</span></div>
+            <div class="tile t-acc"><span class="k">Accès parents</span><span class="v">612</span><span class="s">188 à activer</span></div>
+            <div class="tile t-per"><span class="k">Personnel</span><span class="v">9</span><span class="s">8 fonctions</span></div>
+          </div>
+        </div>
+
+        <div class="analyse">
+          <div class="blabel">Assiduité — 6 dernières semaines</div>
+          <div class="bars"><i class="bar" style="height:62%"></i><i class="bar" style="height:71%"></i><i class="bar" style="height:68%"></i><i class="bar" style="height:84%"></i><i class="bar" style="height:79%"></i><i class="bar" style="height:91%"></i></div>
+          <div class="liste" style="margin-top:12px">
+            <div class="ligne"><span>Terminale D — 6 appels manquants</span><span class="pill p-bad">à surveiller</span></div>
+            <div class="ligne"><span>3ème 2 — taux de présence 82 %</span><span class="pill p-warn">en baisse</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pour">
+      <div class="plus"><b>Ce qu’elle a pour elle</b>Lisible en plein jour, y compris sur un écran bon marché ou éclairé par une fenêtre. Imprimable telle quelle.</div>
+      <div class="moins"><b>Sa limite</b>Les blocs colorés et le fond clair se disputent l’attention : rien ne tire l’œil en premier.</div>
+    </div>
+  </section>
+
+  <!-- ====================== A+B — MIXTE ====================== -->
+  <section class="variante">
+    <div class="vtitle"><h2>A + B — Mosaïque mixte</h2><span class="tag">la fusion des deux</span></div>
+    <p class="vdesc">
+      La mosaïque claire reste au centre, mais le <strong>menu</strong> et la <strong>bande d’analyses</strong>
+      passent en sombre. Le regard va droit aux blocs de couleur ; le décor recule.
+    </p>
+
+    <div class="app mixte">
+      <nav class="menu">
+        <div class="brandline">Gestion Scolaire</div>
+        <div class="mgroup">Comptes</div>
+        <div class="mitem"><span class="dot" style="background:#f0abfc"></span>Personnel</div>
+        <div class="mitem"><span class="dot" style="background:#7dd3fc"></span>Enseignants</div>
+        <div class="mitem"><span class="dot" style="background:#d0b3ff"></span>Élèves</div>
+        <div class="mgroup">Au quotidien</div>
+        <div class="mitem"><span class="dot" style="background:#5eead4"></span>Emploi du temps</div>
+        <div class="mitem on"><span class="dot" style="background:#6ee7b7"></span>Présences</div>
+        <div class="mitem"><span class="dot" style="background:#b9b5ff"></span>Notes</div>
+        <div class="mitem"><span class="dot" style="background:#fda4af"></span>Bulletins</div>
+      </nav>
+      <div class="main">
+        <div class="hero">
+          <div class="hi">Bonjour,</div>
+          <div class="nom">Administration</div>
+          <div class="chips">
+            <span class="chip"><b>800</b><span>élèves</span></span>
+            <span class="chip"><b>34</b><span>enseignants</span></span>
+            <span class="chip"><b>16</b><span>classes</span></span>
+          </div>
+          <div class="actions"><span class="act">Inscrire un élève</span><span class="act">Ajouter un enseignant</span><span class="act">Emploi du temps</span></div>
+        </div>
+
+        <div class="bloc">
+          <div class="blabel">Suivi du jour</div>
+          <div class="tiles">
+            <div class="tile t-pres"><span class="k">Présents</span><span class="v">466</span><span class="s">sur 528 comptés</span></div>
+            <div class="tile t-abs"><span class="k">Absents</span><span class="v">34</span><span class="s">dont 12 justifiés</span></div>
+            <div class="tile t-ret"><span class="k">Retards</span><span class="v">28</span><span class="s">enregistrés</span></div>
+            <div class="tile t-tx"><span class="k">Appels faits</span><span class="v">12/18</span><span class="s">67 % des créneaux</span></div>
+          </div>
+        </div>
+
+        <div class="bloc">
+          <div class="blabel">Statistiques actuelles</div>
+          <div class="tiles">
+            <div class="tile t-ele"><span class="k">Élèves</span><span class="v">800</span><span class="s">+14 ce mois-ci</span></div>
+            <div class="tile t-ens"><span class="k">Enseignants</span><span class="v">34</span><span class="s">18 h / semaine</span></div>
+            <div class="tile t-acc"><span class="k">Accès parents</span><span class="v">612</span><span class="s">188 à activer</span></div>
+            <div class="tile t-per"><span class="k">Personnel</span><span class="v">9</span><span class="s">8 fonctions</span></div>
+          </div>
+        </div>
+
+        <div class="analyse">
+          <div class="blabel">Assiduité — 6 dernières semaines</div>
+          <div class="bars"><i class="bar" style="height:62%"></i><i class="bar" style="height:71%"></i><i class="bar" style="height:68%"></i><i class="bar" style="height:84%"></i><i class="bar" style="height:79%"></i><i class="bar" style="height:91%"></i></div>
+          <div class="liste" style="margin-top:12px">
+            <div class="ligne"><span>Terminale D — 6 appels manquants</span><span class="pill p-bad">à surveiller</span></div>
+            <div class="ligne"><span>3ème 2 — taux de présence 82 %</span><span class="pill p-warn">en baisse</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pour">
+      <div class="plus"><b>Ce qu’elle a pour elle</b>Le menu sombre encadre sans attirer l’œil : les chiffres du jour passent devant. Le contraste reste bon en plein jour.</div>
+      <div class="moins"><b>Sa limite</b>Deux ambiances cohabitent : il faut que la frontière soit nette, sinon cela paraît inachevé.</div>
+    </div>
+  </section>
+
+  <!-- ====================== A+B — NUIT ====================== -->
+  <section class="variante">
+    <div class="vtitle"><h2>A + B — Mosaïque nuit</h2><span class="tag">la plus tranchée</span></div>
+    <p class="vdesc">Tout en sombre, blocs colorés à halo. Les couleurs ressortent beaucoup plus ; le fond disparaît.</p>
+
+    <div class="app nuit">
+      <nav class="menu">
+        <div class="brandline">Gestion Scolaire</div>
+        <div class="mgroup">Comptes</div>
+        <div class="mitem"><span class="dot" style="background:#f0abfc"></span>Personnel</div>
+        <div class="mitem"><span class="dot" style="background:#7dd3fc"></span>Enseignants</div>
+        <div class="mitem"><span class="dot" style="background:#d0b3ff"></span>Élèves</div>
+        <div class="mgroup">Au quotidien</div>
+        <div class="mitem"><span class="dot" style="background:#5eead4"></span>Emploi du temps</div>
+        <div class="mitem on"><span class="dot" style="background:#6ee7b7"></span>Présences</div>
+        <div class="mitem"><span class="dot" style="background:#b9b5ff"></span>Notes</div>
+        <div class="mitem"><span class="dot" style="background:#fda4af"></span>Bulletins</div>
+      </nav>
+      <div class="main">
+        <div class="hero">
+          <div class="hi">Bonjour,</div>
+          <div class="nom">Administration</div>
+          <div class="chips">
+            <span class="chip"><b>800</b><span>élèves</span></span>
+            <span class="chip"><b>34</b><span>enseignants</span></span>
+            <span class="chip"><b>16</b><span>classes</span></span>
+          </div>
+          <div class="actions"><span class="act">Inscrire un élève</span><span class="act">Ajouter un enseignant</span><span class="act">Emploi du temps</span></div>
+        </div>
+
+        <div class="bloc">
+          <div class="blabel">Suivi du jour</div>
+          <div class="tiles">
+            <div class="tile t-pres"><span class="k">Présents</span><span class="v">466</span><span class="s">sur 528 comptés</span></div>
+            <div class="tile t-abs"><span class="k">Absents</span><span class="v">34</span><span class="s">dont 12 justifiés</span></div>
+            <div class="tile t-ret"><span class="k">Retards</span><span class="v">28</span><span class="s">enregistrés</span></div>
+            <div class="tile t-tx"><span class="k">Appels faits</span><span class="v">12/18</span><span class="s">67 % des créneaux</span></div>
+          </div>
+        </div>
+
+        <div class="bloc">
+          <div class="blabel">Statistiques actuelles</div>
+          <div class="tiles">
+            <div class="tile t-ele"><span class="k">Élèves</span><span class="v">800</span><span class="s">+14 ce mois-ci</span></div>
+            <div class="tile t-ens"><span class="k">Enseignants</span><span class="v">34</span><span class="s">18 h / semaine</span></div>
+            <div class="tile t-acc"><span class="k">Accès parents</span><span class="v">612</span><span class="s">188 à activer</span></div>
+            <div class="tile t-per"><span class="k">Personnel</span><span class="v">9</span><span class="s">8 fonctions</span></div>
+          </div>
+        </div>
+
+        <div class="analyse">
+          <div class="blabel">Assiduité — 6 dernières semaines</div>
+          <div class="bars"><i class="bar" style="height:62%"></i><i class="bar" style="height:71%"></i><i class="bar" style="height:68%"></i><i class="bar" style="height:84%"></i><i class="bar" style="height:79%"></i><i class="bar" style="height:91%"></i></div>
+          <div class="liste" style="margin-top:12px">
+            <div class="ligne"><span>Terminale D — 6 appels manquants</span><span class="pill p-bad">à surveiller</span></div>
+            <div class="ligne"><span>3ème 2 — taux de présence 82 %</span><span class="pill p-warn">en baisse</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pour">
+      <div class="plus"><b>Ce qu’elle a pour elle</b>Les couleurs ressortent au maximum ; reposante le soir et sur un grand écran de bureau.</div>
+      <div class="moins"><b>Sa limite</b>Difficile à lire en plein jour sur un écran bon marché, et une capture imprimée vide une cartouche d’encre.</div>
+    </div>
+  </section>
+
+  <div class="final">
+    <h2>Mon avis, puisque vous le demandez</h2>
+    <p>
+      La <strong>mixte</strong>. C’est elle que vous aviez décrite comme « la fusion des deux », et c’est celle qui
+      tient dans les conditions réelles d’un secrétariat : lumière du jour, écran quelconque, écran parfois projeté.
+      Le menu sombre fait reculer la navigation — qu’on connaît par cœur au bout d’une semaine — et laisse les
+      chiffres du jour passer devant.
+    </p>
+    <p>
+      Le mode sombre complet existe déjà dans l’application, par le bouton clair/sombre : qui préfère la nuit l’a
+      déjà, sans que ce soit le décor imposé à tout le monde.
+    </p>
+  </div>
+
+</div>
+</body>
+</html>
