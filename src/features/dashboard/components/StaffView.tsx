@@ -14,6 +14,8 @@ import { StatsBlock } from './StatsBlock';
 import { TimedRefresh } from './TimedRefresh';
 import { TodoPanel } from './TodoPanel';
 import { BlocHead, Card, plural } from './ui';
+import { readChecklist } from '@/features/onboarding/checklist';
+import { StartupBanner } from '@/features/onboarding/components/StartupBanner';
 
 type Sp = Record<string, string | string[] | undefined>;
 
@@ -40,10 +42,18 @@ export async function StaffView({ ctx, sp }: { ctx: TenantContext; sp: Sp }) {
   if (hasAnyPermission(ctx, ['attendance.view', 'attendance.view_all'])) actions.push({ label: 'Présences', href: `${base}/attendance`, Icon: ClipboardCheck, group: 'module' });
   if (hasPermission(ctx, 'reports.view')) actions.push({ label: 'Bulletins', href: `${base}/bulletins`, Icon: FileText, group: 'module' });
 
+  // Tant que l'essentiel manque, le tableau de bord mesure du vide : on dit
+  // d'abord par ou commencer.
+  const demarrage = await readChecklist(ctx);
+
   return (
     <div className="mx-auto max-w-6xl space-y-7">
       {/* Le total des appels attendus change à chaque fin de créneau : relecture chaque minute (les données, elles, arrivent en direct). */}
       <TimedRefresh />
+
+      {demarrage.ready ? null : (
+        <StartupBanner slug={ctx.school.slug} done={demarrage.done} total={demarrage.total} steps={demarrage.steps} />
+      )}
 
       <Hero
         name={ctx.user.displayName}
