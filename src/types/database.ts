@@ -1816,6 +1816,45 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_receipts: {
+        Row: {
+          id: string
+          school_id: string
+          payment_id: string
+          number: string
+          year: number
+          sequence: number
+          amount: number
+          currency: string
+          label: string
+          issued_at: string
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          payment_id: string
+          number: string
+          year: number
+          sequence: number
+          amount: number
+          currency?: string
+          label: string
+          issued_at?: string
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          payment_id?: string
+          number?: string
+          year?: number
+          sequence?: number
+          amount?: number
+          currency?: string
+          label?: string
+          issued_at?: string
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           id: string
@@ -3694,18 +3733,36 @@ export type Database = {
           school_id: string
           subscription_id: string
           module_id: string
+          starts_on: string
+          ends_on: string | null
+          mode: Database['public']['Enums']["module_access_mode"]
+          price_paid: number | null
+          created_at: string
+          updated_at: string
         }
         Insert: {
           id?: string
           school_id: string
           subscription_id: string
           module_id: string
+          starts_on?: string
+          ends_on?: string | null
+          mode?: Database['public']['Enums']["module_access_mode"]
+          price_paid?: number | null
+          created_at?: string
+          updated_at?: string
         }
         Update: {
           id?: string
           school_id?: string
           subscription_id?: string
           module_id?: string
+          starts_on?: string
+          ends_on?: string | null
+          mode?: Database['public']['Enums']["module_access_mode"]
+          price_paid?: number | null
+          created_at?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -4302,6 +4359,7 @@ export type Database = {
       justification_status: "PENDING" | "APPROVED" | "REJECTED"
       login_kind: "EMAIL" | "PHONE" | "MATRICULE"
       membership_status: "INVITED" | "ACTIVE" | "SUSPENDED" | "DISABLED"
+      module_access_mode: "FULL" | "DEMO"
       notification_channel: "IN_APP" | "PUSH" | "EMAIL" | "SMS" | "WHATSAPP"
       occurrence_status: "SCHEDULED" | "CANCELLED" | "MOVED" | "REPLACED" | "DONE"
       payment_method: "MOBILE_MONEY" | "BANK_TRANSFER" | "CASH" | "CARD" | "OTHER"

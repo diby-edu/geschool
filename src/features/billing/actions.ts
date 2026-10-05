@@ -1,5 +1,8 @@
 'use server';
 
+import { writePaymentSettings } from './payment-settings';
+import { requireAdmin } from '@/features/platform/admin';
+
 import { redirect } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
 import { runFormAction, formValues, type FormState } from '@/lib/forms';
@@ -124,5 +127,25 @@ export async function deleteModuleAction(id: string, _p: FormState, _fd: FormDat
     await assertPlatformAdmin();
     await deleteModule(id);
     redirect('/admin/plans?module_supprime=1');
+  });
+}
+
+/**
+ * Comment les ecoles paient : passerelle ouverte, et ou verser en attendant.
+ *
+ * Tant que ces coordonnees sont vides, l'ecran de paiement d'une ecole le dit
+ * et lui demande de ne verser sur aucun numero qui ne viendrait pas de la
+ * plateforme. Mieux vaut cette phrase qu'un numero approximatif.
+ */
+export async function savePaymentSettingsAction(_p: FormState, fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const admin = await requireAdmin();
+    await writePaymentSettings(admin.userId, {
+      provider: String(fd.get('provider') ?? '').trim().slice(0, 40),
+      mobileMoneyNumber: String(fd.get('mobileMoneyNumber') ?? '').trim().slice(0, 40),
+      mobileMoneyName: String(fd.get('mobileMoneyName') ?? '').trim().slice(0, 80),
+      instructions: String(fd.get('instructions') ?? '').trim().slice(0, 600),
+    });
+    redirect('/admin/paiements?enregistre=1');
   });
 }

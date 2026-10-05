@@ -1,7 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { listPayments } from '@/features/platform/admin';
-import { settlePaymentAction } from '@/features/billing/actions';
+import { settlePaymentAction, savePaymentSettingsAction } from '@/features/billing/actions';
+import { readPaymentSettingsForAdmin } from '@/features/billing/payment-settings';
+import { PaymentSettingsForm } from '@/features/billing/components/PaymentSettingsForm';
+import { Alert } from '@/components/ui/alert';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { ConfirmSubmit } from '@/components/ui/confirm-submit';
@@ -42,11 +45,15 @@ export default async function PlatformPaymentsPage({
 }) {
   const sp = await searchParams;
   const all = sp.tout === '1';
-  const payments = await listPayments(all ? 'ALL' : 'PENDING');
+  const [payments, paymentSettings] = await Promise.all([
+    listPayments(all ? 'ALL' : 'PENDING'),
+    readPaymentSettingsForAdmin(),
+  ]);
   const pending = payments.filter((p) => p.status === 'PENDING');
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">
+      {sp.enregistre === '1' ? <Alert tone="success">Réglages de paiement enregistrés.</Alert> : null}
       <PageHeader
         title="Paiements"
         description={
@@ -60,6 +67,19 @@ export default async function PlatformPaymentsPage({
           </Link>
         }
       />
+
+      <Card>
+        <CardContent className="space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold">Comment les écoles paient</h2>
+            <p className="text-sm text-[color:var(--muted-foreground)]">
+              Ce que voit une école quand elle clique sur « Payer ». Sans passerelle, elle verse sur votre numéro et
+              signale la référence&nbsp;; vous confirmez ci-dessous, et son reçu s’émet.
+            </p>
+          </div>
+          <PaymentSettingsForm action={savePaymentSettingsAction} settings={paymentSettings} />
+        </CardContent>
+      </Card>
 
       {payments.length === 0 ? (
         <EmptyState
