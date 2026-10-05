@@ -122,3 +122,31 @@ export async function getFunctionPermissionCodes(ctx: TenantContext, roleCode: s
     .maybeSingle();
   return own ? getRolePermissionCodes(ctx, own.id) : getTemplatePermissionCodes(roleCode);
 }
+
+/**
+ * Les droits de TOUTES les fonctions de l'etablissement, en une requete.
+ *
+ * Sert la vue d'ensemble : une case par droit et par fonction. La lire ligne
+ * par ligne demanderait une requete par fonction — onze allers-retours pour un
+ * tableau qu'on regarde d'un coup d'oeil.
+ */
+export async function allRolePermissions(ctx: TenantContext): Promise<Map<string, Set<string>>> {
+  const supabase = await createClient();
+  const { data: roles } = await supabase.from('roles').select('id, code').eq('school_id', ctx.school.id);
+  const parId = new Map((roles ?? []).map((r) => [r.id, r.code]));
+  if (parId.size === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from('role_permissions')
+    .select('role_id, permissions(code)')
+    .in('role_id', [...parId.keys()]);
+  if (error) throw error;
+
+  const out = new Map<string, Set<string>>();
+  for (const code of parId.values()) out.set(code, new Set());
+  for (const l of (data ?? []) as unknown as { role_id: string; permissions: { code: string } | null }[]) {
+    const roleCode = parId.get(l.role_id);
+    if (roleCode && l.permissions?.code) out.get(roleCode)!.add(l.permissions.code);
+  }
+  return out;
+}

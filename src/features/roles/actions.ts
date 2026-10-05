@@ -122,3 +122,50 @@ export async function resetRoleAction(slug: string, roleId: string, _prev: FormS
     redirect(`/e/${slug}/roles?role=${role.code}&reset=1`);
   });
 }
+
+/**
+ * Bascule UN droit d'UNE fonction, depuis la vue d'ensemble.
+ *
+ * Le tableau croise sert a reperer l'anomalie — « le secretaire peut-il
+ * vraiment publier les bulletins ? » — et a la corriger sur place, sans
+ * rouvrir la fiche de la fonction. Les memes gardes s'appliquent : on
+ * n'accorde pas un droit qu'on ne detient pas soi-meme, et la base refuse en
+ * dernier recours.
+ */
+export async function togglePermissionAction(
+  slug: string,
+  roleId: string,
+  code: string,
+  grant: boolean,
+  _prev: FormState,
+  _fd: FormData,
+): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    requireWritable(ctx, 'users.assign_roles');
+    const role = await loadEditableRole(ctx.school.id, roleId);
+    if (!CATALOG_CODES.has(code)) throw new NotFoundError('Droit inconnu.');
+
+    if (grant && !hasPermission(ctx, code)) {
+      throw new AuthorizationError(
+        `Vous ne pouvez pas accorder un droit que vous ne possédez pas : ${permissionLabel(code)}.`,
+      );
+    }
+
+    const supabase = await createClient();
+    const { error } = await supabase.rpc(
+      'set_role_permissions' as never,
+      { p_role: roleId, p_add: grant ? [code] : [], p_remove: grant ? [] : [code] } as never,
+    );
+    if (error) dbError(error as { code?: string; message?: string });
+
+    await audit(ctx, {
+      action: 'roles.permissions.update',
+      module: 'roles',
+      entityType: 'role',
+      entityId: roleId,
+      after: { role: role.code, ...(grant ? { added: [code] } : { removed: [code] }) },
+    });
+    redirect(`/e/${slug}/roles?vue=ensemble&maj=${encodeURIComponent(code)}`);
+  });
+}

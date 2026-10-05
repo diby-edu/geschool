@@ -65,6 +65,32 @@ export const STAFF_FUNCTIONS = [
 
 export type StaffFunction = (typeof STAFF_FUNCTIONS)[number];
 
+/**
+ * Abreviation pour les en-tetes du tableau croise.
+ *
+ * Onze colonnes de « Inspecteur d'education » seraient illisibles ; le nom
+ * complet reste en infobulle et sur la fiche de la fonction.
+ */
+const ROLE_SHORT: Record<RoleCode, string> = {
+  SCHOOL_ADMIN: 'Fond.',
+  DIRECTOR: 'Dir.',
+  DEPUTY_DIRECTOR: 'D. adj.',
+  CENSOR: 'Cens.',
+  EDUCATION_INSPECTOR: 'Insp.',
+  HEAD_SUPERVISOR: 'Surv. gén.',
+  SUPERVISOR: 'Éduc.',
+  SECRETARY: 'Secr.',
+  IT_ADMIN: 'Info.',
+  ACCOUNTANT: 'Compt.',
+  TEACHER: 'Ens.',
+  PARENT: 'Parent',
+  STUDENT: 'Élève',
+};
+
+export function roleShort(code: RoleCode): string {
+  return ROLE_SHORT[code] ?? code;
+}
+
 export function roleLabel(code: RoleCode): string {
   return ROLE_LABELS[code] ?? code;
 }

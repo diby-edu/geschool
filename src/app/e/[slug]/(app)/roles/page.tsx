@@ -5,12 +5,17 @@ import { requirePageAccess } from '@/lib/permissions/guard';
 import { PERMISSION_GROUPS } from '@/lib/permissions/catalog';
 import { cn } from '@/lib/utils';
 import {
+  allRolePermissions,
   getRolePermissionCodes,
   listExistingPermissionCodes,
   listSchoolRoles,
 } from '@/features/roles/queries';
-import { customizeRolesAction, resetRoleAction, saveRolePermissionsAction } from '@/features/roles/actions';
+import { customizeRolesAction, resetRoleAction, saveRolePermissionsAction, togglePermissionAction } from '@/features/roles/actions';
 import { RolePermissionsForm } from '@/features/roles/components/RolePermissionsForm';
+import { PermissionMatrix } from '@/features/roles/components/PermissionMatrix';
+import { CellToggle } from '@/features/roles/components/CellToggle';
+import { hasPermission } from '@/lib/permissions';
+import { roleShort, type RoleCode } from '@/lib/permissions/roles';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Alert } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
@@ -66,11 +71,14 @@ export default async function RolesPage({
     );
   }
 
+  const vue = pick(sp.vue) === 'ensemble' ? 'ensemble' : 'fonction';
   const selected = roles.find((r) => r.code === pick(sp.role)) ?? roles.find((r) => !r.locked) ?? roles[0]!;
-  const [existing, currentCodes] = await Promise.all([
+  const [existing, currentCodes, accordes] = await Promise.all([
     listExistingPermissionCodes(),
     selected.locked ? Promise.resolve<string[]>([]) : getRolePermissionCodes(ctx, selected.id),
+    allRolePermissions(ctx),
   ]);
+  const peutRegler = hasPermission(ctx, 'users.assign_roles') && ctx.school.status === 'ACTIVE';
 
   // Seuls les droits qui existent en base ET qui ont un effet réel sont proposés.
   const groups = PERMISSION_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => existing.has(i.code)) })).filter(
@@ -88,6 +96,54 @@ export default async function RolesPage({
         action={<BackToSettings ctx={ctx} />}
       />
 
+      <nav className="flex gap-1 border-b" aria-label="Vue">
+        {[
+          { id: 'fonction', label: 'Par fonction', href: `/e/${slug}/roles?role=${selected.code}` },
+          { id: 'ensemble', label: 'Vue d’ensemble', href: `/e/${slug}/roles?vue=ensemble` },
+        ].map((t) => (
+          <Link
+            key={t.id}
+            href={t.href}
+            scroll={false}
+            aria-current={vue === t.id ? 'page' : undefined}
+            className={cn(
+              '-mb-px border-b-2 px-3 py-2 text-sm',
+              vue === t.id
+                ? 'border-[color:var(--color-brand)] font-semibold text-[color:var(--color-brand)]'
+                : 'border-transparent text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]',
+            )}
+          >
+            {t.label}
+          </Link>
+        ))}
+      </nav>
+
+      {vue === 'ensemble' ? (
+        <PermissionMatrix
+          groups={groups}
+          roles={roles.map((r) => ({
+            id: r.id,
+            code: r.code,
+            name: r.name,
+            short: roleShort(r.code as RoleCode),
+            locked: r.locked,
+          }))}
+          granted={accordes}
+          readOnly={!peutRegler}
+          highlight={pick(sp.maj)}
+          {...(peutRegler
+            ? {
+                toggle: (roleId: string, code: string, grant: boolean, label: string) => (
+                  <CellToggle
+                    action={togglePermissionAction.bind(null, slug, roleId, code, grant)}
+                    granted={!grant}
+                    label={label}
+                  />
+                ),
+              }
+            : {})}
+        />
+      ) : (
       <div className="grid gap-5 md:grid-cols-[15rem_1fr]">
         <nav aria-label="Fonctions" className="space-y-1 md:sticky md:top-4 md:self-start">
           {roles.map((r) => {
@@ -165,6 +221,7 @@ export default async function RolesPage({
           />
         </div>
       </div>
+      )}
     </div>
   );
 }
