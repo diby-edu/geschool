@@ -1,7 +1,9 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { getTenantContext } from '@/lib/tenant/context';
+import { getTenantContext, type TenantContext } from '@/lib/tenant/context';
+import { createClient } from '@/lib/supabase/server';
+import { uniqueCode } from './code';
 import { runFormAction, formValues, type FormState } from '@/lib/forms';
 import { ValidationError } from '@/lib/errors';
 import { gradingScaleSchema, assessmentTypeSchema, assessmentSchema } from './schemas';
@@ -84,7 +86,7 @@ export async function saveScaleAction(slug: string, id: string | null, _p: FormS
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
     const input = gradingScaleSchema.parse({
-      code: fd.get('code'),
+      code: await repere(ctx, fd, id, 'grading_scales'),
       name: fd.get('name'),
       kind: fd.get('kind'),
       minScore: fd.get('minScore'),
@@ -111,7 +113,7 @@ export async function saveTypeAction(slug: string, id: string | null, _p: FormSt
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
     const input = assessmentTypeSchema.parse({
-      code: fd.get('code'),
+      code: await repere(ctx, fd, id, 'assessment_types'),
       name: fd.get('name'),
       defaultCoefficient: fd.get('defaultCoefficient'),
       countsInAverage: fd.get('countsInAverage') === 'on' || fd.get('countsInAverage') === 'true',
@@ -208,4 +210,31 @@ export async function saveGradesAction(slug: string, id: string, _p: FormState, 
     await saveGrades(ctx, id, entries);
     redirect(`/e/${slug}/evaluations/${id}?saved=1`);
   });
+}
+
+/**
+ * Le repere interne d'un bareme ou d'un type.
+ *
+ * On ne le demande plus a l'ecole : « Code » ne veut rien dire pour qui
+ * voulait simplement ecrire « Notes sur 20 ». Il se deduit du nom, et change
+ * de suffixe s'il est deja pris. Une modification garde le sien : le changer
+ * casserait les references existantes.
+ */
+async function repere(
+  ctx: TenantContext,
+  fd: FormData,
+  id: string | null,
+  table: 'grading_scales' | 'assessment_types',
+): Promise<string> {
+  const saisi = String(fd.get('code') ?? '').trim();
+  if (saisi) return saisi;
+
+  const supabase = await createClient();
+  const { data } = await supabase.from(table).select('id, code').eq('school_id', ctx.school.id);
+  const lignes = (data ?? []) as { id: string; code: string }[];
+  if (id) {
+    const actuel = lignes.find((l) => l.id === id)?.code;
+    if (actuel) return actuel;
+  }
+  return uniqueCode(String(fd.get('name') ?? ''), lignes.map((l) => l.code));
 }
