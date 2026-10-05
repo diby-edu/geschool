@@ -207,9 +207,20 @@ async function loadOverview(
     if (last) weekly = { rate7d: last.value, ratePrev7d: known[known.length - 2]?.value ?? last.value, series };
   }
 
+  // Un comptage qui ECHOUE n'est pas un comptage a zero. PostgREST repond en
+  // HEAD, donc sans corps : l'erreur arrive sans message, et `count` reste nul.
+  // Afficher « 0 eleve » dans une ecole qui en compte huit cents est pire que
+  // de ne rien afficher — on prefere taire la section.
+  const compte = (r: { count: number | null; error: unknown } | null): number | null =>
+    r && !r.error ? (r.count ?? 0) : null;
+  const studentsCounted = compte(studentsTotal);
+
   return {
     kind: 'staff',
-    students: studentsTotal ? { total: studentsTotal.count ?? 0, new30d: studentsNew?.count ?? 0 } : null,
+    students:
+      studentsTotal && studentsCounted !== null
+        ? { total: studentsCounted, new30d: compte(studentsNew) ?? 0 }
+        : null,
     capacity,
     parents,
     teachers,
@@ -217,9 +228,9 @@ async function loadOverview(
     classes: classesLoaded ? classesLoaded.classes.length : null,
     levelDistribution,
     weekly,
-    pendingJustifications: pendingJust ? (pendingJust.count ?? 0) : null,
+    pendingJustifications: compte(pendingJust),
     activity,
-    scheduleGenerated: canSchedule && yearId ? (scheduleVersion?.count ?? 0) > 0 : null,
+    scheduleGenerated: canSchedule && yearId ? (compte(scheduleVersion) ?? 0) > 0 : null,
     subscription: subscription ? { status: subscription.status, planName: subscription.plans?.name ?? null } : null,
   };
 }
