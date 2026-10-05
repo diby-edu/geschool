@@ -1,5 +1,6 @@
 'use server';
 
+import type { EducationTrack } from './official-tracks';
 import { redirect } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
 import { runFormAction, formValues, type FormState } from '@/lib/forms';
@@ -60,13 +61,13 @@ export async function deleteLevelAction(slug: string, id: string, _p: FormState,
 /** Bouton « Charger les niveaux officiels » d'un ordre d'enseignement. */
 export async function applyOfficialLevelsAction(
   slug: string,
-  track: 'TECHNIQUE' | 'PROFESSIONNEL',
+  track: EducationTrack,
   _p: FormState,
   _fd: FormData,
 ): Promise<FormState> {
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
     const r = await applyOfficialLevels(ctx, track);
-    redirect(`/e/${slug}/structure?niveaux=${r.levels}`);
+    redirect(`/e/${slug}/structure?niveaux=${r.levels}&cycles=${r.cycles}`);
   });
 }

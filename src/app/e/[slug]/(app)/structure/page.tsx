@@ -3,7 +3,7 @@ import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccessAny } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { listCycles, listLevels, schoolTracks } from '@/features/structure/queries';
-import { TRACK_LABELS, OFFICIAL_TRACK_LEVELS } from '@/features/structure/official-tracks';
+import { TRACK_LABELS, OFFICIAL_STRUCTURE, type EducationTrack } from '@/features/structure/official-tracks';
 import { groupLevels } from '@/features/structure/level-tree';
 import { createCycleAction, deleteCycleAction, createLevelAction, deleteLevelAction, applyOfficialLevelsAction } from '@/features/structure/actions';
 import { CycleCreateForm, LevelCreateForm } from '@/features/structure/components/StructureForms';
@@ -37,10 +37,18 @@ export default async function StructurePage({
 
   // Niveaux officiels proposés pour les ordres de l'établissement, tant qu'il en manque.
   const existingCodes = new Set(allLevels.map((l) => l.code));
-  const officialOffers = (['TECHNIQUE', 'PROFESSIONNEL'] as const)
+  // Ce qui manque encore a chaque ordre souscrit, cycles ET niveaux. Le general
+  // y figure desormais : ses deux cycles et ses quatorze niveaux sont connus
+  // d'avance, il n'y a aucune raison de les faire saisir a la main.
+  const existingCycleCodes = new Set(allCycles.map((c) => c.code));
+  const officialOffers = (['GENERAL', 'TECHNIQUE', 'PROFESSIONNEL'] as const)
     .filter((t) => tracks.includes(t))
-    .map((t) => ({ track: t, missing: OFFICIAL_TRACK_LEVELS[t].levels.filter((l) => !existingCodes.has(l.code)).length }))
-    .filter((o) => o.missing > 0);
+    .map((t) => ({
+      track: t as EducationTrack,
+      missingCycles: OFFICIAL_STRUCTURE[t].cycles.filter((c) => !existingCycleCodes.has(c.code)).length,
+      missing: OFFICIAL_STRUCTURE[t].levels.filter((l) => !existingCodes.has(l.code)).length,
+    }))
+    .filter((o) => o.missing > 0 || o.missingCycles > 0);
 
   // Niveaux rangés par ordre (général, technique, professionnel) puis, dans le
   // professionnel, par diplôme. Repliés par défaut : une école complète en a
@@ -51,7 +59,10 @@ export default async function StructurePage({
     <div className="mx-auto max-w-3xl space-y-8">
       <Flash searchParams={sp} />
       {typeof sp.niveaux === 'string' ? (
-        <Alert tone="success">{sp.niveaux} niveau(x) créé(s). Créez maintenant les classes à partir de ces niveaux.</Alert>
+        <Alert tone="success">
+          {sp.cycles && sp.cycles !== '0' ? `${sp.cycles} cycle(s) et ` : ''}
+          {sp.niveaux} niveau(x) créé(s). Créez maintenant les classes à partir de ces niveaux.
+        </Alert>
       ) : null}
       <PageHeader
         title="Structure pédagogique"
@@ -62,7 +73,10 @@ export default async function StructurePage({
       <section className="space-y-3">
         <h2 className="text-sm font-medium uppercase tracking-wide text-[color:var(--muted-foreground)]">Cycles</h2>
         {cycles.length === 0 ? (
-          <EmptyState title="Aucun cycle" />
+          <EmptyState
+            title="Aucun cycle"
+            hint="Chargez la structure officielle de votre ordre d’enseignement ci-dessous : les cycles et les niveaux sont déjà connus."
+          />
         ) : (
           <ul className="space-y-2">
             {cycles.map((c) => (
@@ -100,18 +114,21 @@ export default async function StructurePage({
             {officialOffers.map((o) => (
               <Card key={o.track}>
                 <CardContent className="space-y-2 py-4 text-sm">
-                  <p className="font-semibold">Niveaux officiels : {TRACK_LABELS[o.track]}</p>
+                  <p className="font-semibold">Structure officielle : {TRACK_LABELS[o.track]}</p>
                   <p className="text-[color:var(--muted-foreground)]">
-                    {o.track === 'TECHNIQUE'
-                      ? 'Crée les séries du technique (2nde AB, B, F1, F2, F3, G1, G2, T3, F7).'
-                      : 'Crée les classes de la formation professionnelle, rangées par diplôme (CAP, BEP, BT, CQP, FQ).'}{' '}
+                    {o.track === 'GENERAL'
+                      ? 'Crée le premier et le second cycle, puis la 6ème à la Terminale (séries A, C, D).'
+                      : o.track === 'TECHNIQUE'
+                        ? 'Crée les séries du technique (2nde AB, B, F1, F2, F3, G1, G2, T3, F7).'
+                        : 'Crée les classes de la formation professionnelle, rangées par diplôme (CAP, BEP, BT, CQP, FQ).'}{' '}
+                    {o.missingCycles > 0 ? `${o.missingCycles} cycle(s) et ` : ''}
                     {o.missing} niveau(x) manquant(s). Ce qui existe déjà n’est pas modifié ; tout reste modifiable ensuite.
                   </p>
                   <ConfirmSubmit
                     action={applyOfficialLevelsAction.bind(null, slug, o.track)}
-                    label="Charger les niveaux officiels"
+                    label="Charger la structure officielle"
                     variant="secondary"
-                    confirmMessage={`Créer les ${o.missing} niveau(x) manquants de l'ordre « ${TRACK_LABELS[o.track]} » ?`}
+                    confirmMessage={`Créer ce qui manque à l'ordre « ${TRACK_LABELS[o.track]} » ?`}
                   />
                 </CardContent>
               </Card>

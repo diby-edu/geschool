@@ -190,6 +190,19 @@
 .mkt-wiz-field input:focus { outline: none; border-color: var(--mkt-brand); }
 .mkt-wiz-hint { font-size: 0.78rem; color: var(--mkt-muted); margin: 6px 0 0; }
 
+/* Champ de mot de passe : un bouton pour verifier ce qu'on a tape. Sans lui,
+   on saisit deux fois a l'aveugle un mot de passe qu'on vient d'inventer. */
+.mkt-wiz-pass { position: relative; }
+.mkt-wiz-pass input { padding-right: 46px !important; }
+.mkt-wiz-pass button {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  display: grid; place-items: center; width: 34px; height: 34px;
+  border: 0; border-radius: 9px; background: transparent; cursor: pointer;
+  color: var(--mkt-muted);
+}
+.mkt-wiz-pass button:hover { color: var(--mkt-tx); background: var(--mkt-soft); }
+.mkt-wiz-pass button:focus-visible { outline: 2px solid var(--mkt-brand); outline-offset: 1px; }
+
 .mkt-wiz-photo-drop {
   width: 84px; height: 84px; border-radius: 18px; border: 2px dashed var(--mkt-stroke);
   display: grid; place-items: center; cursor: pointer; color: var(--mkt-muted); background: var(--mkt-soft);

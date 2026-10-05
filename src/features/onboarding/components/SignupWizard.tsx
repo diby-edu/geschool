@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useFormStatus } from 'react-dom';
 import { registerSchoolAction } from '../actions';
 import type { FormState } from '@/lib/forms';
@@ -59,6 +60,9 @@ export function SignupWizard() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [fields, setFields] = useState<Fields>({ ...EMPTY_FIELDS, ...state.values });
   const [logoName, setLogoName] = useState<string | null>(null);
+  // Le mot de passe se saisit deux fois : pouvoir le relire evite de le
+  // retaper trois fois sans savoir laquelle des deux frappes etait fausse.
+  const [voirMdp, setVoirMdp] = useState(false);
   const [tracks, setTracks] = useState<Set<string>>(new Set(['GENERAL']));
   const [modules, setModules] = useState<Set<string>>(new Set(['SCOL']));
 
@@ -355,26 +359,38 @@ export function SignupWizard() {
               <span className="lbl">
                 Mot de passe <span className="req">*</span>
               </span>
-              <input
-                type="password"
-                name="password"
-                value={fields.password}
-                onChange={(e) => setField('password', e.target.value)}
-                required
-              />
+              <span className="mkt-wiz-pass">
+                <input
+                  type={voirMdp ? 'text' : 'password'}
+                  name="password"
+                  value={fields.password}
+                  onChange={(e) => setField('password', e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setVoirMdp((v) => !v)}
+                  aria-label={voirMdp ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                  title={voirMdp ? 'Masquer' : 'Afficher'}
+                >
+                  {voirMdp ? <EyeOff size={18} aria-hidden /> : <Eye size={18} aria-hidden />}
+                </button>
+              </span>
               {err.password ? <p className="mkt-wiz-hint" style={{ color: '#d1476b' }}>{err.password[0]}</p> : null}
             </label>
             <label className="mkt-wiz-field">
               <span className="lbl">
                 Confirmer <span className="req">*</span>
               </span>
-              <input
-                type="password"
-                name="confirmPassword"
-                value={fields.confirmPassword}
-                onChange={(e) => setField('confirmPassword', e.target.value)}
-                required
-              />
+              <span className="mkt-wiz-pass">
+                <input
+                  type={voirMdp ? 'text' : 'password'}
+                  name="confirmPassword"
+                  value={fields.confirmPassword}
+                  onChange={(e) => setField('confirmPassword', e.target.value)}
+                  required
+                />
+              </span>
               {err.confirmPassword ? <p className="mkt-wiz-hint" style={{ color: '#d1476b' }}>{err.confirmPassword[0]}</p> : null}
             </label>
           </div>

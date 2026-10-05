@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getTenantContext } from '@/lib/tenant/context';
 import { runFormAction, formValues, type FormState } from '@/lib/forms';
 import { academicYearSchema, calendarEventSchema, periodEditSchema, periodSchema } from './schemas';
+import { nameFromStart } from './school-year';
 import {
   createYear, updateYear, activateYear, closeYear, reopenYear, createPeriod, deletePeriod, setGradingWindow, setGradingOverride,
   createCalendarEvent, deleteCalendarEvent, applyOfficialCalendar, updatePeriod, updateCalendarEvent,
@@ -15,9 +16,18 @@ const withValues =
   (state: FormState): FormState =>
     state.error || state.fieldErrors ? { ...state, values: formValues(formData) } : state;
 
+/**
+ * Le nom de l'annee se DEDUIT de sa date de debut : « 2026-2027 ».
+ *
+ * Le demander, c'etait demander de recopier ce que la date dit deja — et
+ * s'exposer a « 2026/2027 », « 2026 - 2027 » et « Annee 2026 » dans la meme
+ * base. Un nom explicite reste accepte pour les cas particuliers.
+ */
 function parseYear(fd: FormData) {
+  const startsOn = String(fd.get('startsOn') ?? '');
+  const saisi = String(fd.get('name') ?? '').trim();
   return academicYearSchema.parse({
-    name: fd.get('name'),
+    name: saisi || nameFromStart(startsOn) || '',
     startsOn: fd.get('startsOn'),
     endsOn: fd.get('endsOn'),
   });

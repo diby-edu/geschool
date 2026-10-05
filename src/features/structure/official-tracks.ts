@@ -11,6 +11,8 @@
  * ils sont reconnus tels quels par les établissements, et modifiables.
  */
 
+import { OFFICIAL_CI_CYCLES, OFFICIAL_CI_LEVELS } from '@/features/programme/official-ci';
+
 export type EducationTrack = 'GENERAL' | 'TECHNIQUE' | 'PROFESSIONNEL';
 
 export type OfficialLevel = {
@@ -231,12 +233,51 @@ function build(names: readonly string[]): OfficialLevel[] {
   return names.map((name, i) => ({ name, code: levelCode(name, taken), diploma: diplomaOf(name), sequence: i + 1 }));
 }
 
+const SAUT = String.fromCharCode(10);
+const PRO_NAMES = PROFESSIONNEL_RAW.split(SAUT).map((l) => l.trim()).filter(Boolean);
+
 export const OFFICIAL_TRACK_LEVELS: Record<'TECHNIQUE' | 'PROFESSIONNEL', { cycleCode: string; cycleName: string; levels: OfficialLevel[] }> = {
   TECHNIQUE: { cycleCode: 'TECH', cycleName: 'Enseignement technique', levels: build(TECHNIQUE_RAW) },
   PROFESSIONNEL: {
     cycleCode: 'PRO',
     cycleName: 'Formation professionnelle',
     levels: build(PROFESSIONNEL_RAW.split('\n').map((l) => l.trim()).filter(Boolean)),
+  },
+};
+
+/**
+ * La structure officielle de CHAQUE ordre : ses cycles et ses niveaux.
+ *
+ * Le general a deux cycles (premier et second) ; le technique et le
+ * professionnel n'en ont qu'un. Tout cela est connu d'avance : une ecole qui
+ * vient de s'inscrire ne devrait pas avoir a saisir « 6eme », « 5eme »,
+ * « 4eme »… ni a inventer le nom de ses cycles.
+ *
+ * Elle reste libre d'en ajouter, d'en retirer ou de les renommer ensuite.
+ */
+export type OfficialCycle = { code: string; name: string; sequence: number };
+
+export const OFFICIAL_STRUCTURE: Record<
+  EducationTrack,
+  { cycles: OfficialCycle[]; levels: (OfficialLevel & { cycleCode: string })[] }
+> = {
+  GENERAL: {
+    cycles: OFFICIAL_CI_CYCLES.map((c) => ({ code: c.code, name: c.name, sequence: c.sequence })),
+    levels: OFFICIAL_CI_LEVELS.map((l, i) => ({
+      code: l.code,
+      name: l.name,
+      cycleCode: l.cycle,
+      diploma: null,
+      sequence: i + 1,
+    })),
+  },
+  TECHNIQUE: {
+    cycles: [{ code: 'TECH', name: 'Enseignement technique', sequence: 1 }],
+    levels: build(TECHNIQUE_RAW).map((l) => ({ ...l, cycleCode: 'TECH' })),
+  },
+  PROFESSIONNEL: {
+    cycles: [{ code: 'PRO', name: 'Formation professionnelle', sequence: 1 }],
+    levels: build(PRO_NAMES).map((l) => ({ ...l, cycleCode: 'PRO' })),
   },
 };
 

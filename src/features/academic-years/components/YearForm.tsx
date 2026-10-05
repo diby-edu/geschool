@@ -28,17 +28,24 @@ export function YearForm({
       <CardContent>
         <form action={formAction} className="space-y-4">
           {state.error ? <Alert tone="error">{state.error}</Alert> : null}
-          <Field label="Nom" htmlFor="name" required errors={err.name} hint="Ex. 2026-2027">
-            <Input id="name" name="name" defaultValue={v.name} required autoFocus />
-          </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Début" htmlFor="startsOn" required errors={err.startsOn}>
-              <Input id="startsOn" name="startsOn" type="date" defaultValue={v.startsOn} required />
+              <Input id="startsOn" name="startsOn" type="date" defaultValue={v.startsOn} required autoFocus />
             </Field>
             <Field label="Fin" htmlFor="endsOn" required errors={err.endsOn}>
               <Input id="endsOn" name="endsOn" type="date" defaultValue={v.endsOn} required />
             </Field>
           </div>
+          {/* Le nom se deduit de la rentree ; on ne le demande que pour les
+              calendriers qui ne se nomment pas « 2026-2027 ». */}
+          <Field
+            label="Nom"
+            htmlFor="name"
+            errors={err.name}
+            hint="Laissez vide : il se déduit de la rentrée (« 2026-2027 »)."
+          >
+            <Input id="name" name="name" defaultValue={v.name} />
+          </Field>
           <div className="pt-2">
             <SubmitButton>{submitLabel}</SubmitButton>
           </div>
