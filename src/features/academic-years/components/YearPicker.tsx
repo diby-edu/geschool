@@ -32,7 +32,13 @@ export function YearPicker({
   existing: string[];
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
-  const [choix, setChoix] = useState<string | null>(suggestions.find((s) => s.current && !existing.includes(s.name))?.name ?? null);
+  // Celle de l'annee en cours, sinon la premiere qui reste a creer : on ouvre
+  // sur un choix utile plutot que sur deux champs de date vides.
+  const [choix, setChoix] = useState<string | null>(
+    suggestions.find((s) => s.current && !existing.includes(s.name))?.name ??
+      suggestions.find((s) => !existing.includes(s.name))?.name ??
+      null,
+  );
   const [libre, setLibre] = useState(false);
 
   const dejaLa = new Set(existing);
