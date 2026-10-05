@@ -544,8 +544,10 @@ export default async function YearDetailPage({
             <div className="space-y-2">
               <p className="text-sm font-medium">Horaires par cycle (optionnel)</p>
               <p className="text-xs text-[color:var(--muted-foreground)]">
-                Un cycle (primaire, collège…) dont les horaires ou les pauses diffèrent peut avoir sa propre grille,
-                qui prime alors sur celle ci-dessus pour ses classes.
+                Tout le monde ne sort pas à la même heure&nbsp;: le premier et le second cycle ont rarement la même
+                récréation, et un établissement qui pratique plusieurs ordres d’enseignement en a encore d’autres.
+                Donnez à ce cycle sa propre grille — horaires des journées <em>et</em> récréations — elle prime alors
+                sur celle de l’établissement pour toutes ses classes.
               </p>
               <ul className="space-y-2">
                 {cycles.map((c) => (

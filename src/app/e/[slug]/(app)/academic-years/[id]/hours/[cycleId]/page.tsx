@@ -61,7 +61,11 @@ export default async function CycleHoursPage({
         }
       />
 
-      <ConfigForm action={saveConfigAction.bind(null, slug, id, cycleId)} defaults={hoursDefaults} />
+      <ConfigForm
+        action={saveConfigAction.bind(null, slug, id, cycleId)}
+        defaults={hoursDefaults}
+        scope={{ cycleName: cycle.name }}
+      />
 
       {ownConfig ? (
         <ConfirmSubmit

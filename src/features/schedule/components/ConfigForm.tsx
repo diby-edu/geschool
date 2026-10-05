@@ -41,9 +41,18 @@ function toHalfDays(plan: DayPlan | undefined) {
 export function ConfigForm({
   action,
   defaults,
+  scope,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   defaults: { workingDays: number[]; dayHours: DayPlan[]; slotMinutes: number; breaks?: Pause[] };
+  /**
+   * A QUI cette grille s'applique : tout l'etablissement, ou un cycle precis.
+   *
+   * Sans cette precision, on croit que la recreation est la meme pour tout le
+   * monde — alors que le premier et le second cycle n'ont presque jamais la
+   * meme, et qu'un etablissement a plusieurs ordres en a encore d'autres.
+   */
+  scope?: { cycleName: string } | undefined;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const err = state.fieldErrors ?? {};
@@ -142,6 +151,20 @@ export function ConfigForm({
             <p className="text-xs text-[color:var(--muted-foreground)]">
               À la même heure chaque jour travaillé. Aucun cours n’y est placé. Une récréation de l’après-midi ne
               s’applique pas aux jours sans après-midi.
+            </p>
+            <p className="text-xs text-[color:var(--muted-foreground)]">
+              {scope ? (
+                <>
+                  Ces récréations ne concernent que le cycle <strong>{scope.cycleName}</strong>. Les autres gardent
+                  les leurs.
+                </>
+              ) : (
+                <>
+                  Ces récréations valent pour <strong>tout l’établissement</strong>. Si un cycle, un ordre
+                  d’enseignement ou une partie de vos classes sort à une autre heure, donnez-lui sa propre grille
+                  plus bas&nbsp;: <em>Horaires par cycle</em>.
+                </>
+              )}
             </p>
             <div className="space-y-2">
               {RECESS_ROWS.map((row, i) => {
