@@ -549,7 +549,16 @@ export default async function YearDetailPage({
             </Card>
           ) : null}
 
-          <ConfigForm action={saveConfigAction.bind(null, slug, id, null)} defaults={hoursDefaults} suite={suiteValue(sp)} />
+          <ConfigForm
+            action={saveConfigAction.bind(null, slug, id, null)}
+            defaults={hoursDefaults}
+            suite={suiteValue(sp)}
+            cycleLinks={cycles.map((c) => ({
+              name: c.name,
+              href: `/e/${slug}/academic-years/${id}/hours/${c.id}`,
+              configured: c.configId !== null,
+            }))}
+          />
 
           {cycles.length > 0 ? (
             <div className="space-y-2">

@@ -136,6 +136,14 @@ export const HUB: HubSection[] = [
         any: ['assignments.view'],
       },
       {
+        path: 'horaires',
+        title: 'Horaires et récréations',
+        description: 'Jours travaillés, heures de chaque journée, récréations — pour toute l’école ou par cycle.',
+        icon: CalendarDays,
+        any: ['schedule.manage_configuration'],
+        feature: 'schedule',
+      },
+      {
         path: 'attendance/regles',
         title: 'Règles de présence',
         description: 'Quand alerter la famille, qui prévenir, à partir de combien d’heures convoquer.',

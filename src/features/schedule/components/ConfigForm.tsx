@@ -43,6 +43,7 @@ export function ConfigForm({
   defaults,
   scope,
   suite,
+  cycleLinks,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   defaults: { workingDays: number[]; dayHours: DayPlan[]; slotMinutes: number; breaks?: Pause[] };
@@ -54,6 +55,13 @@ export function ConfigForm({
    * meme, et qu'un etablissement a plusieurs ordres en a encore d'autres.
    */
   scope?: { cycleName: string } | undefined;
+  /**
+   * Les cycles de l'etablissement, avec le lien vers LEUR grille.
+   *
+   * Dire « donnez-lui sa propre grille » ne suffit pas : encore faut-il
+   * pouvoir y aller d'ici, au moment ou la question se pose.
+   */
+  cycleLinks?: { name: string; href: string; configured: boolean }[] | undefined;
   /** Marqueur de la mise en route, a renvoyer pour enchainer l'etape suivante. */
   suite?: string | null | undefined;
 }) {
@@ -164,12 +172,26 @@ export function ConfigForm({
                 </>
               ) : (
                 <>
-                  Ces récréations valent pour <strong>tout l’établissement</strong>. Si un cycle, un ordre
-                  d’enseignement ou une partie de vos classes sort à une autre heure, donnez-lui sa propre grille
-                  plus bas&nbsp;: <em>Horaires par cycle</em>.
+                  Ces récréations valent pour <strong>tout l’établissement</strong>. Un cycle qui sort à une autre
+                  heure a sa propre grille — horaires <em>et</em> récréations.
                 </>
               )}
             </p>
+            {!scope && cycleLinks && cycleLinks.length > 0 ? (
+              <ul className="flex flex-wrap gap-2 text-xs">
+                {cycleLinks.map((c) => (
+                  <li key={c.href}>
+                    <a
+                      href={c.href}
+                      className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-medium hover:bg-[color:var(--color-brand-muted)]"
+                      style={c.configured ? { borderColor: 'var(--color-brand)', color: 'var(--color-brand)' } : undefined}
+                    >
+                      {c.configured ? '✓' : '+'} Récréations de {c.name}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             <div className="space-y-2">
               {RECESS_ROWS.map((row, i) => {
                 const isOn = breaksOn.has(i);
