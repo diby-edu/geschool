@@ -6,6 +6,7 @@ import { getTenantContext } from '@/lib/tenant/context';
 import { runFormAction, formValues, type FormState } from '@/lib/forms';
 import { academicYearSchema, calendarEventSchema, periodEditSchema, periodSchema } from './schemas';
 import { nameFromStart } from './school-year';
+import { afterStep } from '@/features/onboarding/suite';
 import {
   createYear, updateYear, activateYear, closeYear, reopenYear, createPeriod, deletePeriod, setGradingWindow, setGradingOverride,
   createCalendarEvent, deleteCalendarEvent, applyOfficialCalendar, updatePeriod, updateCalendarEvent,
@@ -37,10 +38,10 @@ export async function createYearAction(slug: string, _p: FormState, fd: FormData
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
     const id = await createYear(ctx, parseYear(fd));
-    // Direction directe vers la fiche de l'annee : creer une annee sans
-    // enchainer sur ses periodes et ses horaires ne servirait a rien (les
-    // deux sont obligatoires avant de generer un emploi du temps).
-    redirect(`/e/${slug}/academic-years/${id}?created=1`);
+    // Depuis la mise en route, on y retourne pour enchainer l'etape suivante ;
+    // sinon, direction la fiche de l'annee — creer une annee sans enchainer
+    // sur ses periodes et ses horaires ne servirait a rien.
+    redirect(afterStep(slug, fd, `/e/${slug}/academic-years/${id}?created=1`));
   }).then(withValues(fd));
 }
 
@@ -52,13 +53,14 @@ export async function updateYearAction(slug: string, id: string, _p: FormState, 
   }).then(withValues(fd));
 }
 
-export async function activateYearAction(slug: string, id: string, _p: FormState, _fd: FormData): Promise<FormState> {
+export async function activateYearAction(slug: string, id: string, _p: FormState, fd: FormData): Promise<FormState> {
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
     await activateYear(ctx, id);
-    // L'annee courante s'affiche dans le menu (layout) : il faut le reconstruire.
+    // L'annee courante s'affiche dans le menu (layout) : il faut le
+    // reconstruire AVANT de partir, quelle que soit la destination.
     revalidatePath(`/e/${slug}`, 'layout');
-    redirect(`/e/${slug}/academic-years?updated=1`);
+    redirect(afterStep(slug, fd, `/e/${slug}/academic-years?updated=1`));
   });
 }
 

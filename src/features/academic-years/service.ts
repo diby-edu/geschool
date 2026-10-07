@@ -31,6 +31,18 @@ export async function createYear(ctx: TenantContext, input: AcademicYearInput): 
     throw error;
   }
   await audit(ctx, { action: 'academic_years.create', module: 'academic_years', entityType: 'academic_year', entityId: data.id, after: input });
+
+  // La PREMIERE annee devient l'annee en cours. Sans cela, l'ecole la cree,
+  // ne voit rien changer, et tout ce qui s'y rattache — classes, periodes,
+  // notes — reste invisible : il fallait deviner qu'un second clic
+  // « Activer » existait quelque part.
+  const { count } = await supabase
+    .from('academic_years')
+    .select('id', { count: 'exact', head: true })
+    .eq('school_id', ctx.school.id)
+    .eq('is_current', true);
+  if ((count ?? 0) === 0) await activateYear(ctx, data.id);
+
   return data.id;
 }
 

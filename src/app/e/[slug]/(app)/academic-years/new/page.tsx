@@ -6,18 +6,30 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { YearPicker } from '@/features/academic-years/components/YearPicker';
 import { createYearAction } from '@/features/academic-years/actions';
 import { suggestedYears } from '@/features/academic-years/school-year';
+import { suiteValue, fromStartup } from '@/features/onboarding/suite';
+import { StartupTrail } from '@/features/onboarding/components/StartupTrail';
 import { listYears } from '@/features/academic-years/queries';
 
 export const metadata: Metadata = { title: 'Nouvelle année scolaire' };
 
-export default async function NewYearPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function NewYearPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { slug } = await params;
+  const sp = await searchParams;
   const ctx = await getTenantContext(slug);
   requirePageAccess(ctx, 'academic_years.manage');
   const existantes = (await listYears(ctx)).map((y) => y.name);
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-3xl space-y-4">
+      {fromStartup(sp) ? (
+        <StartupTrail slug={slug} step={1} total={10} label="l’année scolaire" />
+      ) : null}
       <PageHeader
         title="Nouvelle année scolaire"
         description="Choisissez l’année : ses dates sont déjà remplies, son nom se déduit de la rentrée." 
@@ -27,7 +39,12 @@ export default async function NewYearPage({ params }: { params: Promise<{ slug: 
           </Link>
         }
       />
-      <YearPicker action={createYearAction.bind(null, slug)} suggestions={suggestedYears()} existing={existantes} />
+      <YearPicker
+        action={createYearAction.bind(null, slug)}
+        suggestions={suggestedYears()}
+        existing={existantes}
+        suite={suiteValue(sp)}
+      />
     </div>
   );
 }

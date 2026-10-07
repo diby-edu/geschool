@@ -12,6 +12,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ConfirmSubmit } from '@/components/ui/confirm-submit';
 import { BackToSettings } from '@/features/settings/components/BackToSettings';
+import { fromStartup, suiteValue } from '@/features/onboarding/suite';
+import { StartupTrail } from '@/features/onboarding/components/StartupTrail';
 
 export const metadata: Metadata = { title: 'Années scolaires' };
 
@@ -36,6 +38,11 @@ export default async function AcademicYearsPage({
   return (
     <div className="mx-auto max-w-3xl">
       <Flash searchParams={sp} />
+      {fromStartup(sp) ? (
+        <div className="mb-4">
+          <StartupTrail slug={slug} step={1} total={10} label="l’année scolaire" />
+        </div>
+      ) : null}
       <PageHeader
         title="Années scolaires"
         description="Une seule année est active à la fois."
@@ -82,6 +89,7 @@ export default async function AcademicYearsPage({
                         label="Activer"
                         variant="secondary"
                         confirmMessage={`Activer l'année « ${y.name} » ? Elle deviendra l'année courante.`}
+                        {...(suiteValue(sp) ? { hidden: { suite: suiteValue(sp)! } } : {})}
                       />
                     ) : null}
                     {canClose && y.status === 'ACTIVE' ? (

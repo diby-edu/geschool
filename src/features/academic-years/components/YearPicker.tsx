@@ -25,11 +25,14 @@ export function YearPicker({
   action,
   suggestions,
   existing,
+  suite,
 }: {
   action: Action;
   suggestions: SuggestedYear[];
   /** Noms des annees deja creees : on ne propose pas deux fois la meme. */
   existing: string[];
+  /** Marqueur de la mise en route, a renvoyer pour y retourner ensuite. */
+  suite?: string | null | undefined;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   // Celle de l'annee en cours, sinon la premiere qui reste a creer : on ouvre
@@ -84,6 +87,7 @@ export function YearPicker({
       <Card>
         <CardContent>
           <form action={formAction} className="space-y-4">
+            {suite ? <input type="hidden" name="suite" value={suite} /> : null}
             {libre || !retenue ? (
               <>
                 <p className="text-sm text-[color:var(--muted-foreground)]">

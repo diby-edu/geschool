@@ -15,11 +15,14 @@ export function ConfirmSubmit({
   label,
   confirmMessage,
   variant = 'danger',
+  hidden,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   label: string;
   confirmMessage: string;
   variant?: 'danger' | 'secondary';
+  /** Champs caches a transmettre a l'action (le marqueur de mise en route). */
+  hidden?: Record<string, string> | undefined;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   return (
@@ -31,6 +34,9 @@ export function ConfirmSubmit({
           if (!window.confirm(confirmMessage)) e.preventDefault();
         }}
       >
+        {hidden
+          ? Object.entries(hidden).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)
+          : null}
         <Button type="submit" variant={variant} size="sm">
           {label}
         </Button>

@@ -35,7 +35,7 @@ export default async function StartupPage({ params }: { params: Promise<{ slug: 
     <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader
         title="Mise en route"
-        description="Huit points, dans l’ordre. Vous pouvez partir et revenir : rien ne se perd."
+        description={`${total} points, dans l’ordre. Vous pouvez partir et revenir : rien ne se perd.`}
         action={
           <Link href={`/e/${slug}/dashboard`}>
             <Button variant="ghost">Tableau de bord</Button>
