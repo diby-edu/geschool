@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { fromStartup, suiteValue } from '@/features/onboarding/suite';
+import { StartupTrail } from '@/features/onboarding/components/StartupTrail';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
@@ -133,6 +135,14 @@ export default async function YearDetailPage({
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <Flash searchParams={sp} />
+      {fromStartup(sp) ? (
+        <StartupTrail
+          slug={slug}
+          step={tab === 'horaires' ? 5 : 2}
+          total={10}
+          label={tab === 'horaires' ? 'les horaires de la journée' : 'les trimestres ou semestres'}
+        />
+      ) : null}
       {sp.configured === '1' ? <Alert tone="success">Horaires enregistrés.</Alert> : null}
       {officialFlash ? (
         <Alert tone="success">
@@ -406,6 +416,7 @@ export default async function YearDetailPage({
           <PeriodCreateForm
             action={createPeriodAction.bind(null, slug, id)}
             nextSequence={nextSeqShown}
+            suite={suiteValue(sp)}
             schoolTracks={tracks}
             {...(tab === 'semestres'
               ? {
@@ -538,7 +549,7 @@ export default async function YearDetailPage({
             </Card>
           ) : null}
 
-          <ConfigForm action={saveConfigAction.bind(null, slug, id, null)} defaults={hoursDefaults} />
+          <ConfigForm action={saveConfigAction.bind(null, slug, id, null)} defaults={hoursDefaults} suite={suiteValue(sp)} />
 
           {cycles.length > 0 ? (
             <div className="space-y-2">

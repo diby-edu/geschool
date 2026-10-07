@@ -1,6 +1,7 @@
 'use server';
 
 import type { EducationTrack } from './official-tracks';
+import { afterStep } from '@/features/onboarding/suite';
 import { redirect } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
 import { runFormAction, formValues, type FormState } from '@/lib/forms';
@@ -63,11 +64,11 @@ export async function applyOfficialLevelsAction(
   slug: string,
   track: EducationTrack,
   _p: FormState,
-  _fd: FormData,
+  fd: FormData,
 ): Promise<FormState> {
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
     const r = await applyOfficialLevels(ctx, track);
-    redirect(`/e/${slug}/structure?niveaux=${r.levels}&cycles=${r.cycles}`);
+    redirect(afterStep(slug, fd, `/e/${slug}/structure?niveaux=${r.levels}&cycles=${r.cycles}`));
   });
 }

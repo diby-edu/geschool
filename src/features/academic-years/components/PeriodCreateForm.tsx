@@ -17,6 +17,7 @@ export function PeriodCreateForm({
   defaultKind = 'TERM',
   defaultTrack = '',
   title = 'Ajouter une période',
+  suite,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   nextSequence: number;
@@ -26,6 +27,8 @@ export function PeriodCreateForm({
   defaultKind?: 'TERM' | 'SEMESTER' | 'QUARTER';
   defaultTrack?: string;
   title?: string;
+  /** Marqueur de la mise en route, a renvoyer pour enchainer l'etape suivante. */
+  suite?: string | null | undefined;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const choices = trackChoices(schoolTracks);
@@ -36,6 +39,7 @@ export function PeriodCreateForm({
       <CardContent>
         <p className="mb-3 text-sm font-medium">{title}</p>
         <form action={formAction} className="space-y-3">
+      {suite ? <input type="hidden" name="suite" value={suite} /> : null}
           {state.error ? <Alert tone="error">{state.error}</Alert> : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Nom" htmlFor="name" required errors={err.name}>

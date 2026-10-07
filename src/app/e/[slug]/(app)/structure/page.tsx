@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { ChevronRight } from 'lucide-react';
 import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccessAny } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
@@ -13,6 +14,8 @@ import { Alert } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { ConfirmSubmit } from '@/components/ui/confirm-submit';
 import { BackToSettings } from '@/features/settings/components/BackToSettings';
+import { fromStartup, suiteValue } from '@/features/onboarding/suite';
+import { StartupTrail } from '@/features/onboarding/components/StartupTrail';
 
 export const metadata: Metadata = { title: 'Structure pédagogique' };
 
@@ -58,6 +61,7 @@ export default async function StructurePage({
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <Flash searchParams={sp} />
+      {fromStartup(sp) ? <StartupTrail slug={slug} step={3} total={10} label="les cycles et les niveaux" /> : null}
       {typeof sp.niveaux === 'string' ? (
         <Alert tone="success">
           {sp.cycles && sp.cycles !== '0' ? `${sp.cycles} cycle(s) et ` : ''}
@@ -69,6 +73,39 @@ export default async function StructurePage({
         description="Cycles et niveaux. Les classes sont créées à partir des niveaux."
       action={<BackToSettings ctx={ctx} />}
       />
+
+      {officialOffers.length > 0 && canLevels && canCycles ? (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-[color:var(--muted-foreground)]">
+            Partir de la structure officielle
+          </h2>
+          <div className="space-y-2">
+            {officialOffers.map((o) => (
+              <Card key={o.track}>
+                <CardContent className="space-y-2 py-4 text-sm">
+                  <p className="font-semibold">Structure officielle : {TRACK_LABELS[o.track]}</p>
+                  <p className="text-[color:var(--muted-foreground)]">
+                    {o.track === 'GENERAL'
+                      ? 'Crée le premier et le second cycle, puis la 6ème à la Terminale (séries A, C, D).'
+                      : o.track === 'TECHNIQUE'
+                        ? 'Crée les séries du technique (2nde AB, B, F1, F2, F3, G1, G2, T3, F7).'
+                        : 'Crée les classes de la formation professionnelle, rangées par diplôme (CAP, BEP, BT, CQP, FQ).'}{' '}
+                    {o.missingCycles > 0 ? `${o.missingCycles} cycle(s) et ` : ''}
+                    {o.missing} niveau(x) manquant(s). Ce qui existe déjà n’est pas modifié ; tout reste modifiable ensuite.
+                  </p>
+                  <ConfirmSubmit
+                    action={applyOfficialLevelsAction.bind(null, slug, o.track)}
+                    {...(suiteValue(sp) ? { hidden: { suite: suiteValue(sp)! } } : {})}
+                    label="Charger la structure officielle"
+                    variant="secondary"
+                    confirmMessage={`Créer ce qui manque à l'ordre « ${TRACK_LABELS[o.track]} » ?`}
+                  />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="space-y-3">
         <h2 className="text-sm font-medium uppercase tracking-wide text-[color:var(--muted-foreground)]">Cycles</h2>
@@ -109,40 +146,22 @@ export default async function StructurePage({
 
       <section className="space-y-3">
         <h2 className="text-sm font-medium uppercase tracking-wide text-[color:var(--muted-foreground)]">Niveaux</h2>
-        {officialOffers.length > 0 && canLevels && canCycles ? (
-          <div className="space-y-2">
-            {officialOffers.map((o) => (
-              <Card key={o.track}>
-                <CardContent className="space-y-2 py-4 text-sm">
-                  <p className="font-semibold">Structure officielle : {TRACK_LABELS[o.track]}</p>
-                  <p className="text-[color:var(--muted-foreground)]">
-                    {o.track === 'GENERAL'
-                      ? 'Crée le premier et le second cycle, puis la 6ème à la Terminale (séries A, C, D).'
-                      : o.track === 'TECHNIQUE'
-                        ? 'Crée les séries du technique (2nde AB, B, F1, F2, F3, G1, G2, T3, F7).'
-                        : 'Crée les classes de la formation professionnelle, rangées par diplôme (CAP, BEP, BT, CQP, FQ).'}{' '}
-                    {o.missingCycles > 0 ? `${o.missingCycles} cycle(s) et ` : ''}
-                    {o.missing} niveau(x) manquant(s). Ce qui existe déjà n’est pas modifié ; tout reste modifiable ensuite.
-                  </p>
-                  <ConfirmSubmit
-                    action={applyOfficialLevelsAction.bind(null, slug, o.track)}
-                    label="Charger la structure officielle"
-                    variant="secondary"
-                    confirmMessage={`Créer ce qui manque à l'ordre « ${TRACK_LABELS[o.track]} » ?`}
-                  />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : null}
 
         {levels.length === 0 ? (
           <EmptyState title="Aucun niveau" hint="Créez d'abord un cycle, puis ajoutez-y des niveaux." />
         ) : (
           groups.map((g) => (
-            <details key={g.track} className="rounded-3xl border" style={{ backgroundColor: 'var(--surface)' }}>
-              <summary className="flex cursor-pointer items-center justify-between gap-3 px-5 py-3.5">
-                <span className="text-sm font-bold uppercase tracking-wide">{g.label}</span>
+            <details key={g.track} className="group rounded-3xl border" style={{ backgroundColor: 'var(--surface)' }}>
+              {/* Replie par defaut : une ecole complete depasse la cinquantaine
+                  de niveaux. Le chevron dit que le bloc s'ouvre. */}
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3.5">
+                <span className="flex items-center gap-2">
+                  <ChevronRight
+                    className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90 motion-reduce:transition-none"
+                    aria-hidden
+                  />
+                  <span className="text-sm font-bold uppercase tracking-wide">{g.label}</span>
+                </span>
                 <span className="text-xs font-semibold tabular-nums text-[color:var(--muted-foreground)]">
                   {g.total} niveau{g.total > 1 ? 'x' : ''}
                 </span>

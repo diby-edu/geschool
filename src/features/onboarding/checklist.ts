@@ -106,7 +106,7 @@ export async function readChecklist(ctx: TenantContext): Promise<Checklist> {
       why: 'Sans période, aucune note ne peut être saisie ni moyenne calculée.',
       done: fait(periods as { count: number | null; error: unknown }),
       blocking: true,
-      href: yearId ? `${base}/academic-years/${yearId}?onglet=trimestres` : `${base}/academic-years${suite}`,
+      href: yearId ? `${base}/academic-years/${yearId}?onglet=trimestres&suite=demarrage` : `${base}/academic-years${suite}`,
       cta: 'Définir les périodes',
     },
     {
@@ -133,7 +133,7 @@ export async function readChecklist(ctx: TenantContext): Promise<Checklist> {
       why: 'Début et fin de chaque jour, récréations, durée d’un cours : la grille où se placent les séances.',
       done: fait(horaires as { count: number | null; error: unknown }),
       blocking: true,
-      href: yearId ? `${base}/academic-years/${yearId}?onglet=horaires` : `${base}/academic-years${suite}`,
+      href: yearId ? `${base}/academic-years/${yearId}?onglet=horaires&suite=demarrage` : `${base}/academic-years${suite}`,
       cta: 'Régler les horaires',
     },
     {

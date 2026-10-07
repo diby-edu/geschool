@@ -26,9 +26,13 @@ export function suiteValue(sp: Sp): string | null {
 }
 
 /**
- * Ou renvoyer apres l'action : la mise en route si on en vient, sinon la
- * destination habituelle.
+ * Ou renvoyer apres l'action.
+ *
+ * Depuis la mise en route, on ne repasse PAS par la liste : revenir cocher la
+ * ligne puis cliquer la suivante fait deux gestes de trop. On repart vers la
+ * page de mise en route avec `?suivante=1`, qui renvoie aussitot sur la
+ * premiere etape encore a faire — une seule page connait l'ordre.
  */
 export function afterStep(slug: string, fd: FormData, defaut: string): string {
-  return String(fd.get('suite') ?? '') === SUITE ? `/e/${slug}/demarrage` : defaut;
+  return String(fd.get('suite') ?? '') === SUITE ? `/e/${slug}/demarrage?suivante=1` : defaut;
 }

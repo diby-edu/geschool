@@ -1,5 +1,7 @@
 'use server';
 
+import { afterStep } from '@/features/onboarding/suite';
+
 import { redirect } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
 import { runFormAction, formValues, type FormState } from '@/lib/forms';
@@ -26,7 +28,7 @@ export async function createClassAction(slug: string, _p: FormState, fd: FormDat
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
     await createClass(ctx, parse(fd));
-    redirect(`/e/${slug}/classes?created=1`);
+    redirect(afterStep(slug, fd, `/e/${slug}/classes?created=1`));
   }).then(withValues(fd));
 }
 

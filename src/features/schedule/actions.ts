@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { afterStep } from '@/features/onboarding/suite';
 import { getTenantContext } from '@/lib/tenant/context';
 import { runFormAction, formValues, type FormState } from '@/lib/forms';
 import { scheduleConfigSchema, sessionSchema, requirementSchema } from './schemas';
@@ -58,9 +59,13 @@ export async function saveConfigAction(
     // (qui liste les cycles), celle de l'établissement à Paramètres, rubrique
     // « Établissement » (d'où l'on vient).
     redirect(
-      cycleId
-        ? `/e/${slug}/academic-years/${yearId}?onglet=horaires&configured=1`
-        : `/e/${slug}/parametres?configured=1#hub-etablissement`,
+      afterStep(
+        slug,
+        fd,
+        cycleId
+          ? `/e/${slug}/academic-years/${yearId}?onglet=horaires&configured=1`
+          : `/e/${slug}/parametres?configured=1#hub-etablissement`,
+      ),
     );
   }).then((s) => (s.error || s.fieldErrors ? { ...s, values: formValues(fd) } : s));
 }

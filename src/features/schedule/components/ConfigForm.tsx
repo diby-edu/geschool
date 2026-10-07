@@ -42,6 +42,7 @@ export function ConfigForm({
   action,
   defaults,
   scope,
+  suite,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   defaults: { workingDays: number[]; dayHours: DayPlan[]; slotMinutes: number; breaks?: Pause[] };
@@ -53,6 +54,8 @@ export function ConfigForm({
    * meme, et qu'un etablissement a plusieurs ordres en a encore d'autres.
    */
   scope?: { cycleName: string } | undefined;
+  /** Marqueur de la mise en route, a renvoyer pour enchainer l'etape suivante. */
+  suite?: string | null | undefined;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const err = state.fieldErrors ?? {};
@@ -80,6 +83,7 @@ export function ConfigForm({
     <Card>
       <CardContent>
         <form action={formAction} className="space-y-5">
+      {suite ? <input type="hidden" name="suite" value={suite} /> : null}
           {state.error ? <Alert tone="error">{state.error}</Alert> : null}
 
           <fieldset className="space-y-3">

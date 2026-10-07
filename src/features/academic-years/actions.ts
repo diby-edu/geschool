@@ -96,7 +96,7 @@ export async function createPeriodAction(slug: string, yearId: string, _p: FormS
       isGradingPeriod: fd.get('isGradingPeriod') != null,
       track: fd.get('track') ?? '',
     }));
-    redirect(`/e/${slug}/academic-years/${yearId}?onglet=trimestres&created=1`);
+    redirect(afterStep(slug, fd, `/e/${slug}/academic-years/${yearId}?onglet=trimestres&created=1`));
   }).then(withValues(fd));
 }
 

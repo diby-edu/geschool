@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { Check } from 'lucide-react';
 import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccessAny } from '@/lib/permissions/guard';
@@ -22,14 +23,27 @@ export const dynamic = 'force-dynamic';
  * Volontairement LEGER : une liste, pas un parcours oblige. On la quitte, on y
  * revient, et elle disparait d'elle-meme quand tout est pret.
  */
-export default async function StartupPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function StartupPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { slug } = await params;
+  const sp = await searchParams;
   const ctx = await getTenantContext(slug);
   requirePageAccessAny(ctx, ['settings.update', 'academic_years.manage', 'classes.view']);
 
   const { steps, done, total, ready } = await readChecklist(ctx);
   const restant = steps.filter((s) => !s.done);
   const prochaine = restant.find((s) => s.blocking) ?? restant[0] ?? null;
+
+  // On vient de terminer une etape : on enchaine SANS repasser par la liste.
+  // Revenir cocher la ligne puis cliquer la suivante faisait deux gestes de
+  // trop ; la liste reste accessible par le fil, en haut de chaque ecran.
+  const enchainer = (Array.isArray(sp.suivante) ? sp.suivante[0] : sp.suivante) === '1';
+  if (enchainer && prochaine) redirect(prochaine.href);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -42,6 +56,10 @@ export default async function StartupPage({ params }: { params: Promise<{ slug: 
           </Link>
         }
       />
+
+      {enchainer && !prochaine ? (
+        <Alert tone="success">Tout est fait. Votre établissement est prêt.</Alert>
+      ) : null}
 
       {ready ? (
         <Alert tone="success">
