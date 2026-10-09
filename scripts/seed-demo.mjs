@@ -189,7 +189,7 @@ const COLLEGE_LEVELS = [
 const LYCEE_LEVELS = [
   { code: '2NDE', name: '2nde', sequence: 5, sections: ['A', 'C'] },
   { code: '1ERE', name: '1ère', sequence: 6, sections: ['A', 'C', 'D'] },
-  { code: 'TERM', name: 'Terminale', sequence: 7, sections: ['A', 'C', 'D'] },
+  { code: 'TERM', name: 'Tle', sequence: 7, sections: ['A', 'C', 'D'] },
 ];
 
 /** Plan de classes d'un etablissement. `scale` = 'large' (Ecole 1) | 'small' (Ecoles 2/3). */

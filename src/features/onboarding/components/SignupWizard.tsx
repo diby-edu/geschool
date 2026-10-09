@@ -10,7 +10,7 @@ import { MODULES, formatFrancs } from '../catalog';
 const STEP_LABELS = ['Établissement', 'Modules', 'Votre compte'];
 
 const EDUCATION_TRACKS = [
-  { code: 'GENERAL', name: 'GÉNÉRAL', desc: '6ème à Terminale (séries A, C, D)' },
+  { code: 'GENERAL', name: 'GÉNÉRAL', desc: '6ème à Tle (séries A, C, D)' },
   { code: 'TECHNIQUE', name: 'TECHNIQUE', desc: 'Séries B, F, G, T' },
   { code: 'PROFESSIONNEL', name: 'PROFESSIONNEL', desc: 'BEP, BT, CAP, CQP, FQ' },
 ] as const;

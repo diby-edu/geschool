@@ -44,6 +44,7 @@ describe('groupLevels', () => {
 describe('suggestLevelCode', () => {
   it('abrège les niveaux du général comme les codes officiels', () => {
     expect(suggestLevelCode('Terminale D')).toBe('TLE-D');
+    expect(suggestLevelCode('Tle D')).toBe('TLE-D');
     expect(suggestLevelCode('Première A1')).toBe('1ERE-A1');
     expect(suggestLevelCode('Quatrième')).toBe('4E');
     expect(suggestLevelCode('Sixième')).toBe('6E');

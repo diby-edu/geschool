@@ -9,7 +9,7 @@ import { SubmitButton } from '@/features/auth/components/SubmitButton';
 import type { FormState } from '@/lib/forms';
 
 const TRACK_CHOICES = [
-  { code: 'GENERAL', label: 'Enseignement général', hint: 'Trimestres · 6e à Terminale' },
+  { code: 'GENERAL', label: 'Enseignement général', hint: 'Trimestres · 6e à Tle' },
   { code: 'TECHNIQUE', label: 'Enseignement technique', hint: 'Semestres · séries B, F, G…' },
   { code: 'PROFESSIONNEL', label: 'Formation professionnelle', hint: 'Semestres · CAP, BEP, BT…' },
 ] as const;

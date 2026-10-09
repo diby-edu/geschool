@@ -60,10 +60,10 @@ export const OFFICIAL_CI_LEVELS: OfficialLevel[] = [
   { code: '1ERE-A2', name: '1ère A2', cycle: 'CYCLE2', sequence: 8 },
   { code: '1ERE-C', name: '1ère C', cycle: 'CYCLE2', sequence: 9 },
   { code: '1ERE-D', name: '1ère D', cycle: 'CYCLE2', sequence: 10 },
-  { code: 'TLE-A1', name: 'Terminale A1', cycle: 'CYCLE2', sequence: 11 },
-  { code: 'TLE-A2', name: 'Terminale A2', cycle: 'CYCLE2', sequence: 12 },
-  { code: 'TLE-C', name: 'Terminale C', cycle: 'CYCLE2', sequence: 13 },
-  { code: 'TLE-D', name: 'Terminale D', cycle: 'CYCLE2', sequence: 14 },
+  { code: 'TLE-A1', name: 'Tle A1', cycle: 'CYCLE2', sequence: 11 },
+  { code: 'TLE-A2', name: 'Tle A2', cycle: 'CYCLE2', sequence: 12 },
+  { code: 'TLE-C', name: 'Tle C', cycle: 'CYCLE2', sequence: 13 },
+  { code: 'TLE-D', name: 'Tle D', cycle: 'CYCLE2', sequence: 14 },
 ];
 
 export const OFFICIAL_CI_SUBJECTS: OfficialSubject[] = [

@@ -86,7 +86,7 @@ export default async function StructurePage({
                   <p className="font-semibold">Structure officielle : {TRACK_LABELS[o.track]}</p>
                   <p className="text-[color:var(--muted-foreground)]">
                     {o.track === 'GENERAL'
-                      ? 'Crée le premier et le second cycle, puis la 6ème à la Terminale (séries A, C, D).'
+                      ? 'Crée le premier et le second cycle, puis la 6ème à la Tle (séries A, C, D).'
                       : o.track === 'TECHNIQUE'
                         ? 'Crée les séries du technique (2nde AB, B, F1, F2, F3, G1, G2, T3, F7).'
                         : 'Crée les classes de la formation professionnelle, rangées par diplôme (CAP, BEP, BT, CQP, FQ).'}{' '}

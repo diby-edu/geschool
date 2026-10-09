@@ -72,8 +72,11 @@ export function canImport(ctx: TenantContext, kind: ImportKind): boolean {
   return REQUIRED_PERMISSIONS[kind].every((p) => hasPermission(ctx, p));
 }
 
-/** Clé de comparaison souple : « Tle C », « TLE-C » et « tle c » se rejoignent. */
-const loose = (v: string) => normCode(v).replace(/[^A-Z0-9]/g, '');
+/**
+ * Clé de comparaison souple : « Tle C », « TLE-C » et « tle c » se rejoignent. « Terminale »
+ * vaut « Tle » : un fichier écrit avant le renommage des niveaux (0104) se rattache toujours.
+ */
+const loose = (v: string) => normCode(v).replace(/\bTERMINALE\b/g, 'TLE').replace(/[^A-Z0-9]/g, '');
 
 function reason(error: unknown): string {
   if (isAppError(error)) return error.message;

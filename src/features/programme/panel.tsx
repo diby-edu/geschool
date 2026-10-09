@@ -163,7 +163,7 @@ export async function ProgrammePanel({
           <CardContent className="space-y-3 py-4 text-sm">
             <h2 className="font-semibold">Grille officielle : Côte d’Ivoire, secondaire général</h2>
             <p className="text-[color:var(--muted-foreground)]">
-              Crée en un clic les niveaux de la 6ème à la Terminale (une série par niveau : 2nde A et C, 1ère et Terminale
+              Crée en un clic les niveaux de la 6ème à la Tle (une série par niveau : 2nde A et C, 1ère et Tle
               A1, A2, C, D), les matières et les coefficients officiels. Ce qui existe déjà n’est pas modifié, et tout reste
               modifiable ensuite.
             </p>

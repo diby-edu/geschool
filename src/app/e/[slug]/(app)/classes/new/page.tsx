@@ -32,7 +32,7 @@ export default async function NewClassPage({ params }: { params: Promise<{ slug:
       {levels.length === 0 ? (
         <EmptyState
           title="Aucun niveau défini"
-          hint="Créez d'abord les niveaux, ou chargez la grille officielle (6ème à Terminale) depuis Programme."
+          hint="Créez d'abord les niveaux, ou chargez la grille officielle (6ème à Tle) depuis Programme."
           action={{ href: `/e/${slug}/programme`, label: 'Ouvrir le programme' }}
         />
       ) : (
