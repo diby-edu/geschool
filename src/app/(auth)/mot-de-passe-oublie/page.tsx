@@ -2,13 +2,13 @@ import type { Metadata } from 'next';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PasswordResetForm } from '@/features/auth/components/PasswordResetForm';
 
-export const metadata: Metadata = { title: 'Mot de passe oublie' };
+export const metadata: Metadata = { title: 'Mot de passe oublié' };
 
 export default function PasswordResetPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Mot de passe oublie</CardTitle>
+        <CardTitle>Mot de passe oublié</CardTitle>
         <CardDescription>Un lien de réinitialisation vous sera envoyé par email.</CardDescription>
       </CardHeader>
       <CardContent>

@@ -10,7 +10,7 @@ import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Flash } from '@/components/ui/flash';
 import { Button } from '@/components/ui/button';
 
-export const metadata: Metadata = { title: 'Notes & Évaluations' };
+export const metadata: Metadata = { title: 'Notes & évaluations' };
 
 export default async function MyClassEvaluationsPage({
   params,

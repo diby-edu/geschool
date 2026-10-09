@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { hasAnyPermission } from '@/lib/permissions';
 import type { TenantContext } from '@/lib/tenant/context';
 import { HUB_PERMISSIONS } from '../hub';
+import { getActiveSpace } from '@/features/navigation/spaces';
 
 /**
  * Retour aux Paramètres, en haut à droite des écrans de configuration.
@@ -11,8 +12,10 @@ import { HUB_PERMISSIONS } from '../hub';
  * a bien accès aux Paramètres — un enseignant qui ouvre le Programme depuis son
  * menu n'a rien à y faire.
  */
-export function BackToSettings({ ctx, label = 'Retour aux paramètres' }: { ctx: TenantContext; label?: string }) {
+export async function BackToSettings({ ctx, label = 'Retour aux paramètres' }: { ctx: TenantContext; label?: string }) {
   if (!hasAnyPermission(ctx, HUB_PERMISSIONS)) return null;
+  // L'espace Enseignant n'a pas de Paramètres, même si un droit de lecture (matières) y donnerait accès.
+  if ((await getActiveSpace(ctx)) === 'teacher') return null;
   return (
     <Link
       href={`/e/${ctx.school.slug}/parametres`}

@@ -118,7 +118,7 @@ export function DataTable<Row extends { id: string }>({
             <PageLink
               disabled={params.page <= 1}
               href={`${basePath}${mergeQuery(searchParams, { page: params.page - 1 })}`}
-              label="Precedent"
+              label="Précédent"
             />
             <PageLink
               disabled={params.page >= pages}

@@ -79,7 +79,7 @@ export default async function SchoolAppLayout({
       // Un Super Admin arrive ici depuis /admin : sans ce lien, il resterait
       // captif de l'espace etablissement (aucune entree du menu ne pointe vers
       // la plateforme).
-      {...(ctx.isPlatformAdmin ? { back: { href: '/admin', label: 'Retour a la plateforme' } } : {})}
+      {...(ctx.isPlatformAdmin ? { back: { href: '/admin', label: 'Retour à la plateforme' } } : {})}
       user={{ displayName: ctx.user.displayName, roleLabel: roleLabel_ }}
     >
       {/* Administrateur de la plateforme chez un client : il a tous les droits

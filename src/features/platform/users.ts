@@ -3,6 +3,7 @@ import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import { requireAdmin } from './admin';
 import { fetchAllRows } from '@/lib/supabase/pagination';
+import { isSyntheticEmail } from '@/features/auth/service';
 
 /**
  * Tous les comptes de la plateforme, vus par l'éditeur.
@@ -38,7 +39,13 @@ export async function listPlatformUsers(search = '', limit = 200): Promise<Platf
     status: string;
     schools: { name: string; slug: string } | null;
     membership_roles: { roles: { code: string } | null }[];
-    users: { display_name: string | null; email: string | null; phone_e164: string | null; last_login_at: string | null } | null;
+    users: {
+      display_name: string | null;
+      auth_email: string | null;
+      contact_email: string | null;
+      phone_e164: string | null;
+      last_login_at: string | null;
+    } | null;
   };
 
   const rows = await fetchAllRows<Membership>((cursor) => {
@@ -46,7 +53,7 @@ export async function listPlatformUsers(search = '', limit = 200): Promise<Platf
       .from('school_memberships')
       .select(
         'id, user_id, status, schools(name, slug), membership_roles(roles(code)), ' +
-          'users(display_name, email, phone_e164, last_login_at)',
+          'users(display_name, auth_email, contact_email, phone_e164, last_login_at)',
       )
       .order('id')
       .limit(500);
@@ -75,7 +82,8 @@ export async function listPlatformUsers(search = '', limit = 200): Promise<Platf
     parUser.set(m.user_id, {
       id: m.user_id,
       name: u?.display_name ?? '—',
-      email: u?.email ?? null,
+      // Adresse de contact, sinon celle de connexion — sauf si celle-ci est synthétique (compte sans e-mail).
+      email: u?.contact_email ?? (u?.auth_email && !isSyntheticEmail(u.auth_email) ? u.auth_email : null),
       phone: u?.phone_e164 ?? null,
       lastLogin: dernier,
       idleDays: dernier ? Math.floor((maintenant - new Date(dernier).getTime()) / 86_400_000) : null,

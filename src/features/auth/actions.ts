@@ -39,6 +39,17 @@ function schoolAttemptKey(schoolRef: string, identifier: string, country: string
   return attemptKey('school', schoolRef, normalized.ok ? normalized.value : identifier);
 }
 
+/**
+ * Date de dernière connexion (users.last_login_at), lue par la plateforme (page
+ * Comptes). Écrite par la personne elle-même — la policy users_update l'autorise
+ * sur sa propre ligne. Un échec ne doit jamais bloquer une connexion réussie.
+ */
+async function noteLogin(supabase: Awaited<ReturnType<typeof createClient>>, userId: string | undefined): Promise<void> {
+  if (!userId) return;
+  const { error } = await supabase.from('users').update({ last_login_at: new Date().toISOString() }).eq('id', userId);
+  if (error) console.error('[auth] last_login_at non enregistré :', error.message);
+}
+
 function safeNext(next: unknown): string {
   // N'accepte qu'un chemin interne, jamais une URL absolue (open redirect)
   if (typeof next === 'string' && next.startsWith('/') && !next.startsWith('//')) return next;
@@ -63,7 +74,7 @@ export async function loginWithEmail(_prev: AuthState, formData: FormData): Prom
   if (await isLockedOut(key)) return { error: LOCKED_MESSAGE };
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data: signedIn, error } = await supabase.auth.signInWithPassword({
     email: parsed.data.email,
     password: parsed.data.password,
   });
@@ -72,7 +83,14 @@ export async function loginWithEmail(_prev: AuthState, formData: FormData): Prom
     return { error: GENERIC };
   }
   await clearFailures(key);
+  await noteLogin(supabase, signedIn.user?.id);
 
+  // Sans destination demandée, un Super Admin va droit à son espace : l'aiguillage
+  // de « / » rendu dans la foulée de la connexion lui a déjà servi la vitrine publique.
+  if (!parsed.data.next) {
+    const { data: isAdmin } = await supabase.rpc('is_platform_admin' as never);
+    if (isAdmin === true) redirect('/admin');
+  }
   redirect(safeNext(parsed.data.next));
 }
 
@@ -105,7 +123,7 @@ export async function loginWithSchoolIdentifier(
   // Anti-enumeration : sur echec de resolution, on tente quand meme une
   // connexion avec un email inexistant. Le temps de reponse et le message
   // restent identiques, qu'un compte existe ou non.
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data: signedIn, error } = await supabase.auth.signInWithPassword({
     email: authEmail ?? `inconnu-${crypto.randomUUID()}@${'accounts.invalid'}`,
     password: parsed.data.password,
   });
@@ -114,6 +132,7 @@ export async function loginWithSchoolIdentifier(
     return { error: GENERIC };
   }
   await clearFailures(key);
+  await noteLogin(supabase, signedIn.user?.id);
 
   redirect(`/e/${parsed.data.slug}`);
 }
@@ -145,7 +164,7 @@ export async function loginWithSchoolCode(_prev: AuthState, formData: FormData):
   const supabase = await createClient();
   // Anti-enumeration : meme parcours et meme message, que le code ecole, le
   // compte ou le mot de passe soit faux — une connexion est toujours tentee.
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data: signedIn, error } = await supabase.auth.signInWithPassword({
     email: authEmail ?? `inconnu-${crypto.randomUUID()}@accounts.invalid`,
     password: parsed.data.password,
   });
@@ -154,6 +173,7 @@ export async function loginWithSchoolCode(_prev: AuthState, formData: FormData):
     return { error: GENERIC_CODE };
   }
   await clearFailures(key);
+  await noteLogin(supabase, signedIn.user?.id);
 
 
   (await cookies()).set(SCHOOL_CODE_COOKIE, parsed.data.code, {

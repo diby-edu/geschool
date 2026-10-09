@@ -16,7 +16,7 @@ import { Alert } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
-export const metadata: Metadata = { title: 'Notes & Évaluations' };
+export const metadata: Metadata = { title: 'Notes & évaluations' };
 
 const STATUS_TONE: Record<string, string> = {
   DRAFT: 'text-[color:var(--muted-foreground)]',
@@ -47,7 +47,7 @@ export default async function EvaluationsPage({
     const classes = await getMyTaughtClasses(ctx);
     return (
       <div className="mx-auto max-w-4xl space-y-6">
-        <PageHeader title="Notes & Évaluations" {...(ctx.academicYear ? { description: `Année ${ctx.academicYear.name}` } : {})} />
+        <PageHeader title="Notes & évaluations" {...(ctx.academicYear ? { description: `Année ${ctx.academicYear.name}` } : {})} />
         {classes.length === 0 ? (
           <EmptyState title="Aucune classe" hint="Aucune classe ne vous est encore affectée." />
         ) : (
@@ -73,7 +73,7 @@ export default async function EvaluationsPage({
   if (!ctx.academicYear) {
     return (
       <div className="mx-auto max-w-4xl">
-        <PageHeader title="Notes & Évaluations" />
+        <PageHeader title="Notes & évaluations" />
         <EmptyState title="Aucune année active" hint="Activez une année scolaire d'abord." action={{ href: `/e/${slug}/academic-years`, label: 'Gérer les années scolaires' }} />
       </div>
     );
@@ -151,7 +151,7 @@ export default async function EvaluationsPage({
     <div className="mx-auto max-w-5xl space-y-6">
       <Flash searchParams={sp} />
       <PageHeader
-        title="Notes & Évaluations"
+        title="Notes & évaluations"
         description={`Année ${ctx.academicYear.name}`}
         action={
           <div className="flex items-center gap-2">

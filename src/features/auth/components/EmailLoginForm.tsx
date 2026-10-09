@@ -36,7 +36,7 @@ export function EmailLoginForm({ next }: { next?: string | undefined }) {
           href="/mot-de-passe-oublie"
           className="text-[color:var(--muted-foreground)] hover:underline"
         >
-          Mot de passe oublie ?
+          Mot de passe oublié ?
         </a>
       </p>
     </form>
