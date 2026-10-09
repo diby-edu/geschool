@@ -21,6 +21,18 @@ export type AuditRow = {
 /** Domaines proposés au filtre : ceux que l'écran sait nommer. Une valeur hors liste est ignorée. */
 export const AUDIT_MODULES = Object.keys(MODULE_LABELS);
 
+/** Qui a fait l'action : tout le monde, les enseignants, ou le reste du personnel. */
+export type AuditWho = 'all' | 'teachers' | 'staff';
+
+export type AuditFilter = {
+  /**
+   * Domaines MASQUÉS (décochés). On exclut plutôt qu'on n'inclut : un domaine que
+   * l'écran ne connaît pas encore reste visible, jamais caché par défaut.
+   */
+  hidden: string[];
+  who: AuditWho;
+};
+
 /**
  * Une page du journal, du plus récent au plus ancien. Tri sur (date, id) : deux
  * événements écrits dans la même milliseconde ne changent pas de page d'un appel
@@ -28,7 +40,7 @@ export const AUDIT_MODULES = Object.keys(MODULE_LABELS);
  */
 export async function listAudit(
   ctx: TenantContext,
-  module: string | undefined,
+  filter: AuditFilter,
   page: Pick<ListParams, 'from' | 'to'>,
 ): Promise<{ rows: AuditRow[]; total: number }> {
   const supabase = await createClient();
@@ -43,7 +55,10 @@ export async function listAudit(
     .order('created_at', { ascending: false })
     .order('id', { ascending: false })
     .range(page.from, page.to);
-  if (module && AUDIT_MODULES.includes(module)) query = query.eq('module', module);
+  const hidden = filter.hidden.filter((m) => AUDIT_MODULES.includes(m));
+  if (hidden.length > 0) query = query.not('module', 'in', `(${hidden.join(',')})`);
+  if (filter.who === 'teachers') query = query.eq('actor_role', 'TEACHER');
+  if (filter.who === 'staff') query = query.neq('actor_role', 'TEACHER').eq('actor_is_platform_admin', false);
 
   const { data, count, error } = await query;
   if (error) throw error;

@@ -5,7 +5,10 @@ import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess } from '@/lib/permissions/guard';
 import { mergeQuery, pageCount, parseListParams } from '@/lib/query/list';
 import { roleLabel, type RoleCode } from '@/lib/permissions/roles';
-import { AUDIT_MODULES, listAudit, type AuditRow } from '@/features/audit/queries';
+import { AUDIT_MODULES, listAudit, type AuditFilter, type AuditRow } from '@/features/audit/queries';
+import { cleanHidden, parseWho, readJournalPrefs } from '@/features/audit/journal-prefs';
+import { saveJournalPrefsAction } from '@/features/audit/actions';
+import { hasPermission } from '@/lib/permissions';
 import { actionLabel, moduleLabel, summarize } from '@/features/audit/labels';
 import { DataTable, type Column } from '@/components/data-table/DataTable';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -29,11 +32,20 @@ export default async function AuditPage({
   requirePageAccess(ctx, 'audit.view');
 
   const base = `/e/${slug}/audit`;
-  const rawModule = Array.isArray(sp.module) ? sp.module[0] : sp.module;
-  const domain = rawModule && AUDIT_MODULES.includes(rawModule) ? rawModule : undefined;
   const listParams = parseListParams(sp, { sortable: [], pageSize: PAGE_SIZE });
 
-  const { rows, total } = await listAudit(ctx, domain, listParams);
+  // Filtre envoyé (f=1) : les cases cochées. Sinon : l'affichage mémorisé pour l'école.
+  const saved = await readJournalPrefs(ctx);
+  const submitted = sp.f === '1';
+  const shownParam = sp.d === undefined ? [] : Array.isArray(sp.d) ? sp.d : [sp.d];
+  const filter: AuditFilter = submitted
+    ? { hidden: cleanHidden(AUDIT_MODULES.filter((m) => !shownParam.includes(m))), who: parseWho(sp.who) }
+    : saved;
+  const hidden = new Set(filter.hidden);
+  const canSave = hasPermission(ctx, 'settings.update');
+  const domains = [...AUDIT_MODULES].sort((a, b) => moduleLabel(a).localeCompare(moduleLabel(b), 'fr'));
+
+  const { rows, total } = await listAudit(ctx, filter, listParams);
   const pages = pageCount(total, PAGE_SIZE);
   if (listParams.page > pages) redirect(`${base}${mergeQuery(sp, { page: pages })}`);
 
@@ -86,28 +98,55 @@ export default async function AuditPage({
         }
       />
 
-      <form method="get" className="flex flex-wrap items-end gap-3">
-        <div>
-          <label htmlFor="module" className="mb-1 block text-sm font-medium">
-            Domaine
-          </label>
-          <select
-            id="module"
-            name="module"
-            defaultValue={domain ?? ''}
-            className="h-10 rounded-[--radius-card] border bg-[color:var(--surface)] px-3 text-sm"
-          >
-            <option value="">Tous les domaines</option>
-            {AUDIT_MODULES.map((m) => (
-              <option key={m} value={m}>
-                {moduleLabel(m)}
-              </option>
+      <form method="get" className="space-y-4 rounded-3xl border p-5" style={{ backgroundColor: 'var(--surface)' }}>
+        <input type="hidden" name="f" value="1" />
+        <fieldset>
+          <legend className="mb-2 text-sm font-semibold">Actions de</legend>
+          <div className="flex flex-wrap gap-4 text-sm">
+            {(
+              [
+                ['all', 'Tout le monde'],
+                ['teachers', 'Enseignants'],
+                ['staff', 'Personnel (hors enseignants)'],
+              ] as const
+            ).map(([value, label]) => (
+              <label key={value} className="flex items-center gap-2">
+                <input type="radio" name="who" value={value} defaultChecked={filter.who === value} />
+                {label}
+              </label>
             ))}
-          </select>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend className="mb-2 text-sm font-semibold">Domaines affichés</legend>
+          <div className="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            {domains.map((m) => (
+              <label key={m} className="flex items-center gap-2">
+                <input type="checkbox" name="d" value={m} defaultChecked={!hidden.has(m)} />
+                {moduleLabel(m)}
+              </label>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-[color:var(--muted-foreground)]">
+            Décocher un domaine le masque seulement : toutes les actions restent enregistrées.
+          </p>
+        </fieldset>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="submit" variant="secondary" size="sm">
+            Afficher
+          </Button>
+          {canSave ? (
+            <Button type="submit" size="sm" formAction={saveJournalPrefsAction.bind(null, slug)}>
+              Enregistrer comme affichage par défaut
+            </Button>
+          ) : null}
+          <Link href={`${base}?f=1${AUDIT_MODULES.map((m) => `&d=${m}`).join('')}`} className="text-sm text-[color:var(--muted-foreground)] hover:underline">
+            Tout afficher
+          </Link>
+          {sp.saved === '1' ? <span className="text-sm text-[color:var(--color-success)]">Affichage par défaut enregistré.</span> : null}
         </div>
-        <Button type="submit" variant="secondary" size="sm">
-          Filtrer
-        </Button>
       </form>
 
       <DataTable
@@ -117,7 +156,7 @@ export default async function AuditPage({
         params={listParams}
         basePath={base}
         searchParams={sp}
-        emptyLabel={domain ? 'Aucun événement dans ce domaine.' : 'Aucun événement enregistré.'}
+        emptyLabel={hidden.size > 0 || filter.who !== 'all' ? 'Aucun événement pour ce filtre.' : 'Aucun événement enregistré.'}
       />
     </div>
   );

@@ -56,7 +56,9 @@ export function mergeQuery(
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(current)) {
     if (v === undefined) continue;
-    params.set(k, Array.isArray(v) ? (v[0] ?? '') : v);
+    // Un paramètre répété (cases à cocher d'un filtre) garde toutes ses valeurs.
+    if (Array.isArray(v)) for (const item of v) params.append(k, item);
+    else params.set(k, v);
   }
   for (const [k, v] of Object.entries(overrides)) {
     if (v === null || v === undefined || v === '') params.delete(k);
