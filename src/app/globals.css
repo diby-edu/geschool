@@ -68,6 +68,26 @@
   color-scheme: dark;
 }
 
+/* Zone sombre (Mosaique « mixte ») : le menu lateral et la bande d'analyses gardent
+   les jetons du mode sombre meme en clair, pour que la navigation recule et que les
+   chiffres du jour passent devant. Les composants lisent les jetons : rien a changer en eux. */
+.zone-sombre {
+  --background: #0d1024;
+  --foreground: #eef0ff;
+  --surface: #151936;
+  --border: rgba(140, 150, 255, 0.16);
+  --muted-foreground: #a4abd8;
+  --color-brand: #8b85ff;
+  --color-brand-foreground: #141433;
+  --color-brand-muted: rgba(139, 133, 255, 0.16);
+  color-scheme: dark;
+  color: var(--foreground);
+}
+.zone-sombre .nav-chip {
+  background-color: var(--chip-bg-dark);
+  color: var(--chip-fg-dark);
+}
+
 /* Pastilles colorees du menu (une couleur par module, la meme que son bloc du tableau de bord). */
 .nav-chip {
   background-color: var(--chip-bg);

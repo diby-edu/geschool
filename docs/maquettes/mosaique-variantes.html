@@ -41,6 +41,9 @@
   .brandline { font-weight: 800; font-size: 13px; padding: 2px 8px 12px; letter-spacing: -0.01em; }
   .mgroup { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; opacity: .55; padding: 12px 8px 5px; }
   .mitem { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 9px; }
+  a.mitem { color: inherit; text-decoration: none; cursor: pointer; }
+  .app.clair a.mitem:hover { background: #f1f0ff; }
+  .app.mixte a.mitem:hover, .app.nuit a.mitem:hover { background: rgba(139,133,255,.12); }
   .dot { width: 7px; height: 7px; border-radius: 99px; flex: 0 0 auto; }
   .main { padding: 16px; display: grid; gap: 14px; }
 
@@ -129,25 +132,26 @@
     Le contenu est le même dans les trois : bandeau d’accueil, Suivi du jour, Statistiques, Analyses.
     Seul le <strong>décor</strong> change. Les chiffres sont ceux d’une journée ordinaire à La Renaissance
     (800 élèves, 34 enseignants, 16 classes).
+    <strong>Chaque module du menu est cliquable</strong> : il ouvre la vraie page sur localhost (serveur lancé, compte de démo connecté).
   </p>
 
   <!-- ====================== A — CLAIRE ====================== -->
   <section class="variante">
-    <div class="vtitle"><h2>A — Mosaïque claire</h2><span class="tag">en place aujourd’hui</span></div>
+    <div class="vtitle"><h2>A — Mosaïque claire</h2><span class="tag">l’ancienne</span></div>
     <p class="vdesc">Tout en clair : menu blanc, fond bleuté, blocs pleins colorés. C’est ce que vous avez à l’écran en ce moment.</p>
 
     <div class="app clair">
       <nav class="menu">
         <div class="brandline">Gestion Scolaire</div>
         <div class="mgroup">Comptes</div>
-        <div class="mitem"><span class="dot" style="background:#b02bbd"></span>Personnel</div>
-        <div class="mitem"><span class="dot" style="background:#0a76b3"></span>Enseignants</div>
-        <div class="mitem"><span class="dot" style="background:#8347ea"></span>Élèves</div>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/personnel" target="_blank" rel="noopener"><span class="dot" style="background:#b02bbd"></span>Personnel</a>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/teachers" target="_blank" rel="noopener"><span class="dot" style="background:#0a76b3"></span>Enseignants</a>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/students" target="_blank" rel="noopener"><span class="dot" style="background:#8347ea"></span>Élèves</a>
         <div class="mgroup">Au quotidien</div>
-        <div class="mitem"><span class="dot" style="background:#0d7f78"></span>Emploi du temps</div>
-        <div class="mitem on"><span class="dot" style="background:#0a7d55"></span>Présences</div>
-        <div class="mitem"><span class="dot" style="background:#5b50e6"></span>Notes</div>
-        <div class="mitem"><span class="dot" style="background:#c8245a"></span>Bulletins</div>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/schedule" target="_blank" rel="noopener"><span class="dot" style="background:#0d7f78"></span>Emploi du temps</a>
+        <a class="mitem on" href="http://localhost:3000/e/gs-renaissance/attendance" target="_blank" rel="noopener"><span class="dot" style="background:#0a7d55"></span>Présences</a>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/evaluations" target="_blank" rel="noopener"><span class="dot" style="background:#5b50e6"></span>Notes</a>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/bulletins" target="_blank" rel="noopener"><span class="dot" style="background:#c8245a"></span>Bulletins</a>
       </nav>
       <div class="main">
         <div class="hero">
@@ -200,7 +204,7 @@
 
   <!-- ====================== A+B — MIXTE ====================== -->
   <section class="variante">
-    <div class="vtitle"><h2>A + B — Mosaïque mixte</h2><span class="tag">la fusion des deux</span></div>
+    <div class="vtitle"><h2>A + B — Mosaïque mixte</h2><span class="tag">retenue — en place depuis le 9 octobre</span></div>
     <p class="vdesc">
       La mosaïque claire reste au centre, mais le <strong>menu</strong> et la <strong>bande d’analyses</strong>
       passent en sombre. Le regard va droit aux blocs de couleur ; le décor recule.
@@ -210,14 +214,14 @@
       <nav class="menu">
         <div class="brandline">Gestion Scolaire</div>
         <div class="mgroup">Comptes</div>
-        <div class="mitem"><span class="dot" style="background:#f0abfc"></span>Personnel</div>
-        <div class="mitem"><span class="dot" style="background:#7dd3fc"></span>Enseignants</div>
-        <div class="mitem"><span class="dot" style="background:#d0b3ff"></span>Élèves</div>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/personnel" target="_blank" rel="noopener"><span class="dot" style="background:#f0abfc"></span>Personnel</a>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/teachers" target="_blank" rel="noopener"><span class="dot" style="background:#7dd3fc"></span>Enseignants</a>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/students" target="_blank" rel="noopener"><span class="dot" style="background:#d0b3ff"></span>Élèves</a>
         <div class="mgroup">Au quotidien</div>
-        <div class="mitem"><span class="dot" style="background:#5eead4"></span>Emploi du temps</div>
-        <div class="mitem on"><span class="dot" style="background:#6ee7b7"></span>Présences</div>
-        <div class="mitem"><span class="dot" style="background:#b9b5ff"></span>Notes</div>
-        <div class="mitem"><span class="dot" style="background:#fda4af"></span>Bulletins</div>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/schedule" target="_blank" rel="noopener"><span class="dot" style="background:#5eead4"></span>Emploi du temps</a>
+        <a class="mitem on" href="http://localhost:3000/e/gs-renaissance/attendance" target="_blank" rel="noopener"><span class="dot" style="background:#6ee7b7"></span>Présences</a>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/evaluations" target="_blank" rel="noopener"><span class="dot" style="background:#b9b5ff"></span>Notes</a>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/bulletins" target="_blank" rel="noopener"><span class="dot" style="background:#fda4af"></span>Bulletins</a>
       </nav>
       <div class="main">
         <div class="hero">
@@ -277,14 +281,14 @@
       <nav class="menu">
         <div class="brandline">Gestion Scolaire</div>
         <div class="mgroup">Comptes</div>
-        <div class="mitem"><span class="dot" style="background:#f0abfc"></span>Personnel</div>
-        <div class="mitem"><span class="dot" style="background:#7dd3fc"></span>Enseignants</div>
-        <div class="mitem"><span class="dot" style="background:#d0b3ff"></span>Élèves</div>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/personnel" target="_blank" rel="noopener"><span class="dot" style="background:#f0abfc"></span>Personnel</a>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/teachers" target="_blank" rel="noopener"><span class="dot" style="background:#7dd3fc"></span>Enseignants</a>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/students" target="_blank" rel="noopener"><span class="dot" style="background:#d0b3ff"></span>Élèves</a>
         <div class="mgroup">Au quotidien</div>
-        <div class="mitem"><span class="dot" style="background:#5eead4"></span>Emploi du temps</div>
-        <div class="mitem on"><span class="dot" style="background:#6ee7b7"></span>Présences</div>
-        <div class="mitem"><span class="dot" style="background:#b9b5ff"></span>Notes</div>
-        <div class="mitem"><span class="dot" style="background:#fda4af"></span>Bulletins</div>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/schedule" target="_blank" rel="noopener"><span class="dot" style="background:#5eead4"></span>Emploi du temps</a>
+        <a class="mitem on" href="http://localhost:3000/e/gs-renaissance/attendance" target="_blank" rel="noopener"><span class="dot" style="background:#6ee7b7"></span>Présences</a>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/evaluations" target="_blank" rel="noopener"><span class="dot" style="background:#b9b5ff"></span>Notes</a>
+        <a class="mitem" href="http://localhost:3000/e/gs-renaissance/bulletins" target="_blank" rel="noopener"><span class="dot" style="background:#fda4af"></span>Bulletins</a>
       </nav>
       <div class="main">
         <div class="hero">

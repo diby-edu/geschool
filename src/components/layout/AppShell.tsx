@@ -39,7 +39,8 @@ export function AppShell({
 }) {
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[15rem_1fr]">
-      <aside className="border-b md:border-b-0 md:border-r" style={{ backgroundColor: 'var(--surface)' }}>
+      {/* Menu sombre en clair comme en sombre : variante « mixte » de la Mosaïque. */}
+      <aside className="zone-sombre border-b md:border-b-0 md:border-r" style={{ backgroundColor: 'var(--surface)' }}>
         {back ? (
           <Link
             href={back.href}
