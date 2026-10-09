@@ -4,7 +4,6 @@ import { hasAnyPermission, hasPermission } from '@/lib/permissions';
 import { parseDashParams } from '../params';
 import { loadStaffDashboard } from '../staff';
 import { staffRoleText } from '../sections';
-import { ActivityFeed } from './ActivityFeed';
 import { AssiduityCard, LevelsCard, WatchCard } from './Analyses';
 import { DayBlock, dateFr } from './DayBlock';
 import { GradingBlock } from './GradingBlock';
@@ -72,30 +71,26 @@ export async function StaffView({ ctx, sp }: { ctx: TenantContext; sp: Sp }) {
 
       <StatsBlock o={o} base={base} />
 
-      {o.weekly || o.levelDistribution ? (
-        <section className="grid gap-4 lg:grid-cols-[1.55fr_1fr]">
-          {data.day ? <AssiduityCard weekly={o.weekly} /> : null}
-          {o.levelDistribution ? <LevelsCard levels={o.levelDistribution} /> : null}
-        </section>
+      {/* Bande d'analyses sombre, en clair comme en sombre : variante « mixte » de la Mosaïque. */}
+      {o.weekly || o.levelDistribution || data.watch ? (
+        <div className="zone-sombre space-y-4 rounded-[2rem] p-3 sm:p-4" style={{ backgroundColor: 'var(--background)' }}>
+          {o.weekly || o.levelDistribution ? (
+            <section className="grid items-start gap-4 lg:grid-cols-[1.55fr_1fr]">
+              {data.day ? <AssiduityCard weekly={o.weekly} /> : null}
+              {o.levelDistribution ? <LevelsCard levels={o.levelDistribution} /> : null}
+            </section>
+          ) : null}
+
+          {data.watch ? <WatchCard watch={data.watch} base={dash} sp={sp} /> : null}
+        </div>
       ) : null}
 
-      {data.watch ? <WatchCard watch={data.watch} base={dash} sp={sp} /> : null}
-
-      <section className="grid gap-4 lg:grid-cols-2">
-        <div className="space-y-3">
-          <BlocHead title="À traiter" />
-          <Card>
-            <TodoPanel items={data.todos} />
-          </Card>
-        </div>
-        {o.activity ? (
-          <div className="space-y-3">
-            <BlocHead title="Activité récente" />
-            <Card>
-              <ActivityFeed items={o.activity} />
-            </Card>
-          </div>
-        ) : null}
+      {/* L'historique des actions vit dans Paramètres → Journal d'audit, plus sur le tableau de bord. */}
+      <section className="space-y-3">
+        <BlocHead title="À traiter" />
+        <Card>
+          <TodoPanel items={data.todos} />
+        </Card>
       </section>
 
       <DayPanel data={data} base={dash} sp={sp} tz={ctx.school.timezone} slug={ctx.school.slug} tab={params.callsTab} canOpenTeacherFile={hasPermission(ctx, 'teachers.update')} />

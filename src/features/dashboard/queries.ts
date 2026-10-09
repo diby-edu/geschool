@@ -4,6 +4,7 @@ import type { EducationTrack } from '@/features/structure/official-tracks';
 import { schoolTracks } from '@/features/structure/queries';
 
 import { createClient } from '@/lib/supabase/server';
+import { fetchAllRows } from '@/lib/supabase/pagination';
 import type { TenantContext } from '@/lib/tenant/context';
 import type { Space } from '@/lib/permissions/roles';
 import { myChildrenIds } from '@/features/family/children';
@@ -76,31 +77,45 @@ async function loadCurrentPeriod(
 // Section : classes (remplissage, repartition par niveau)
 // ---------------------------------------------------------------------------
 
-export type ClassRow = { id: string; name: string; capacity: number; level_id: string | null; levels: { name: string } | null };
+export type ClassRow = {
+  id: string;
+  name: string;
+  capacity: number;
+  level_id: string | null;
+  levels: { name: string; sequence: number; cycles: { sequence: number } | null } | null;
+};
 
 export async function loadClasses(
   supabase: Awaited<ReturnType<typeof createClient>>,
   schoolId: string,
   yearId: string,
 ): Promise<{ classes: ClassRow[]; enrolledByClass: Map<string, number> }> {
-  const [{ data: classData }, { data: enrollData }] = await Promise.all([
+  // Inscriptions lues en entier : une réponse PostgREST s'arrête à 1000 lignes, et un
+  // grand établissement les dépasse (effectifs par niveau faussés sans rien dire).
+  const [{ data: classData }, enrollData] = await Promise.all([
     supabase
       .from('classes')
-      .select('id, name, capacity, level_id, levels(name)')
+      .select('id, name, capacity, level_id, levels(name, sequence, cycles(sequence))')
       .eq('school_id', schoolId)
       .eq('academic_year_id', yearId)
       .eq('status', 'ACTIVE'),
-    supabase
-      .from('student_enrollments')
-      .select('class_id')
-      .eq('school_id', schoolId)
-      .eq('academic_year_id', yearId)
-      .eq('status', 'ENROLLED'),
+    fetchAllRows<{ id: string; class_id: string }>((cursor) => {
+      let q = supabase
+        .from('student_enrollments')
+        .select('id, class_id')
+        .eq('school_id', schoolId)
+        .eq('academic_year_id', yearId)
+        .eq('status', 'ENROLLED')
+        .order('id')
+        .limit(1000);
+      if (cursor) q = q.gt('id', cursor);
+      return q;
+    }),
   ]);
 
-  const classes = ((classData ?? []) as unknown as ClassRow[]).sort((a, b) => a.name.localeCompare(b.name));
+  const classes = ((classData ?? []) as unknown as ClassRow[]).sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
   const enrolledByClass = new Map<string, number>();
-  for (const row of (enrollData ?? []) as { class_id: string }[]) {
+  for (const row of enrollData) {
     enrolledByClass.set(row.class_id, (enrolledByClass.get(row.class_id) ?? 0) + 1);
   }
   return { classes, enrolledByClass };
@@ -241,7 +256,7 @@ async function loadTeacherOverview(ctx: TenantContext): Promise<TeacherOverview>
 
   const classes = Array.from(byId.values())
     .map((c) => ({ id: c.id, name: c.name, level: c.levels?.name ?? null, students: counts.get(c.id) ?? 0 }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
 
   const stats = await loadTeacherStats(ctx, teacherRow.id, yearId, classes.length, classes.reduce((sum, c) => sum + c.students, 0));
 

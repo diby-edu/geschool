@@ -9,7 +9,7 @@ import { hasPermission } from '@/lib/permissions';
 import { EMPLOYMENT_OPTIONS } from '@/lib/hr';
 import { getSchoolSubscription } from '@/features/billing/platform';
 import { listStaff } from '@/features/staff/queries';
-import { isoDaysAgo, loadActivity, loadClasses, loadParents } from './queries';
+import { isoDaysAgo, loadClasses, loadParents } from './queries';
 import type { DashParams, TopRange, WatchRange } from './params';
 import { addDays, currentPeriod, mondayOf, periodShortLabel, resolveRange, schoolToday, type PeriodInfo, type RangeKey, type YearInfo } from './time';
 import type {
@@ -119,7 +119,7 @@ async function loadOverview(
 
   const weekFrom = addDays(mondayOf(today), -7 * (SIX_WEEKS - 1));
 
-  const [studentsTotal, studentsNew, teacherRows, classesLoaded, parents, staff, weeklyRes, pendingJust, scheduleVersion, subscription, activity] =
+  const [studentsTotal, studentsNew, teacherRows, classesLoaded, parents, staff, weeklyRes, pendingJust, scheduleVersion, subscription] =
     await Promise.all([
       canStudents
         ? yearId
@@ -153,7 +153,6 @@ async function loadOverview(
             .eq('status', 'PUBLISHED')
         : Promise.resolve(null),
       hasPermission(ctx, 'billing.view') ? getSchoolSubscription(schoolId) : Promise.resolve(null),
-      hasPermission(ctx, 'audit.view') ? loadActivity(supabase, schoolId) : Promise.resolve(null),
     ]);
 
   // Places, niveaux
@@ -167,12 +166,23 @@ async function loadOverview(
         capacity: sized.reduce((n, c) => n + c.capacity, 0),
       };
     }
-    const byLevel = new Map<string, number>();
+    // Niveaux dans l'ordre de l'école (cycle puis niveau : 6ème → Tle), chacun avec ses classes.
+    type Level = NonNullable<StaffOverview['levelDistribution']>[number] & { order: [number, number] };
+    const byLevel = new Map<string, Level>();
     for (const c of classesLoaded.classes) {
       const name = c.levels?.name ?? '—';
-      byLevel.set(name, (byLevel.get(name) ?? 0) + (classesLoaded.enrolledByClass.get(c.id) ?? 0));
+      const count = classesLoaded.enrolledByClass.get(c.id) ?? 0;
+      let level = byLevel.get(name);
+      if (!level) {
+        level = { label: name, value: 0, classes: [], order: [c.levels?.cycles?.sequence ?? 999, c.levels?.sequence ?? 999] };
+        byLevel.set(name, level);
+      }
+      level.value += count;
+      level.classes.push({ label: c.name, value: count });
     }
-    levelDistribution = Array.from(byLevel.entries()).map(([label, value]) => ({ label, value }));
+    levelDistribution = Array.from(byLevel.values())
+      .sort((a, b) => a.order[0] - b.order[0] || a.order[1] - b.order[1] || a.label.localeCompare(b.label, 'fr', { numeric: true }))
+      .map(({ order: _order, ...level }) => level);
   }
 
   // Enseignants : total, acces crees, types de contrat
@@ -229,7 +239,6 @@ async function loadOverview(
     levelDistribution,
     weekly,
     pendingJustifications: compte(pendingJust),
-    activity,
     scheduleGenerated: canSchedule && yearId ? (compte(scheduleVersion) ?? 0) > 0 : null,
     subscription: subscription ? { status: subscription.status, planName: subscription.plans?.name ?? null } : null,
   };
@@ -261,7 +270,6 @@ const NO_OVERVIEW: StaffOverview = {
   levelDistribution: null,
   weekly: null,
   pendingJustifications: null,
-  activity: null,
   scheduleGenerated: null,
   subscription: null,
 };

@@ -106,25 +106,83 @@ export function AssiduityCard({ weekly }: { weekly: StaffOverview['weekly'] }) {
 
 const LEVEL_COLORS = ['#4a44e0', '#8b5cf6', '#12a99b', '#16a06a', '#f2a71b', '#f97316', '#ec4899'];
 
+/** Nom court d'un niveau ou d'une classe : « Terminale A1 » → « Tle A1 », comme on l'écrit à l'école. */
+export function shortLevel(name: string): string {
+  return name.replace(/\bTerminale\b/gi, 'Tle');
+}
+
+/** Niveaux montrés d'emblée ; les suivants se déroulent d'un clic. */
+const LEVELS_SHOWN = 10;
+
+type LevelRow = NonNullable<StaffOverview['levelDistribution']>[number];
+
+const TRACK = { backgroundColor: 'color-mix(in oklch, var(--foreground) 8%, var(--surface))' };
+
+/** Un niveau : sa barre, et ses classes avec leur effectif quand on clique dessus. */
+function LevelItem({ level, max, color }: { level: LevelRow; max: number; color: string }) {
+  const classMax = Math.max(1, ...level.classes.map((c) => c.value));
+  return (
+    <li>
+      <details className="group">
+        <summary
+          className="grid cursor-pointer list-none grid-cols-[1rem_4.75rem_1fr_2.75rem] items-center gap-2.5 rounded-lg py-1 text-[13px] hover:bg-[color:var(--color-brand-muted)] [&::-webkit-details-marker]:hidden"
+          title={`${level.label} · ${level.classes.length} classe${level.classes.length > 1 ? 's' : ''}`}
+        >
+          <span aria-hidden className="text-center text-[10px] text-[color:var(--muted-foreground)] transition-transform group-open:rotate-90">▶</span>
+          <span className="truncate font-semibold">{shortLevel(level.label)}</span>
+          <div className="h-3.5 overflow-hidden rounded-full" style={TRACK}>
+            <div className="h-full rounded-full" style={{ width: `${(level.value / max) * 100}%`, backgroundColor: color }} />
+          </div>
+          <span className="text-right font-semibold tabular-nums">{level.value}</span>
+        </summary>
+        <ul className="mb-2 ml-[1.6rem] mt-1 space-y-1.5 border-l pl-3">
+          {level.classes.map((c) => (
+            <li key={c.label} className="grid grid-cols-[4.75rem_1fr_2.75rem] items-center gap-2.5 text-[12px]">
+              <span className="truncate text-[color:var(--muted-foreground)]" title={c.label}>{shortLevel(c.label)}</span>
+              <div className="h-2 overflow-hidden rounded-full" style={TRACK}>
+                <div className="h-full rounded-full opacity-70" style={{ width: `${(c.value / classMax) * 100}%`, backgroundColor: color }} />
+              </div>
+              <span className="text-right tabular-nums">{c.value}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
+    </li>
+  );
+}
+
 export function LevelsCard({ levels }: { levels: NonNullable<StaffOverview['levelDistribution']> }) {
   const max = Math.max(1, ...levels.map((l) => l.value));
+  const color = (i: number) => LEVEL_COLORS[i % LEVEL_COLORS.length]!;
+  const shown = levels.slice(0, LEVELS_SHOWN);
+  const rest = levels.slice(LEVELS_SHOWN);
   return (
     <Card>
       <h2 className="text-lg font-extrabold">Élèves par niveau</h2>
       {levels.length === 0 ? (
         <p className="mt-3 text-sm text-[color:var(--muted-foreground)]">Aucune classe avec des élèves inscrits.</p>
       ) : (
-        <ul className="mt-4 space-y-3.5">
-          {levels.map((l, i) => (
-            <li key={l.label} className="grid grid-cols-[3.5rem_1fr_2.75rem] items-center gap-3 text-[13px]">
-              <span className="truncate font-semibold">{l.label}</span>
-              <div className="h-3.5 overflow-hidden rounded-full" style={{ backgroundColor: 'color-mix(in oklch, var(--foreground) 8%, var(--surface))' }}>
-                <div className="h-full rounded-full" style={{ width: `${(l.value / max) * 100}%`, backgroundColor: LEVEL_COLORS[i % LEVEL_COLORS.length] }} />
-              </div>
-              <span className="text-right font-semibold tabular-nums">{l.value}</span>
-            </li>
-          ))}
-        </ul>
+        <>
+          <p className="mt-0.5 text-xs text-[color:var(--muted-foreground)]">Cliquez sur un niveau pour voir ses classes.</p>
+          <ul className="mt-3 space-y-1.5">
+            {shown.map((l, i) => (
+              <LevelItem key={l.label} level={l} max={max} color={color(i)} />
+            ))}
+          </ul>
+          {rest.length > 0 ? (
+            <details className="group/more mt-1.5">
+              <summary className="cursor-pointer list-none rounded-lg px-1 py-1.5 text-xs font-semibold text-[color:var(--color-brand)] hover:underline [&::-webkit-details-marker]:hidden">
+                <span className="group-open/more:hidden">Voir les {rest.length} autres niveaux</span>
+                <span className="hidden group-open/more:inline">Masquer les {rest.length} autres niveaux</span>
+              </summary>
+              <ul className="mt-1.5 space-y-1.5">
+                {rest.map((l, i) => (
+                  <LevelItem key={l.label} level={l} max={max} color={color(i + LEVELS_SHOWN)} />
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </>
       )}
     </Card>
   );

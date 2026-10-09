@@ -35,11 +35,11 @@ export type StaffOverview = {
   teachers: { total: number; withAccess: number; byContract: { code: string; label: string; count: number }[] } | null;
   personnel: { total: number; functions: number; labels: string[] } | null;
   classes: number | null;
-  levelDistribution: { label: string; value: number }[] | null;
+  /** Effectifs par niveau (ordre de l'école), avec le détail par classe. */
+  levelDistribution: { label: string; value: number; classes: { label: string; value: number }[] }[] | null;
   /** Assiduite des 6 dernieres semaines (une semaine sans appel = trou, jamais 0 %). */
   weekly: { rate7d: number; ratePrev7d: number; series: Sparkline } | null;
   pendingJustifications: number | null;
-  activity: ActivityItem[] | null;
   scheduleGenerated: boolean | null;
   subscription: { status: string; planName: string | null } | null;
 };
