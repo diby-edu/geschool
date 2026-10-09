@@ -4,7 +4,8 @@ import { notFound } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccessAny, requireFeature } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
-import { loadAppel, canActOnOccurrence } from '@/features/attendance/registers';
+import { loadAppel } from '@/features/attendance/registers';
+import { getCurrentCoursesForTeacher } from '@/features/attendance/current';
 import { submitRegisterAction, validateRegisterAction } from '@/features/attendance/actions';
 import { AppelGrid } from '@/features/attendance/components/AppelGrid';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -41,10 +42,9 @@ export default async function AppelPage({
   }
 
   const canValidate = hasPermission(ctx, 'attendance.validate');
-  const canTake =
-    hasPermission(ctx, 'attendance.create') ||
-    hasPermission(ctx, 'attendance.update') ||
-    (await canActOnOccurrence(ctx, occurrenceId));
+  // L'appel est celui de l'ENSEIGNANT, pendant son cours : c'est aussi ce qui atteste
+  // qu'il était là. La direction consulte et valide, elle ne remplit pas l'appel à sa place.
+  const canTake = (await getCurrentCoursesForTeacher(ctx)).some((c) => c.occurrenceId === occurrenceId);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -74,11 +74,14 @@ export default async function AppelPage({
         </Card>
       ) : null}
 
-      {canTake ? (
-        <AppelGrid slug={slug} occurrenceId={occurrenceId} editable={appel.editable} students={appel.students} />
-      ) : (
-        <Alert tone="info">Vous n’avez pas le droit de faire l’appel.</Alert>
+      {canTake ? null : (
+        <Alert tone="info">
+          {appel.registerStatus ? 'Consultation : l’appel est fait par l’enseignant, pendant son cours.' : 'L’enseignant n’a pas encore fait l’appel de ce cours.'}
+        </Alert>
       )}
+      {canTake || appel.registerStatus ? (
+        <AppelGrid slug={slug} occurrenceId={occurrenceId} editable={canTake && appel.editable} students={appel.students} />
+      ) : null}
     </div>
   );
 }

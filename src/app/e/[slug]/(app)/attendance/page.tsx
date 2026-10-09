@@ -106,7 +106,7 @@ export default async function AttendancePage({
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
         title="Appel et présences"
-        description="Faire l’appel des cours du jour"
+        description="Suivre l’appel des cours du jour, fait par chaque enseignant pendant son cours"
         action={
           <div className="flex items-center gap-2">
             <Link href={`${base}/absences`}><Button variant="ghost">Absences</Button></Link>
@@ -158,7 +158,7 @@ export default async function AttendancePage({
                   <td className="px-3 py-2">{o.register_status ? (REG_LABEL[o.register_status] ?? o.register_status) : '—'}</td>
                   <td className="px-3 py-2 text-right">
                     <Link href={`${base}/${o.id}`} className="text-sm text-[color:var(--color-brand)] hover:underline">
-                      {o.register_status ? 'Ouvrir' : 'Faire l’appel'}
+                      Voir
                     </Link>
                   </td>
                 </tr>
