@@ -45,6 +45,7 @@ export const EXEMPLE_BULLETIN: BulletinDetail = {
   class_average: 11.87,
   absences: 6,
   lateness: 3,
+  absenceHoursUnjustified: 4.5,
   head_teacher_comment: null,
   council_comment:
     'Trimestre solide, porté par les sciences. La philosophie et l’histoire-géographie restent en retrait : un travail régulier de rédaction les redressera.',

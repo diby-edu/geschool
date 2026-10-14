@@ -5,6 +5,7 @@ import type { TenantContext } from '@/lib/tenant/context';
 import { getMyTeacherId, getMyPublishedSessions } from '@/features/schedule/my-schedule';
 import { schoolToday } from '@/features/dashboard/time';
 import { clock, coversNow } from './day-phase';
+import { audienceOf, TARGETS_SELECT, type SessionTarget } from './targets';
 
 /**
  * Detection du « cours actuel » d'un enseignant (module Presence, cahier des
@@ -50,7 +51,7 @@ export async function listMySessionsOn(ctx: TenantContext, teacherId: string, da
     .from('session_occurrences')
     .select(
       'id, starts_at, ends_at, override_starts_at, override_ends_at, ' +
-        'schedule_sessions(subjects(name), schedule_session_targets(class_id, classes(name)))',
+        `schedule_sessions(subjects(name), ${TARGETS_SELECT})`,
     )
     .eq('school_id', ctx.school.id)
     .in('schedule_session_id', sessions.map((s) => s.id))
@@ -65,7 +66,7 @@ export async function listMySessionsOn(ctx: TenantContext, teacherId: string, da
     override_ends_at: string | null;
     schedule_sessions: {
       subjects: { name: string } | null;
-      schedule_session_targets: { class_id: string | null; classes: { name: string } | null }[];
+      schedule_session_targets: SessionTarget[];
     } | null;
   }[];
   if (rows.length === 0) return [];
@@ -80,13 +81,13 @@ export async function listMySessionsOn(ctx: TenantContext, teacherId: string, da
   const tz = ctx.school.timezone;
   return rows
     .map((r) => {
-      const target = r.schedule_sessions?.schedule_session_targets?.[0] ?? null;
+      const audience = audienceOf(r.schedule_sessions?.schedule_session_targets);
       const startsIso = r.override_starts_at ?? r.starts_at;
       const endsIso = r.override_ends_at ?? r.ends_at;
       return {
         occurrenceId: r.id,
-        classId: target?.class_id ?? null,
-        klass: target?.classes?.name ?? '—',
+        classId: audience.classIds[0] ?? null,
+        klass: audience.label,
         subject: r.schedule_sessions?.subjects?.name ?? 'Cours',
         startsIso,
         endsIso,

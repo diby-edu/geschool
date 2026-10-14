@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { StudentAvatar } from '@/components/ui/student-avatar';
 import type { AppelStudent } from '@/features/attendance/registers';
-import { submitOrQueue, flushAttendanceQueue, queueLength } from '@/features/attendance/offline-queue';
+import { submitOrQueue } from '@/features/attendance/offline-queue';
+import { serverNow } from '@/features/attendance/server-clock';
 
 type Status = 'PRESENT' | 'ABSENT' | 'LATE';
 
@@ -90,20 +91,6 @@ export function CurrentAppelCard({
   // arrive en retard. Le verrou, c'est la fin du créneau, pas la validation.
   const [validated, setValidated] = useState(false);
   const locked = !editable;
-  const [pending, setPending] = useState(() => queueLength());
-
-  const flush = useCallback(async () => {
-    const { synced } = await flushAttendanceQueue();
-    setPending(queueLength());
-    if (synced > 0) setMessage({ tone: 'success', text: `${synced} appel(s) en attente synchronisé(s).` });
-  }, []);
-
-  useEffect(() => {
-    const run = () => void flush();
-    queueMicrotask(run); // synchro initiale hors du corps de l'effet
-    window.addEventListener('online', run);
-    return () => window.removeEventListener('online', run);
-  }, [flush]);
 
   const total = students.length;
   const absences = students.filter((s) => s.status === 'ABSENT').length;
@@ -120,7 +107,7 @@ export function CurrentAppelCard({
       prev.map((s) => {
         if (s.studentId !== studentId) return s;
         const next = NEXT_STATUS[normalize(s.status)];
-        if (next === 'LATE') setLateAt((m) => ({ ...m, [studentId]: Date.now() }));
+        if (next === 'LATE') setLateAt((m) => ({ ...m, [studentId]: serverNow() }));
         return { ...s, status: next };
       }),
     );
@@ -136,10 +123,14 @@ export function CurrentAppelCard({
       clientOperationId: crypto.randomUUID(),
       occurrenceId,
       alsoSubmit: true,
+      // L'heure du clic voyage avec l'appel : reçu après la fin du cours, il
+      // est jugé à cet instant-là (appel fait hors ligne, jamais perdu).
+      takenAt: new Date(serverNow()).toISOString(),
+      label: `${klass} — ${subject}, ${dateLabel} ${timeLabel}`,
       entries: students.map((s) => ({
         studentId: s.studentId,
         status: s.status,
-        minutesLate: s.status === 'LATE' ? minutesDepuisLeDebut(startsAt, lateAt[s.studentId] ?? Date.now()) : 0,
+        minutesLate: s.status === 'LATE' ? minutesDepuisLeDebut(startsAt, lateAt[s.studentId] ?? serverNow()) : 0,
         comment: '',
       })),
     });
@@ -147,18 +138,22 @@ export function CurrentAppelCard({
     // Valide dans les deux cas : confirme et synchronise tout de suite, ou
     // enregistre sur l'appareil pour synchronisation automatique des le
     // retour du reseau (l'enseignant n'a pas a attendre ni a reessayer).
-    setValidated(true);
     if (outcome.ok) {
+      setValidated(true);
       setMessage({
         tone: 'success',
         text: 'Appel validé. Vous pouvez encore le corriger tant que le cours n’est pas terminé.',
       });
       router.refresh();
+    } else if (outcome.refused) {
+      setMessage({ tone: 'error', text: `Appel refusé : ${outcome.refused} Il reste sur l'appareil (bouton en haut de l'écran).` });
     } else {
-      setPending(queueLength());
+      setValidated(true);
       setMessage({
         tone: 'info',
-        text: "Réseau indisponible : appel enregistré sur l'appareil, il sera synchronisé automatiquement au retour de la connexion.",
+        text: outcome.needsLogin
+          ? "Session expirée : l'appel est gardé sur l'appareil. Reconnectez-vous, il partira seul."
+          : "Pas de réseau : l'appel est gardé sur l'appareil. Il partira seul au retour de la connexion (voir le bouton en haut de l'écran).",
       });
     }
     setBusy(false);
@@ -180,11 +175,10 @@ export function CurrentAppelCard({
         </div>
       </div>
 
-      {pending > 0 ? <Alert tone="info">{pending} appel(s) en attente de synchronisation.</Alert> : null}
       {message ? <Alert tone={message.tone}>{message.text}</Alert> : null}
 
       {students.length === 0 ? (
-        <Alert tone="info">Aucun élève inscrit dans cette classe.</Alert>
+        <Alert tone="info">Aucun élève attendu à ce cours.</Alert>
       ) : (
         <ul className="divide-y overflow-hidden rounded-[--radius-card] border" style={{ borderColor: 'var(--border)' }}>
           {students.map((s) => {

@@ -22,6 +22,10 @@ export const attendanceSaveSchema = z.object({
   // enseignant) n'a ainsi qu'une seule chose a mettre en file hors ligne,
   // pas deux appels a coordonner separement.
   alsoSubmit: z.coerce.boolean().default(false),
+  // Instant où l'appel a été FAIT, noté par l'appareil. Ne sert qu'au rejeu
+  // d'un appel fait hors ligne : le droit de l'enseignant se juge alors à cet
+  // instant, pas à celui où le réseau est revenu (migration 0105).
+  takenAt: z.iso.datetime({ offset: true }).optional(),
 });
 
 export type AttendanceSaveInput = z.infer<typeof attendanceSaveSchema>;

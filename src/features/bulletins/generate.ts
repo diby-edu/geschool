@@ -152,6 +152,7 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
 
   // Absences / retards de la période (une requête, tally en mémoire).
   const { absences, lateness } = await countAttendance(ctx, studentIds, period.starts_on, period.ends_on);
+  const unjustifiedHours = await unjustifiedAbsenceHours(ctx, studentIds, period.starts_on, period.ends_on);
 
   // Les règles d'écriture de l'établissement : appréciations, mentions,
   // décisions, coefficients de période. Rien n'est écrit à la main.
@@ -232,6 +233,7 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
           decision_label: decision ? fillDecisionLabel(decision.label, klass.name, nextLevel) : null,
           absences_count: absences.get(studentId) ?? 0,
           lateness_count: lateness.get(studentId) ?? 0,
+          absence_hours_unjustified: unjustifiedHours.get(studentId) ?? 0,
           generated_at: new Date().toISOString(),
           // Un bulletin regenere doit etre revalide puis resigne.
           signed_at: null,
@@ -339,6 +341,34 @@ async function nextLevelName(ctx: TenantContext, levelId: string): Promise<strin
     .limit(1)
     .maybeSingle();
   return next?.name ?? null;
+}
+
+/**
+ * Heures d'absence NON JUSTIFIÉES par élève : la durée réelle de chaque cours
+ * manqué (public.attendance_hours, migration 0105). Une absence est justifiée
+ * si elle est EXCUSED ou couverte par un justificatif approuvé — la même règle
+ * que l'espace parent, pour que les deux ne se contredisent jamais.
+ */
+async function unjustifiedAbsenceHours(
+  ctx: TenantContext,
+  studentIds: string[],
+  from: string,
+  to: string,
+): Promise<Map<string, number>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('attendance_hours' as never, {
+    p_school: ctx.school.id,
+    p_students: studentIds,
+    p_from: from,
+    p_to: to,
+  } as never);
+  // Un bulletin faux est pire qu'un bulletin refusé.
+  if (error) throw new Error(`Calcul des heures d'absence impossible : ${error.message}`);
+  const out = new Map<string, number>();
+  for (const r of (data ?? []) as { student_id: string; unjustified_hours: number | string }[]) {
+    out.set(r.student_id, Number(r.unjustified_hours));
+  }
+  return out;
 }
 
 async function countAttendance(

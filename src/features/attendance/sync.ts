@@ -3,13 +3,23 @@ import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
 import { audit } from '@/lib/audit';
-import { AuthorizationError, NotFoundError, ValidationError } from '@/lib/errors';
+import { AuthorizationError, ConflictError, NotFoundError } from '@/lib/errors';
+import { hasPermission } from '@/lib/permissions';
 import type { TablesInsert } from '@/types/database';
 import { getAppliedSyncResult, recordAppliedSyncOperation } from '@/services/sync-ledger';
-import { canActOnOccurrence, submitRegister } from './registers';
+import { canActOnOccurrence, loadRoster, submitRegister } from './registers';
+import { getOccurrence } from './occurrences';
+import { clampLateMinutes } from './targets';
 import type { AttendanceEntry } from './schemas';
 
-export type SaveResult = { registerId: string; deduped: boolean; savedCount: number; submitted: boolean };
+export type SaveResult = {
+  registerId: string;
+  deduped: boolean;
+  savedCount: number;
+  submitted: boolean;
+  /** Élèves reçus qui ne sont pas (ou plus) attendus à ce cours : écartés. */
+  ignoredCount?: number;
+};
 
 /**
  * Applique un appel de façon IDEMPOTENTE (ADR-009, docs/OFFLINE_SYNC.md).
@@ -32,6 +42,8 @@ export async function applyAttendanceSave(
     source: 'ONLINE' | 'OFFLINE_SYNC';
     /** Enchaine le verrouillage (submitRegister) juste apres l'enregistrement. */
     alsoSubmit?: boolean;
+    /** Instant où l'appel a été fait (appareil). Pris en compte au rejeu hors ligne. */
+    takenAt?: string;
   },
 ): Promise<SaveResult> {
   const supabase = await createClient();
@@ -46,29 +58,43 @@ export async function applyAttendanceSave(
   }
 
   // 2. L'occurrence existe-t-elle dans cet établissement ?
-  const { data: occ } = await supabase
-    .from('session_occurrences')
-    .select('id')
-    .eq('school_id', ctx.school.id)
-    .eq('id', input.occurrenceId)
-    .maybeSingle();
+  const occ = await getOccurrence(ctx, input.occurrenceId);
   if (!occ) throw new NotFoundError('Séance introuvable.');
 
-  // Droit d'agir : permission générale (censeur/direction) OU enseignant de
-  // cette séance précise (perimètre dérivé, RLS 0015 — jamais accordé en
-  // permission générale au rôle TEACHER par conception).
+  // Droit d'agir : permission générale (vie scolaire) OU enseignant de cette
+  // séance PENDANT le créneau (RLS 0084). Un appel fait hors ligne et reçu
+  // après la fin du cours se juge à l'instant où il a été FAIT (0105) : un
+  // appel fait sans réseau n'est jamais perdu, quelle que soit la coupure.
+  let replayAt: string | null = null;
   if (!(await canActOnOccurrence(ctx, input.occurrenceId))) {
-    throw new AuthorizationError("Vous n'êtes pas habilité à faire l'appel de cette séance.");
+    if (input.source === 'OFFLINE_SYNC' && input.takenAt) {
+      const { data: okAt } = await supabase.rpc('can_take_attendance_at' as never, {
+        p_school: ctx.school.id,
+        p_occurrence: input.occurrenceId,
+        p_at: input.takenAt,
+      } as never);
+      if (okAt === true) replayAt = input.takenAt;
+    }
+    if (!replayAt) {
+      throw new AuthorizationError(
+        input.source === 'OFFLINE_SYNC'
+          ? "Appel refusé : l'heure notée par l'appareil ne tombe pas dans le créneau de ce cours (horloge du téléphone à vérifier)."
+          : "Vous n'êtes pas habilité à faire l'appel de cette séance.",
+      );
+    }
   }
 
   // 3. Registre : réutiliser celui de l'occurrence, ou le créer (statut OPEN).
   let registerId: string;
   const { data: existing } = await supabase
     .from('attendance_registers')
-    .select('id')
+    .select('id, status')
     .eq('school_id', ctx.school.id)
     .eq('session_occurrence_id', input.occurrenceId)
     .maybeSingle();
+  if (existing?.status === 'VALIDATED' && !hasPermission(ctx, 'attendance.update')) {
+    throw new ConflictError('Cet appel a été validé par la vie scolaire : il ne peut plus être modifié.');
+  }
   if (existing) {
     registerId = existing.id;
   } else {
@@ -81,6 +107,7 @@ export async function applyAttendanceSave(
         status: 'OPEN',
         client_operation_id: input.clientOperationId,
         source: input.source,
+        ...(replayAt ? { taken_at: replayAt } : {}),
       })
       .select('id')
       .single();
@@ -103,21 +130,25 @@ export async function applyAttendanceSave(
     }
   }
 
-  // 4. Enregistrements par élève (upsert), avec validation serveur.
-  const rows: TablesInsert<'attendance_records'>[] = input.entries.map((e) => {
-    if (e.status === 'LATE' && e.minutesLate <= 0) {
-      throw new ValidationError('Un retard doit préciser une durée en minutes.');
-    }
-    return {
-      school_id: ctx.school.id,
-      register_id: registerId,
-      student_id: e.studentId,
-      status: e.status,
-      minutes_late: e.status === 'LATE' ? e.minutesLate : 0,
-      comment: e.comment || null,
-      recorded_by: ctx.user.id,
-    };
-  });
+  // 4. Enregistrements par élève (upsert), avec validation serveur. Seuls
+  // les élèves attendus à ce cours sont retenus : une requête forgée ne peut
+  // pas marquer absent un élève d'une autre classe. Un élève sorti du cours
+  // entre l'appel hors ligne et son envoi est écarté, sans perdre les autres.
+  const expected = new Set((await loadRoster(ctx, occ)).map((r) => r.studentId));
+  const kept = input.entries.filter((e) => expected.has(e.studentId));
+  const ignoredCount = input.entries.length - kept.length;
+  const takenAt = replayAt ?? new Date().toISOString();
+  const rows: TablesInsert<'attendance_records'>[] = kept.map((e) => ({
+    school_id: ctx.school.id,
+    register_id: registerId,
+    student_id: e.studentId,
+    status: e.status,
+    // Le retard se déduit de l'heure du clic ; il ne dépasse jamais le cours.
+    minutes_late: e.status === 'LATE' ? clampLateMinutes(e.minutesLate, occ.starts_iso, occ.ends_iso) : 0,
+    comment: e.comment || null,
+    recorded_by: ctx.user.id,
+    taken_at: takenAt,
+  }));
   if (rows.length > 0) {
     const { error } = await supabase.from('attendance_records').upsert(rows, { onConflict: 'register_id,student_id' });
     if (error) throw error;
@@ -135,7 +166,7 @@ export async function applyAttendanceSave(
       .eq('id', registerId)
       .maybeSingle();
     if (reg?.status === 'OPEN') {
-      await submitRegister(ctx, registerId);
+      await submitRegister(ctx, registerId, replayAt ?? undefined);
     }
     submitted = true;
   }
@@ -146,7 +177,12 @@ export async function applyAttendanceSave(
     userId: ctx.user.id,
     clientOperationId: input.clientOperationId,
     operationType: 'attendance.save',
-    payload: { occurrenceId: input.occurrenceId, count: rows.length, alsoSubmit: input.alsoSubmit ?? false },
+    payload: {
+      occurrenceId: input.occurrenceId,
+      count: rows.length,
+      alsoSubmit: input.alsoSubmit ?? false,
+      ...(replayAt ? { takenAt: replayAt } : {}),
+    },
     result: { registerId, savedCount: rows.length, submitted },
   });
 
@@ -155,8 +191,16 @@ export async function applyAttendanceSave(
     module: 'attendance',
     entityType: 'attendance_register',
     entityId: registerId,
-    after: { count: rows.length, source: input.source, submitted },
+    // Un appel reçu après coup reste reconnaissable : la vie scolaire voit
+    // l'heure où il a été fait et l'heure où il est arrivé.
+    after: {
+      count: rows.length,
+      source: input.source,
+      submitted,
+      ...(replayAt ? { takenAt: replayAt, receivedAt: new Date().toISOString() } : {}),
+      ...(ignoredCount > 0 ? { ignored: ignoredCount } : {}),
+    },
   });
 
-  return { registerId, deduped: false, savedCount: rows.length, submitted };
+  return { registerId, deduped: false, savedCount: rows.length, submitted, ignoredCount };
 }

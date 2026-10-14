@@ -6,7 +6,8 @@ import { requireWritable, hasPermission } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
 import { AuthorizationError, ConflictError, NotFoundError } from '@/lib/errors';
 import { signAvatarUrls } from '@/lib/storage/avatars';
-import { getOccurrence } from './occurrences';
+import { getOccurrence, type OccurrenceDetail } from './occurrences';
+import { uniqueStudents } from './targets';
 
 /**
  * Un enseignant fait l'appel de SES SEANCES sans porter la permission
@@ -54,6 +55,52 @@ export type Appel = {
   students: AppelStudent[];
 };
 
+type RosterEntry = { studentId: string; matricule: string; name: string; photoPath: string | null };
+
+type StudentJoin = { matricule: string; first_name: string; last_name: string; photo_url: string | null } | null;
+
+/**
+ * Les élèves attendus à un cours : ceux des classes visées, plus ceux des
+ * groupes visés (LV2, option) encore membres le jour du cours. Un élève
+ * présent par les deux chemins n'apparaît qu'une fois.
+ */
+export async function loadRoster(ctx: TenantContext, occ: OccurrenceDetail): Promise<RosterEntry[]> {
+  const supabase = await createClient();
+  const toEntry = (studentId: string, s: StudentJoin): RosterEntry => ({
+    studentId,
+    matricule: s?.matricule ?? '',
+    name: s ? `${s.last_name.toUpperCase()} ${s.first_name}` : '—',
+    photoPath: s?.photo_url ?? null,
+  });
+
+  const [byClass, byGroup] = await Promise.all([
+    occ.class_ids.length > 0
+      ? supabase
+          .from('student_enrollments')
+          .select('student_id, students(matricule, first_name, last_name, photo_url)')
+          .eq('school_id', ctx.school.id)
+          .in('class_id', occ.class_ids)
+          .eq('status', 'ENROLLED')
+      : Promise.resolve({ data: [] as unknown[] }),
+    occ.group_ids.length > 0
+      ? supabase
+          .from('student_groups')
+          .select('student_id, left_at, students(matricule, first_name, last_name, photo_url)')
+          .eq('school_id', ctx.school.id)
+          .in('group_id', occ.group_ids)
+          .lte('joined_at', occ.occurs_on)
+          .or(`left_at.is.null,left_at.gt.${occ.occurs_on}`)
+      : Promise.resolve({ data: [] as unknown[] }),
+  ]);
+
+  const rows = [
+    ...((byClass.data ?? []) as { student_id: string; students: StudentJoin }[]),
+    ...((byGroup.data ?? []) as { student_id: string; students: StudentJoin }[]),
+  ].map((r) => toEntry(r.student_id, r.students));
+
+  return uniqueStudents(rows).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export async function loadAppel(ctx: TenantContext, occurrenceId: string): Promise<Appel> {
   const supabase = await createClient();
   const occ = await getOccurrence(ctx, occurrenceId);
@@ -76,34 +123,20 @@ export async function loadAppel(ctx: TenantContext, occurrenceId: string): Promi
     for (const r of recs ?? []) records.set(r.student_id, r);
   }
 
-  const students: AppelStudent[] = [];
-  if (occ.class_id) {
-    const { data: enr } = await supabase
-      .from('student_enrollments')
-      .select('student_id, students(matricule, first_name, last_name, photo_url)')
-      .eq('school_id', ctx.school.id)
-      .eq('class_id', occ.class_id)
-      .eq('status', 'ENROLLED');
-    const rows = (enr ?? []) as unknown as {
-      student_id: string;
-      students: { matricule: string; first_name: string; last_name: string; photo_url: string | null } | null;
-    }[];
-    const signedByPath = await signAvatarUrls(rows.map((e) => e.students?.photo_url));
-    for (const e of rows) {
-      const rec = records.get(e.student_id);
-      const path = e.students?.photo_url ?? null;
-      students.push({
-        studentId: e.student_id,
-        matricule: e.students?.matricule ?? '',
-        name: e.students ? `${e.students.last_name.toUpperCase()} ${e.students.first_name}` : '—',
-        photoUrl: path ? (signedByPath.get(path) ?? null) : null,
-        status: rec?.status ?? 'PRESENT',
-        minutesLate: rec?.minutes_late ?? 0,
-        comment: rec?.comment ?? '',
-      });
-    }
-    students.sort((a, b) => a.name.localeCompare(b.name));
-  }
+  const roster = await loadRoster(ctx, occ);
+  const signedByPath = await signAvatarUrls(roster.map((e) => e.photoPath));
+  const students: AppelStudent[] = roster.map((e) => {
+    const rec = records.get(e.studentId);
+    return {
+      studentId: e.studentId,
+      matricule: e.matricule,
+      name: e.name,
+      photoUrl: e.photoPath ? (signedByPath.get(e.photoPath) ?? null) : null,
+      status: rec?.status ?? 'PRESENT',
+      minutesLate: rec?.minutes_late ?? 0,
+      comment: rec?.comment ?? '',
+    };
+  });
 
   // Modifiable tant que le creneau dure (OPEN ou deja SUBMITTED) ; ferme des
   // que la vie scolaire a valide, ou des que le cours est termine.
@@ -129,7 +162,12 @@ export async function loadAppel(ctx: TenantContext, occurrenceId: string): Promi
   };
 }
 
-export async function submitRegister(ctx: TenantContext, registerId: string): Promise<void> {
+/**
+ * Verrouille un appel (OPEN -> SUBMITTED). `takenAt` : l'instant où
+ * l'enseignant a appuyé sur « Valider », quand l'appel arrive hors ligne,
+ * après coup. Le droit se juge alors à cet instant (migration 0105).
+ */
+export async function submitRegister(ctx: TenantContext, registerId: string, takenAt?: string): Promise<void> {
   const supabase = await createClient();
   const { data: reg } = await supabase
     .from('attendance_registers')
@@ -138,20 +176,21 @@ export async function submitRegister(ctx: TenantContext, registerId: string): Pr
     .eq('id', registerId)
     .maybeSingle();
   if (!reg) throw new NotFoundError('Appel introuvable.');
-  // requireCanAct verifie que le creneau couvre l'instant present : c'est LUI
-  // le verrou, pas la validation. Un enseignant qui valide en debut d'heure
-  // doit pouvoir corriger l'eleve arrive en retard, tant que le cours dure.
-  // Seul un appel deja VALIDE par la vie scolaire se ferme definitivement.
-  await requireCanAct(ctx, reg.session_occurrence_id);
+  // Le verrou, c'est la fin du créneau, pas la validation : un enseignant qui
+  // valide en debut d'heure doit pouvoir corriger l'eleve arrive en retard,
+  // tant que le cours dure. Seul un appel VALIDE par la vie scolaire se ferme.
   if (reg.status === 'VALIDATED') {
     throw new ConflictError('Cet appel a été validé par la vie scolaire : il ne peut plus être modifié.');
   }
-  const { error } = await supabase
-    .from('attendance_registers')
-    .update({ status: 'SUBMITTED' })
-    .eq('school_id', ctx.school.id)
-    .eq('id', registerId);
-  if (error) throw error;
+  if (!takenAt) await requireCanAct(ctx, reg.session_occurrence_id);
+  const { error } = await supabase.rpc('submit_attendance_register' as never, {
+    p_register: registerId,
+    ...(takenAt ? { p_at: takenAt } : {}),
+  } as never);
+  if (error) {
+    if (error.code === '42501') throw new AuthorizationError("Vous n'êtes pas habilité à valider cet appel.");
+    throw error;
+  }
   await audit(ctx, { action: 'attendance.submit', module: 'attendance', entityType: 'attendance_register', entityId: registerId });
 }
 

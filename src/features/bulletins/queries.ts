@@ -41,7 +41,7 @@ export async function getBulletin(ctx: TenantContext, id: string): Promise<Bulle
   const { data } = await supabase
     .from('report_cards')
     .select(
-      'id, status, general_average, rank, class_size, class_average, absences_count, lateness_count, head_teacher_comment, ' +
+      'id, status, general_average, rank, class_size, class_average, absences_count, lateness_count, absence_hours_unjustified, head_teacher_comment, ' +
         'council_comment, distinction, distinction_label, distinction_note, annual_average, annual_rank, decision, decision_label, ' +
         'student_id, academic_year_id, revision, ' +
         'students(matricule, first_name, last_name), classes(name), academic_periods(name, sequence), ' +
@@ -137,7 +137,7 @@ export async function listBulletinsForPrint(
   const { data } = await supabase
     .from('report_cards')
     .select(
-      'id, status, general_average, rank, class_size, class_average, absences_count, lateness_count, head_teacher_comment, ' +
+      'id, status, general_average, rank, class_size, class_average, absences_count, lateness_count, absence_hours_unjustified, head_teacher_comment, ' +
         'council_comment, distinction, distinction_label, distinction_note, annual_average, annual_rank, decision, decision_label, ' +
         'student_id, academic_year_id, revision, ' +
         'students(matricule, first_name, last_name), classes(name), academic_periods(name, sequence), ' +
@@ -197,6 +197,7 @@ type PrintRow = {
   class_average: number | null;
   absences_count: number;
   lateness_count: number;
+  absence_hours_unjustified: number | string | null;
   head_teacher_comment: string | null;
   council_comment: string | null;
   distinction_label: string | null;
@@ -245,6 +246,7 @@ function toDetail(
     class_average: num(r.class_average),
     absences: r.absences_count,
     lateness: r.lateness_count,
+    absenceHoursUnjustified: r.absence_hours_unjustified === null ? null : Number(r.absence_hours_unjustified),
     head_teacher_comment: r.head_teacher_comment,
     council_comment: r.council_comment,
     distinction_label: r.distinction_label,

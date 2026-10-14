@@ -9,6 +9,7 @@ import {
   type ColumnId,
 } from '@/features/reporting/template';
 import { sortTiers, type Tier } from '@/features/reporting/config';
+import { formatHours } from '@/features/attendance/hours';
 
 const fmt = (v: number | null) => (v == null ? '—' : v.toFixed(2).replace('.', ','));
 
@@ -207,7 +208,12 @@ export function BulletinView({
       {has('stats') ? (
         <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
           <Case label="Moyenne de la classe" value={fmt(b.class_average)} />
-          <Case label="Absences" value={String(b.absences)} />
+          {/* Bulletin généré avant le calcul en heures : il garde son ancien chiffre. */}
+          {b.absenceHoursUnjustified === null ? (
+            <Case label="Absences" value={String(b.absences)} />
+          ) : (
+            <Case label="Heures d’absence non justifiées" value={formatHours(b.absenceHoursUnjustified)} />
+          )}
           <Case label="Retards" value={String(b.lateness)} />
         </div>
       ) : null}

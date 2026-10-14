@@ -28,6 +28,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       occurrenceId: parsed.data.occurrenceId,
       entries: parsed.data.entries,
       alsoSubmit: parsed.data.alsoSubmit,
+      ...(parsed.data.takenAt ? { takenAt: parsed.data.takenAt } : {}),
       source,
     });
     return NextResponse.json(result);

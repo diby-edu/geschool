@@ -53,6 +53,8 @@ export type BulletinDetail = {
   class_average: number | null;
   absences: number;
   lateness: number;
+  /** Heures d'absence non justifiées ; null sur un bulletin généré avant le calcul en heures. */
+  absenceHoursUnjustified: number | null;
   head_teacher_comment: string | null;
   council_comment: string | null;
   /** Mention calculée, et l'additif libre que le conseil ajoute à côté. */

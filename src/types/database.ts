@@ -541,6 +541,7 @@ export type Database = {
           recorded_by: string | null
           recorded_at: string
           updated_at: string
+          taken_at: string
         }
         Insert: {
           id?: string
@@ -553,6 +554,7 @@ export type Database = {
           recorded_by?: string | null
           recorded_at?: string
           updated_at?: string
+          taken_at?: string
         }
         Update: {
           id?: string
@@ -565,6 +567,7 @@ export type Database = {
           recorded_by?: string | null
           recorded_at?: string
           updated_at?: string
+          taken_at?: string
         }
         Relationships: []
       }
@@ -2185,6 +2188,7 @@ export type Database = {
           unlocked_by: string | null
           unlock_reason: string | null
           revision: number
+          absence_hours_unjustified: number | null
         }
         Insert: {
           id?: string
@@ -2221,6 +2225,7 @@ export type Database = {
           unlocked_by?: string | null
           unlock_reason?: string | null
           revision?: number
+          absence_hours_unjustified?: number | null
         }
         Update: {
           id?: string
@@ -2257,6 +2262,7 @@ export type Database = {
           unlocked_by?: string | null
           unlock_reason?: string | null
           revision?: number
+          absence_hours_unjustified?: number | null
         }
         Relationships: []
       }

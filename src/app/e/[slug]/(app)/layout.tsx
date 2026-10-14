@@ -11,6 +11,8 @@ import { loadTopBar } from '@/features/navigation/top-bar';
 import { LIVE_TABLES } from '@/components/realtime/live-tables';
 import { roleLabel, type RoleCode } from '@/lib/permissions/roles';
 import { SupportBanner } from '@/components/layout/SupportBanner';
+import { AttendanceSyncButton } from '@/features/attendance/components/AttendanceSyncButton';
+import { hasPermission } from '@/lib/permissions';
 
 /**
  * Garde de l'espace etablissement. getTenantContext resout le tenant depuis le
@@ -73,6 +75,12 @@ export default async function SchoolAppLayout({
       headerExtra={
         <>
           <LiveRefresh schoolId={ctx.school.id} tables={LIVE_TABLES} />
+          {/* Appels faits sans réseau : relancés depuis n'importe quelle page,
+              et visibles tant qu'ils ne sont pas reçus par le serveur. */}
+          <AttendanceSyncButton
+            userId={ctx.user.id}
+            alwaysVisible={!ctx.isPlatformAdmin && (roles.includes('TEACHER') || hasPermission(ctx, 'attendance.create'))}
+          />
           <SpaceSwitcher slug={slug} current={space} spaces={spaces} />
         </>
       }

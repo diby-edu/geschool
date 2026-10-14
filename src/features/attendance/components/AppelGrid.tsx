@@ -1,9 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import type { AppelStudent } from '@/features/attendance/registers';
+import { submitOrQueue } from '@/features/attendance/offline-queue';
+import { serverNow } from '@/features/attendance/server-clock';
 
 const STATUS_OPTIONS = [
   { v: 'PRESENT', l: 'Présent' },
@@ -12,44 +14,11 @@ const STATUS_OPTIONS = [
   { v: 'EXCUSED', l: 'Excusé' },
 ];
 
-const QUEUE_KEY = 'geschool.attendance.queue';
-
-type Op = { slug: string; clientOperationId: string; occurrenceId: string; entries: Entry[] };
-type Entry = { studentId: string; status: string; minutesLate: number; comment: string };
-
-function readQueue(): Op[] {
-  try {
-    const raw = localStorage.getItem(QUEUE_KEY);
-    return raw ? (JSON.parse(raw) as Op[]) : [];
-  } catch {
-    return [];
-  }
-}
-function writeQueue(ops: Op[]): void {
-  try {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(ops));
-  } catch {
-    /* stockage indisponible : on ignore, l'appel en ligne reste tenté */
-  }
-}
-
-async function postOp(op: Op, source: 'ONLINE' | 'OFFLINE_SYNC'): Promise<boolean> {
-  try {
-    const res = await fetch(`/e/${op.slug}/api/attendance`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ...op, source }),
-    });
-    return res.ok;
-  } catch {
-    return false; // panne réseau : à mettre en file
-  }
-}
-
 /**
  * Grille d'appel tolérante au hors-ligne. L'enregistrement passe par un appel
- * réseau idempotent (clientOperationId). En cas de panne, l'opération est mise
- * en file locale (localStorage) et rejouée automatiquement au retour du réseau.
+ * réseau idempotent (clientOperationId). En cas de panne, l'appel reste sur
+ * l'appareil (offline-queue) et part seul au retour du réseau ; le bouton de
+ * l'en-tête montre ce qui n'est pas encore envoyé.
  */
 export function AppelGrid({
   slug,
@@ -64,34 +33,7 @@ export function AppelGrid({
 }) {
   const [students, setStudents] = useState(initial);
   const [message, setMessage] = useState<{ tone: 'success' | 'info' | 'error'; text: string } | null>(null);
-  const [pending, setPending] = useState(0);
   const [busy, setBusy] = useState(false);
-
-  const flush = useCallback(async () => {
-    const queue = readQueue();
-    if (queue.length === 0) {
-      // Rien à synchroniser : on cède la main avant tout setState (l'effet ne
-      // met pas à jour l'état de façon synchrone).
-      await Promise.resolve();
-      setPending(0);
-      return;
-    }
-    const remaining: Op[] = [];
-    for (const op of queue) {
-      const ok = await postOp(op, 'OFFLINE_SYNC');
-      if (!ok) remaining.push(op);
-    }
-    writeQueue(remaining);
-    setPending(remaining.length);
-    if (remaining.length < queue.length) setMessage({ tone: 'success', text: 'Appels en attente synchronisés.' });
-  }, []);
-
-  useEffect(() => {
-    const run = () => void flush();
-    queueMicrotask(run); // synchro initiale hors du corps de l'effet
-    window.addEventListener('online', run);
-    return () => window.removeEventListener('online', run);
-  }, [flush]);
 
   const update = (id: string, patch: Partial<AppelStudent>) =>
     setStudents((prev) => prev.map((s) => (s.studentId === id ? { ...s, ...patch } : s)));
@@ -101,37 +43,40 @@ export function AppelGrid({
   async function save() {
     setBusy(true);
     setMessage(null);
-    const op: Op = {
+    const outcome = await submitOrQueue({
       slug,
       clientOperationId: crypto.randomUUID(),
       occurrenceId,
+      alsoSubmit: false,
+      takenAt: new Date(serverNow()).toISOString(),
       entries: students.map((s) => ({
         studentId: s.studentId,
         status: s.status,
         minutesLate: s.status === 'LATE' ? Math.max(1, s.minutesLate || 0) : 0,
         comment: s.comment ?? '',
       })),
-    };
-    const ok = await postOp(op, 'ONLINE');
-    if (ok) {
+    });
+    if (outcome.ok) {
       setMessage({ tone: 'success', text: 'Appel enregistré.' });
+    } else if (outcome.refused) {
+      setMessage({ tone: 'error', text: `Appel refusé : ${outcome.refused}` });
     } else {
-      const queue = readQueue();
-      queue.push(op);
-      writeQueue(queue);
-      setPending(queue.length);
-      setMessage({ tone: 'info', text: 'Réseau indisponible : appel enregistré sur l’appareil, il sera synchronisé automatiquement.' });
+      setMessage({
+        tone: 'info',
+        text: outcome.needsLogin
+          ? 'Session expirée : appel gardé sur l’appareil. Reconnectez-vous, il partira seul.'
+          : 'Réseau indisponible : appel gardé sur l’appareil, il partira seul au retour de la connexion.',
+      });
     }
     setBusy(false);
   }
 
-  if (students.length === 0) return <Alert tone="info">Aucun élève inscrit dans cette classe.</Alert>;
+  if (students.length === 0) return <Alert tone="info">Aucun élève attendu à ce cours.</Alert>;
 
   return (
     // Saisie de l'appel en cours (souvent hors ligne) : pas de rafraichissement automatique.
     <div className="space-y-3" data-live-hold>
       {message ? <Alert tone={message.tone}>{message.text}</Alert> : null}
-      {pending > 0 ? <Alert tone="info">{pending} appel(s) en attente de synchronisation.</Alert> : null}
 
       {editable ? (
         <div className="flex justify-end">

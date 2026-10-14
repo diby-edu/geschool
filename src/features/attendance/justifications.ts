@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
 import { requireWritable, hasPermission } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
-import { NotFoundError } from '@/lib/errors';
+import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import type { JustificationInput } from './schemas';
 
 export type JustificationRow = {
@@ -45,8 +45,47 @@ export async function listJustifications(ctx: TenantContext, status?: string): P
   }));
 }
 
+/**
+ * Une absence se justifie jusqu'à la CLÔTURE DU TRIMESTRE (règle de
+ * l'établissement) : pas de délai en jours. Un trimestre est clos quand ses
+ * moyennes sont verrouillées ou publiées (LOCKED, PUBLISHED) — justifier
+ * après coup changerait un bulletin déjà arrêté. Seules comptent les périodes
+ * de l'ordre de l'élève (trimestres du général, semestres du technique).
+ */
+async function closedPeriodCovering(ctx: TenantContext, studentId: string, from: string, to: string): Promise<string | null> {
+  const supabase = await createClient();
+  const [{ data: enr }, { data: periods }] = await Promise.all([
+    supabase
+      .from('student_enrollments')
+      .select('classes(levels(cycles(track)))')
+      .eq('school_id', ctx.school.id)
+      .eq('student_id', studentId)
+      .eq('status', 'ENROLLED')
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('academic_periods')
+      .select('name, tracks')
+      .eq('school_id', ctx.school.id)
+      .in('status', ['LOCKED', 'PUBLISHED'])
+      .lte('starts_on', to)
+      .gte('ends_on', from),
+  ]);
+  const track =
+    (enr as unknown as { classes: { levels: { cycles: { track: string | null } | null } | null } | null } | null)?.classes?.levels
+      ?.cycles?.track ?? 'GENERAL';
+  const closed = ((periods ?? []) as { name: string; tracks: string[] | null }[]).find(
+    (p) => !p.tracks || p.tracks.includes(track),
+  );
+  return closed?.name ?? null;
+}
+
 export async function submitJustification(ctx: TenantContext, input: JustificationInput): Promise<void> {
   requireWritable(ctx, 'attendance.justify');
+  const closed = await closedPeriodCovering(ctx, input.studentId, input.coversFrom, input.coversTo);
+  if (closed) {
+    throw new ValidationError(`« ${closed} » est clôturé : ses absences ne peuvent plus être justifiées.`);
+  }
   const supabase = await createClient();
   const { error } = await supabase.from('absence_justifications').insert({
     school_id: ctx.school.id,
@@ -63,8 +102,11 @@ export async function submitJustification(ctx: TenantContext, input: Justificati
 
 /**
  * Décision d'un justificatif. À l'approbation, les absences/retards couverts par
- * la période sont passés en EXCUSED (si le décideur a le droit de modifier un
- * appel — sinon la décision est enregistrée et l'excuse appliquée plus tard).
+ * la période sont passés en EXCUSED si le décideur a le droit de modifier un
+ * appel. Sans ce droit, les lignes restent ABSENT, mais elles comptent quand
+ * même comme justifiées : le bulletin (public.attendance_hours) et l'espace
+ * parent tiennent compte des justificatifs APPROUVÉS, y compris pour une
+ * absence saisie après l'approbation.
  */
 export async function decideJustification(
   ctx: TenantContext,
@@ -82,6 +124,15 @@ export async function decideJustification(
     .eq('id', id)
     .maybeSingle();
   if (!j) throw new NotFoundError('Justificatif introuvable.');
+  // Une décision ne se reprend pas : approuver puis refuser laissait les
+  // absences déjà passées en « excusé », et le bulletin les comptait justifiées.
+  if (j.status !== 'PENDING') {
+    throw new ConflictError('Ce justificatif a déjà été traité.');
+  }
+  if (decision === 'APPROVED') {
+    const closed = await closedPeriodCovering(ctx, j.student_id, j.covers_from, j.covers_to);
+    if (closed) throw new ValidationError(`« ${closed} » est clôturé : ce justificatif ne peut plus être approuvé.`);
+  }
 
   const { error } = await supabase
     .from('absence_justifications')
