@@ -120,7 +120,10 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
       .map((r) => [r.student_id, r]),
   );
   const generalAverages = [...ranking.values()].map((r) => r.general_average).filter((a): a is number => a !== null).map(Number);
-  const classGeneralAvg = generalAverages.length > 0 ? round2(generalAverages.reduce((a, b) => a + b, 0) / generalAverages.length) : null;
+  // Arrondie selon le barème de l'établissement, comme les moyennes des élèves.
+  const classRound = rounder(params.decimals, params.rounding);
+  const classGeneralAvg =
+    generalAverages.length > 0 ? classRound(generalAverages.reduce((a, b) => a + b, 0) / generalAverages.length) : null;
   const classSize = [...ranking.values()][0]?.class_size ?? studentIds.length;
 
   // Moyennes par matière pour toute la classe (une requête par matière).
@@ -161,7 +164,7 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
 
   // Qui enseigne quoi dans cette classe : le nom est FIGÉ sur le bulletin, il
   // doit rester lisible même si l'enseignant quitte l'établissement.
-  const teacherBySubject = await teachersOfClass(ctx, classId, yearId);
+  const teacherFor = await teachersOfClass(ctx, classId, yearId);
 
   // La dernière période de l'année porte, elle seule, la moyenne annuelle, la
   // mention de l'année et la décision de passage. Aucun réglage : c'est le rang
@@ -174,7 +177,6 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
   const annual = isLast
     ? await annualAverages(
         ctx,
-        classId,
         previousPeriods,
         currentSequence,
         new Map([...ranking].map(([id, r]) => [id, r.general_average === null ? null : Number(r.general_average)])),
@@ -255,7 +257,7 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
         report_card_id: card.id,
         subject_id: s.id,
         subject_name_snapshot: s.name,
-        teacher_name_snapshot: teacherBySubject.get(s.id) ?? null,
+        teacher_name_snapshot: teacherFor(studentId, s.id),
         coefficient: s.coefficient,
         average: avg,
         // Le mot de la colonne « Appréciation » : le palier de la moyenne de
@@ -287,33 +289,85 @@ function round2(n: number): number {
 }
 
 /**
- * Qui enseigne quelle matière dans cette classe, sous la forme imprimée sur le
+ * Qui enseigne quelle matière À CET ÉLÈVE, sous la forme imprimée sur le
  * bulletin. Le nom est FIGÉ à la génération : un enseignant qui part en cours
  * d'année reste celui qui a noté ce trimestre-là.
+ *
+ * Une matière enseignée par groupe (LV2, option) a un enseignant par groupe :
+ * l'élève d'Allemand porte le nom du professeur d'Allemand, pas celui
+ * d'Espagnol. Ces affectations visent le GROUPE, pas la classe : les lire par
+ * la classe seulement laissait la case vide.
  */
-async function teachersOfClass(ctx: TenantContext, classId: string, yearId: string): Promise<Map<string, string>> {
+async function teachersOfClass(
+  ctx: TenantContext,
+  classId: string,
+  yearId: string,
+): Promise<(studentId: string, subjectId: string) => string | null> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from('teaching_assignments')
-    .select('subject_id, teachers(first_name, last_name, gender)')
-    .eq('school_id', ctx.school.id)
-    .eq('class_id', classId)
-    .eq('academic_year_id', yearId);
-
-  const out = new Map<string, string>();
-  for (const row of (data ?? []) as unknown as {
-    subject_id: string | null;
-    teachers: { first_name: string; last_name: string; gender: string | null } | null;
-  }[]) {
-    if (!row.subject_id || !row.teachers) continue;
-    // Une matière peut avoir plusieurs affectations (groupes) : la première
-    // suffit, la colonne du bulletin ne porte qu'un nom.
-    if (out.has(row.subject_id)) continue;
-    const t = row.teachers;
+  type Teacher = { first_name: string; last_name: string; gender: string | null } | null;
+  const label = (t: NonNullable<Teacher>) => {
     const civilite = t.gender === 'FEMALE' ? 'Mme' : t.gender === 'MALE' ? 'M.' : '';
-    out.set(row.subject_id, `${civilite} ${t.last_name} ${t.first_name}`.trim());
+    return `${civilite} ${t.last_name} ${t.first_name}`.trim();
+  };
+
+  const { data: links } = await supabase
+    .from('group_classes')
+    .select('group_id')
+    .eq('school_id', ctx.school.id)
+    .eq('class_id', classId);
+  const groupIds = (links ?? []).map((l) => l.group_id);
+
+  const [{ data: byClass }, { data: byGroup }, { data: members }] = await Promise.all([
+    supabase
+      .from('teaching_assignments')
+      .select('subject_id, teachers(first_name, last_name, gender)')
+      .eq('school_id', ctx.school.id)
+      .eq('class_id', classId)
+      .eq('academic_year_id', yearId),
+    groupIds.length > 0
+      ? supabase
+          .from('teaching_assignments')
+          .select('subject_id, group_id, teachers(first_name, last_name, gender)')
+          .eq('school_id', ctx.school.id)
+          .in('group_id', groupIds)
+          .eq('academic_year_id', yearId)
+      : Promise.resolve({ data: [] as unknown[] }),
+    groupIds.length > 0
+      ? supabase
+          .from('student_groups')
+          .select('student_id, group_id')
+          .eq('school_id', ctx.school.id)
+          .in('group_id', groupIds)
+          .is('left_at', null)
+      : Promise.resolve({ data: [] as unknown[] }),
+  ]);
+
+  // Enseignant de la classe entière, par matière (le premier suffit).
+  const classTeacher = new Map<string, string>();
+  for (const row of (byClass ?? []) as unknown as { subject_id: string | null; teachers: Teacher }[]) {
+    if (!row.subject_id || !row.teachers || classTeacher.has(row.subject_id)) continue;
+    classTeacher.set(row.subject_id, label(row.teachers));
   }
-  return out;
+
+  // Enseignant de chaque groupe, par matière.
+  const groupTeacher = new Map<string, string>(); // `${groupId}:${subjectId}`
+  for (const row of (byGroup ?? []) as unknown as { subject_id: string | null; group_id: string; teachers: Teacher }[]) {
+    if (!row.subject_id || !row.teachers) continue;
+    const key = `${row.group_id}:${row.subject_id}`;
+    if (!groupTeacher.has(key)) groupTeacher.set(key, label(row.teachers));
+  }
+  const groupsOf = new Map<string, string[]>();
+  for (const m of (members ?? []) as { student_id: string; group_id: string }[]) {
+    groupsOf.set(m.student_id, [...(groupsOf.get(m.student_id) ?? []), m.group_id]);
+  }
+
+  return (studentId, subjectId) => {
+    for (const g of groupsOf.get(studentId) ?? []) {
+      const t = groupTeacher.get(`${g}:${subjectId}`);
+      if (t) return t;
+    }
+    return classTeacher.get(subjectId) ?? null;
+  };
 }
 
 /**

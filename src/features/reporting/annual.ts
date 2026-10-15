@@ -19,13 +19,12 @@ import type { GradingPeriod } from './periods';
 export type AnnualResult = {
   averages: Map<string, number | null>;
   ranks: Map<string, number>;
-  /** Périodes dont AUCUN bulletin n'existe pour cette classe : on refuse alors de conclure. */
+  /** Périodes dont AUCUN bulletin n'existe pour les élèves de cette classe : on refuse alors de conclure. */
   missingPeriods: string[];
 };
 
 export async function annualAverages(
   ctx: TenantContext,
-  classId: string,
   previous: GradingPeriod[],
   currentSequence: number,
   currentAverages: Map<string, number | null>,
@@ -35,24 +34,33 @@ export async function annualAverages(
   const supabase = await createClient();
 
   type Row = { id: string; student_id: string; academic_period_id: string; general_average: number | null };
-  const rows =
-    previous.length === 0
-      ? []
-      : await fetchAllRows<Row>((cursor) => {
-          let q = supabase
-            .from('report_cards')
-            .select('id, student_id, academic_period_id, general_average')
-            .eq('school_id', ctx.school.id)
-            .eq('class_id', classId)
-            .in(
-              'academic_period_id',
-              previous.map((p) => p.id),
-            )
-            .order('id')
-            .limit(500);
-          if (cursor) q = q.gt('id', cursor);
-          return q as unknown as PromiseLike<{ data: Row[] | null; error: { message: string } | null }>;
-        }, 500);
+  // Les bulletins précédents se cherchent par ÉLÈVE, pas par classe : un élève
+  // passé de la 4e A à la 4e B en cours d'année a son bulletin du 1er trimestre
+  // dans l'ancienne classe. Le chercher dans la classe actuelle le privait de
+  // moyenne annuelle, de rang annuel et de décision proposée.
+  const studentIds = [...currentAverages.keys()];
+  const rows: Row[] = [];
+  if (previous.length > 0) {
+    for (let i = 0; i < studentIds.length; i += 100) {
+      const batch = studentIds.slice(i, i + 100);
+      const part = await fetchAllRows<Row>((cursor) => {
+        let q = supabase
+          .from('report_cards')
+          .select('id, student_id, academic_period_id, general_average')
+          .eq('school_id', ctx.school.id)
+          .in('student_id', batch)
+          .in(
+            'academic_period_id',
+            previous.map((p) => p.id),
+          )
+          .order('id')
+          .limit(500);
+        if (cursor) q = q.gt('id', cursor);
+        return q as unknown as PromiseLike<{ data: Row[] | null; error: { message: string } | null }>;
+      }, 500);
+      rows.push(...part);
+    }
+  }
 
   // Une période dont pas un seul bulletin n'a été généré n'est pas un élève
   // absent : c'est une étape sautée. On le dit au lieu de calculer une moyenne

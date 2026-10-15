@@ -57,8 +57,14 @@ export function BulletinView({
     '{annee}': schoolYear,
   };
 
-  const totalCoef = b.items.reduce((s, i) => s + i.coefficient, 0);
-  const totalWeighted = b.items.reduce((s, i) => s + (i.weighted ?? 0), 0);
+  // Les totaux ne comptent QUE les matières qui entrent dans la moyenne : une
+  // matière sans note, ou facultative hors moyenne, n'a pas de points. Compter
+  // son coefficient faisait que « total des points ÷ total des coefficients »
+  // ne retombait pas sur la moyenne imprimée — un parent qui refait le calcul
+  // trouvait moins.
+  const counted = b.items.filter((i) => i.weighted !== null && i.weighted !== undefined);
+  const totalCoef = counted.reduce((s, i) => s + i.coefficient, 0);
+  const totalWeighted = counted.reduce((s, i) => s + (i.weighted ?? 0), 0);
 
   return (
     <article className="bulletin mx-auto max-w-3xl rounded-[--radius-card] border bg-white p-6 text-black">

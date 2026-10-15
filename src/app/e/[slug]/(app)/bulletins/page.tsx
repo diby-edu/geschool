@@ -6,6 +6,7 @@ import { hasPermission } from '@/lib/permissions';
 import { listClasses, listPeriods } from '@/features/evaluations/refs';
 import { periodsForTrack } from '@/features/academic-years/periods-by-track';
 import { listBulletins, bulletinStateLabel } from '@/features/bulletins/queries';
+import { bulletinReadiness } from '@/features/bulletins/readiness';
 import {
   generateBulletinsAction,
   validateBulletinsAction,
@@ -59,6 +60,10 @@ export default async function BulletinsPage({
   const bulletins = classId && periodId ? await listBulletins(ctx, classId, periodId) : [];
 
   const canGenerate = hasPermission(ctx, 'reports.generate');
+  // Ce qui n'est peut-être pas fini, à montrer AVANT de générer (pas un blocage).
+  const lockedBulletins = bulletins.some((b) => b.status === 'VALIDATED' || b.status === 'PUBLISHED');
+  const readiness =
+    canGenerate && classId && periodId && !lockedBulletins ? await bulletinReadiness(ctx, classId, periodId) : [];
   const canValidate = hasPermission(ctx, 'reports.validate');
   const canPublish = hasPermission(ctx, 'reports.publish');
   const canSign = hasPermission(ctx, 'reports.sign');
@@ -105,6 +110,21 @@ export default async function BulletinsPage({
 
       {classId && periodId ? (
         <>
+          {readiness.length > 0 ? (
+            <Alert tone="info">
+              <p className="font-medium">À vérifier avant de générer :</p>
+              <ul className="mt-1 list-disc pl-5">
+                {readiness.map((r) => (
+                  <li key={r.subject}>
+                    {r.subject} — {r.problems.join(', ')}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1">
+                Les moyennes comptent les notes déjà saisies. Un bulletin validé par le conseil ne se régénère plus.
+              </p>
+            </Alert>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
             {canGenerate ? (
               <SimpleSubmit
