@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { z } from 'zod';
-import { isAppError } from '@/lib/errors';
+import { businessDbError, isAppError } from '@/lib/errors';
 
 /**
  * Convention de retour des Server Actions de formulaire (useActionState).
@@ -57,6 +57,9 @@ export async function runFormAction(fn: () => Promise<never | void>): Promise<Fo
     if (isAppError(error)) {
       return { error: error.message };
     }
+    // Règle métier refusée par la base (notes figées, élève sans moyenne…).
+    const business = businessDbError(error);
+    if (business) return { error: business.message };
     console.error('[form-action]', error);
     return { error: "Une erreur inattendue s'est produite." };
   }

@@ -13,8 +13,8 @@ import { Alert } from '@/components/ui/alert';
 import { StudentAvatar } from '@/components/ui/student-avatar';
 import { SimpleSubmit } from '@/components/ui/simple-submit';
 import { getCompletionState } from '@/features/grading/completion';
-import { completeAveragesAction, reopenAveragesAction } from '@/features/grading/actions';
-import { formatDate } from '@/features/academic-years/labels';
+import { completeAveragesAction, reopenAveragesAction, setExemptionAction } from '@/features/grading/actions';
+import { isEps, listExemptions } from '@/features/grading/exemptions';
 
 export const metadata: Metadata = { title: 'Moyennes et classement' };
 
@@ -80,10 +80,14 @@ export default async function MyClassRankingPage({
     );
   }
 
-  const [ranking, completion] = await Promise.all([
+  const [ranking, completion, eps, exempted] = await Promise.all([
     computeLiveRanking(ctx, classId, period.id, subject.id),
     getCompletionState(ctx, classId, subject.id, period.id),
+    isEps(ctx, subject.id),
+    listExemptions(ctx, period.id, subject.id),
   ]);
+  // Seul le professeur d'EPS de la classe déclare une dispense (la base le vérifie).
+  const canExempt = eps && completion.assignmentId !== null && completion.phase !== 'FROZEN';
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -93,27 +97,43 @@ export default async function MyClassRankingPage({
         action={<Link href={`${base}?period=${period.id}`}><Button variant="ghost">Retour</Button></Link>}
       />
 
+      {sp.exempted ? <Alert tone="success">Élève déclaré dispensé d’EPS pour cette période.</Alert> : null}
+      {sp.unexempted ? <Alert tone="info">Dispense retirée : l’élève peut de nouveau recevoir des notes.</Alert> : null}
+      {completion.phaseMessage ? (
+        <Alert tone={completion.phase === 'FROZEN' ? 'error' : 'info'}>{completion.phaseMessage}</Alert>
+      ) : null}
+
       {completion.assignmentId && !completion.unavailable ? (
         <Card>
-          <CardContent className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0 text-sm">
-              <p className="font-semibold">
-                {completion.completed ? 'Vos moyennes sont marquées terminées' : 'Avez-vous terminé vos moyennes ?'}
-              </p>
-              <p className="text-[color:var(--muted-foreground)]">
-                {completion.completed
-                  ? 'La direction voit que cette classe et cette matière sont à jour.'
-                  : completion.open
-                    ? `La période de calcul est ouverte${completion.window.ends ? ` jusqu'au ${formatDate(completion.window.ends)}` : ''}. Quand tout est saisi, prévenez la direction.`
-                    : "La période de calcul des moyennes n'est pas ouverte : la direction l'ouvrira le moment venu."}
-              </p>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0 text-sm">
+                <p className="font-semibold">
+                  {completion.completed ? 'Vos moyennes sont déclarées terminées' : 'Avez-vous fini vos moyennes ?'}
+                </p>
+                <p className="text-[color:var(--muted-foreground)]">
+                  {completion.completed
+                    ? 'La direction et le professeur principal voient que cette classe et cette matière sont à jour.'
+                    : completion.phase === 'FROZEN'
+                      ? 'Les notes sont figées : il n’est plus possible de le déclarer.'
+                      : completion.missing.length > 0
+                        ? `Encore ${completion.missing.length} élève(s) sans moyenne : chaque élève doit avoir une moyenne${eps ? ', ou être dispensé' : ''}.`
+                        : 'Chaque élève a une moyenne : vous pouvez le déclarer.'}
+                </p>
+              </div>
+              {completion.completed ? (
+                completion.open ? (
+                  <SimpleSubmit action={reopenAveragesAction.bind(null, slug, classId, subject.id, period.id)} label="Rouvrir mes moyennes" />
+                ) : null
+              ) : completion.open && completion.missing.length === 0 ? (
+                <SimpleSubmit action={completeAveragesAction.bind(null, slug, classId, subject.id, period.id)} label="J'ai fini mes moyennes" />
+              ) : null}
             </div>
-            {completion.completed ? (
-              completion.open ? (
-                <SimpleSubmit action={reopenAveragesAction.bind(null, slug, classId, subject.id, period.id)} label="Rouvrir mes moyennes" />
-              ) : null
-            ) : completion.open ? (
-              <SimpleSubmit action={completeAveragesAction.bind(null, slug, classId, subject.id, period.id)} label="J'ai terminé mes moyennes" />
+            {!completion.completed && completion.missing.length > 0 ? (
+              <p className="text-xs text-[color:var(--muted-foreground)]">
+                Sans moyenne : {completion.missing.slice(0, 12).map((m) => m.name).join(', ')}
+                {completion.missing.length > 12 ? '…' : ''}
+              </p>
             ) : null}
           </CardContent>
         </Card>
@@ -138,10 +158,21 @@ export default async function MyClassRankingPage({
                 <span className="block truncate text-sm font-medium">{r.name}</span>
                 <span className="block truncate font-mono text-xs text-[color:var(--muted-foreground)]">{r.matricule}</span>
               </span>
-              <span className="shrink-0 text-right">
-                <span className="block text-sm font-bold tabular-nums">{r.average === null ? '—' : r.average.toLocaleString('fr-FR')}</span>
-                <span className="block text-xs text-[color:var(--muted-foreground)]">/ 20</span>
-              </span>
+              {canExempt ? (
+                <SimpleSubmit
+                  small
+                  action={setExemptionAction.bind(null, slug, classId, subject.id, period.id, r.studentId, !exempted.has(r.studentId))}
+                  label={exempted.has(r.studentId) ? 'Retirer la dispense' : 'Dispensé'}
+                />
+              ) : null}
+              {exempted.has(r.studentId) ? (
+                <span className="shrink-0 text-sm italic text-[color:var(--muted-foreground)]">Dispensé</span>
+              ) : (
+                <span className="shrink-0 text-right">
+                  <span className="block text-sm font-bold tabular-nums">{r.average === null ? '—' : r.average.toLocaleString('fr-FR')}</span>
+                  <span className="block text-xs text-[color:var(--muted-foreground)]">/ 20</span>
+                </span>
+              )}
               <span
                 className="grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
                 style={{ backgroundColor: r.rank && MEDAL_COLOR[r.rank] ? MEDAL_COLOR[r.rank] : 'var(--muted-foreground)' }}

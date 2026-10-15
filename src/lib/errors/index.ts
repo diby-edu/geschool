@@ -108,8 +108,39 @@ export function isAppError(error: unknown): error is AppError {
  * Normalise n'importe quoi en AppError. Une erreur inconnue devient INTERNAL
  * avec un message generique : sa vraie cause part dans les logs, jamais au client.
  */
+/**
+ * Une règle métier refusée PAR LA BASE (fonction ou déclencheur qui lève une
+ * exception rédigée en français : « Les notes de cette période sont figées »,
+ * « 2 élève(s) sans moyenne… »). Son message est fait pour l'utilisateur : on
+ * le montre tel quel, au lieu de « Une erreur inattendue ».
+ *
+ * Les refus techniques de Postgres (RLS, droits) restent cachés : leur message
+ * est en anglais et ne dit rien d'utile.
+ */
+const BUSINESS_DB_CODES: Record<string, 'FORBIDDEN' | 'VALIDATION' | 'NOT_FOUND'> = {
+  '42501': 'FORBIDDEN',
+  '23514': 'VALIDATION',
+  '22023': 'VALIDATION',
+  P0001: 'VALIDATION',
+  P0002: 'NOT_FOUND',
+};
+
+export function businessDbError(error: unknown): AppError | null {
+  if (!error || typeof error !== 'object') return null;
+  const { code, message } = error as { code?: unknown; message?: unknown };
+  if (typeof code !== 'string' || typeof message !== 'string') return null;
+  const kind = BUSINESS_DB_CODES[code];
+  if (!kind) return null;
+  if (/^(new row violates|permission denied|row-level security|new row for relation)/i.test(message)) return null;
+  if (kind === 'FORBIDDEN') return new AuthorizationError(message);
+  if (kind === 'NOT_FOUND') return new NotFoundError(message);
+  return new ValidationError(message);
+}
+
 export function toAppError(error: unknown): AppError {
   if (isAppError(error)) return error;
+  const business = businessDbError(error);
+  if (business) return business;
   return new AppError('INTERNAL', "Une erreur inattendue s'est produite.", 500, {
     cause: error,
   });

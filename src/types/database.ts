@@ -83,6 +83,9 @@ export type Database = {
           grading_ends_on: string | null
           grading_override: string | null
           tracks: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[] | null
+          grades_stop_on: string | null
+          student_check_ends_on: string | null
+          head_check_ends_on: string | null
         }
         Insert: {
           id?: string
@@ -102,6 +105,9 @@ export type Database = {
           grading_ends_on?: string | null
           grading_override?: string | null
           tracks?: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[] | null
+          grades_stop_on?: string | null
+          student_check_ends_on?: string | null
+          head_check_ends_on?: string | null
         }
         Update: {
           id?: string
@@ -121,6 +127,9 @@ export type Database = {
           grading_ends_on?: string | null
           grading_override?: string | null
           tracks?: ("GENERAL" | "TECHNIQUE" | "PROFESSIONNEL")[] | null
+          grades_stop_on?: string | null
+          student_check_ends_on?: string | null
+          head_check_ends_on?: string | null
         }
         Relationships: []
       }
@@ -3655,6 +3664,36 @@ export type Database = {
           updated_at?: string
           created_by?: string | null
           is_state_assigned?: boolean | null
+        }
+        Relationships: []
+      }
+      subject_exemptions: {
+        Row: {
+          id: string
+          school_id: string
+          academic_period_id: string
+          student_id: string
+          subject_id: string
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          academic_period_id: string
+          student_id: string
+          subject_id: string
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          academic_period_id?: string
+          student_id?: string
+          subject_id?: string
+          created_by?: string | null
+          created_at?: string
         }
         Relationships: []
       }

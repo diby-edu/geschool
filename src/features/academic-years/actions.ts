@@ -8,7 +8,7 @@ import { academicYearSchema, calendarEventSchema, periodEditSchema, periodSchema
 import { nameFromStart } from './school-year';
 import { afterStep } from '@/features/onboarding/suite';
 import {
-  createYear, updateYear, activateYear, closeYear, reopenYear, createPeriod, deletePeriod, setGradingWindow, setGradingOverride,
+  createYear, updateYear, activateYear, closeYear, reopenYear, createPeriod, deletePeriod, setGradingWindow, setGradingOverride, setTermDates,
   createCalendarEvent, deleteCalendarEvent, applyOfficialCalendar, updatePeriod, updateCalendarEvent,
 } from './service';
 
@@ -118,6 +118,14 @@ export async function setGradingWindowAction(slug: string, yearId: string, perio
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
     await setGradingWindow(ctx, periodId, dateOrNull(fd.get('gradingStarts')), dateOrNull(fd.get('gradingEnds')));
+    redirect(`/e/${slug}/academic-years/${yearId}?onglet=trimestres&updated=1`);
+  }).then(withValues(fd));
+}
+
+export async function setTermDatesAction(slug: string, yearId: string, periodId: string, _p: FormState, fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    await setTermDates(ctx, periodId, dateOrNull(fd.get('stopOn')), dateOrNull(fd.get('studentEndsOn')), dateOrNull(fd.get('headEndsOn')));
     redirect(`/e/${slug}/academic-years/${yearId}?onglet=trimestres&updated=1`);
   }).then(withValues(fd));
 }

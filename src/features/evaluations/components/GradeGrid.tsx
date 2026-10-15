@@ -68,7 +68,11 @@ export function GradeGrid({
                   <span className="block truncate text-sm font-medium">{s.name}</span>
                   <span className="block truncate font-mono text-xs text-[color:var(--muted-foreground)]">{s.matricule}</span>
                 </span>
+                {s.exempt ? (
+                  <span className="shrink-0 px-2 text-sm italic text-[color:var(--muted-foreground)]">Dispensé</span>
+                ) : null}
                 <input
+                  hidden={s.exempt}
                   ref={(el) => { scoreRefs.current[i] = el; }}
                   type="number"
                   name={`score_${s.studentId}`}
@@ -76,7 +80,7 @@ export function GradeGrid({
                   min="0"
                   max={maxScore}
                   step="0.01"
-                  disabled={!editable}
+                  disabled={!editable || s.exempt}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -87,8 +91,9 @@ export function GradeGrid({
                 />
                 <button
                   type="button"
+                  hidden={s.exempt}
                   onClick={() => toggleExpanded(s.studentId)}
-                  disabled={!editable}
+                  disabled={!editable || s.exempt}
                   title="Marquer absent"
                   className="grid size-7 shrink-0 place-items-center rounded-full border text-sm text-[color:var(--muted-foreground)] disabled:opacity-40"
                   style={{ borderColor: 'var(--border)' }}
@@ -132,7 +137,7 @@ export function GradeGrid({
         <SubmitButton>Enregistrer les notes</SubmitButton>
       ) : (
         <p className="text-xs text-[color:var(--muted-foreground)]">
-          Évaluation clôturée : la saisie est verrouillée.
+          Saisie verrouillée : évaluation clôturée, ou notes de la période figées.
         </p>
       )}
     </form>

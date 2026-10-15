@@ -20,6 +20,8 @@ export type GradeGridStudent = {
   isAbsent: boolean;
   isExcused: boolean;
   comment: string;
+  /** Dispensé d'EPS pour la période : il reste dans la liste, sans pouvoir être noté. */
+  exempt: boolean;
 };
 
 export type GradeGrid = {
@@ -27,6 +29,8 @@ export type GradeGrid = {
   maxScore: number;
   status: string;
   editable: boolean;
+  /** Étape de fin de trimestre de la période (OPEN, STUDENT_CHECK, HEAD_CHECK, FROZEN). */
+  termPhase: string;
   students: GradeGridStudent[];
 };
 
@@ -62,6 +66,19 @@ export async function loadGradeGrid(ctx: TenantContext, assessmentId: string): P
     .eq('assessment_id', assessmentId);
   const byStudent = new Map((grades ?? []).map((g) => [g.student_id, g]));
 
+  // Dispenses d'EPS de la période (migration 0110), et étape de fin de trimestre.
+  const a = assessment as unknown as { academic_period_id: string; subject_id: string };
+  const [{ data: exemptRows }, { data: phase }] = await Promise.all([
+    supabase
+      .from('subject_exemptions')
+      .select('student_id')
+      .eq('school_id', ctx.school.id)
+      .eq('academic_period_id', a.academic_period_id)
+      .eq('subject_id', a.subject_id),
+    supabase.rpc('term_phase' as never, { p_period: a.academic_period_id } as never),
+  ]);
+  const exempted = new Set((exemptRows ?? []).map((r) => r.student_id));
+
   const enrRows = (enr ?? []) as unknown as {
     student_id: string;
     students: { matricule: string; first_name: string; last_name: string; photo_url: string | null } | null;
@@ -82,13 +99,24 @@ export async function loadGradeGrid(ctx: TenantContext, assessmentId: string): P
         isAbsent: g?.is_absent ?? false,
         isExcused: g?.is_excused ?? false,
         comment: g?.comment ?? '',
+        exempt: exempted.has(e.student_id),
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const editable = assessment.status === 'DRAFT' || assessment.status === 'OPEN' || hasPermission(ctx, 'grades.update');
+  // Fin de trimestre : pendant la vérification, le professeur corrige même une
+  // évaluation clôturée ; une fois les notes figées, plus personne. La base
+  // applique la même règle (0110) : ceci n'évite que des refus à l'écran.
+  const termPhase = (phase as string | null) ?? 'OPEN';
+  const editable =
+    termPhase !== 'FROZEN' &&
+    (assessment.status === 'DRAFT' ||
+      assessment.status === 'OPEN' ||
+      termPhase === 'STUDENT_CHECK' ||
+      termPhase === 'HEAD_CHECK' ||
+      hasPermission(ctx, 'grades.update'));
 
-  return { assessmentId, maxScore: assessment.max_score, status: assessment.status, editable, students };
+  return { assessmentId, maxScore: assessment.max_score, status: assessment.status, editable, students, termPhase };
 }
 
 export type GradeEntry = {

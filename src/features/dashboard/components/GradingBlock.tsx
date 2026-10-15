@@ -1,6 +1,4 @@
 import Link from 'next/link';
-import { SimpleSubmit } from '@/components/ui/simple-submit';
-import { setGradingOverrideAction } from '@/features/academic-years/actions';
 import { formatDate } from '@/features/academic-years/labels';
 import { dashHref } from '../params';
 import type { StaffDashboard } from '../staff';
@@ -9,9 +7,9 @@ import { BlocHead, Card, Meter, Pill, SecLabel, Sub, Tile, fr, pct, plural } fro
 type Sp = Record<string, string | string[] | undefined>;
 
 /**
- * Bloc 2 — Moyennes et bulletins. Visible SEULEMENT pendant la période de calcul des
- * moyennes ; la direction l'ouvre / la ferme à tout moment, elle se ferme d'elle-même
- * à la date de fin configurée.
+ * Bloc 2 — Moyennes et bulletins. Visible SEULEMENT pendant la vérification des
+ * moyennes (entre l'arrêt des notes et la fin de la vérification du professeur
+ * principal, migration 0110). Les dates se règlent dans l'année scolaire.
  */
 export function GradingBlock({
   data,
@@ -34,10 +32,8 @@ export function GradingBlock({
 
   const window =
     period.grading_ends_on && period.override !== 'OPEN'
-      ? `calcul du ${period.grading_starts_on ? formatDate(period.grading_starts_on) : '…'} au ${formatDate(period.grading_ends_on)} · fermeture automatique le ${formatDate(period.grading_ends_on)}`
-      : period.override === 'OPEN'
-        ? 'ouverte à la main par la direction'
-        : 'période de calcul ouverte';
+      ? `vérification jusqu’au ${formatDate(period.grading_ends_on)}`
+      : 'vérification des moyennes en cours';
 
   const right = (
     <div className="flex flex-wrap items-center gap-2">
@@ -46,17 +42,12 @@ export function GradingBlock({
         style={{ backgroundColor: 'color-mix(in oklch, var(--color-success) 16%, var(--surface))', color: 'var(--color-success)' }}
       >
         <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-success)' }} />
-        Période de calcul ouverte
+        Vérification des moyennes
       </span>
-      {canManage ? (
-        <>
-          <SimpleSubmit small action={setGradingOverrideAction.bind(null, slug, period.id, 'CLOSED', 'dashboard')} label="Fermer la période" />
-          {yearId ? (
-            <Link href={`/e/${slug}/academic-years/${yearId}#calcul-${period.id}`} className="rounded-xl border px-3 py-1.5 text-sm font-semibold hover:bg-[color:var(--color-brand-muted)]">
-              Dates
-            </Link>
-          ) : null}
-        </>
+      {canManage && yearId ? (
+        <Link href={`/e/${slug}/academic-years/${yearId}?onglet=trimestres#calcul-${period.id}`} className="rounded-xl border px-3 py-1.5 text-sm font-semibold hover:bg-[color:var(--color-brand-muted)]">
+          Dates de fin de trimestre
+        </Link>
       ) : null}
     </div>
   );

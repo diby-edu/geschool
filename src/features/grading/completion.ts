@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
 import { audit } from '@/lib/audit';
 import { AuthorizationError, NotFoundError } from '@/lib/errors';
-import { gradingState } from '@/features/academic-years/grading';
+import { termPhase, termPhaseMessage, type TermPhase } from '@/features/academic-years/grading';
 import { schoolToday } from '@/features/dashboard/time';
 
 /**
@@ -25,6 +25,12 @@ export type CompletionState = {
   window: { starts: string | null; ends: string | null; manual: boolean };
   /** La migration 0056 n'est pas appliquée : la fonction n'existe pas encore. */
   unavailable: boolean;
+  /** Étape de fin de trimestre (migration 0110). */
+  phase: TermPhase;
+  /** Ce que le professeur doit lire (arrêt des notes, correction possible jusqu'au…). */
+  phaseMessage: string | null;
+  /** Élèves sans moyenne : tant qu'il en reste, « J'ai fini » est refusé. */
+  missing: { studentId: string; name: string }[];
 };
 
 async function findAssignment(ctx: TenantContext, classId: string, subjectId: string, periodId: string): Promise<string | null> {
@@ -55,19 +61,24 @@ async function findAssignment(ctx: TenantContext, classId: string, subjectId: st
 export async function getCompletionState(ctx: TenantContext, classId: string, subjectId: string, periodId: string): Promise<CompletionState> {
   const supabase = await createClient();
   const assignmentId = await findAssignment(ctx, classId, subjectId, periodId);
-  const empty: CompletionState = { assignmentId, completed: false, completedAt: null, open: false, window: { starts: null, ends: null, manual: false }, unavailable: false };
+  const empty: CompletionState = {
+    assignmentId, completed: false, completedAt: null, open: false, window: { starts: null, ends: null, manual: false },
+    unavailable: false, phase: 'OPEN', phaseMessage: null, missing: [],
+  };
 
   const { data: period, error } = await supabase
     .from('academic_periods')
-    .select('grading_starts_on, grading_ends_on, grading_override')
+    .select('grading_starts_on, grading_ends_on, grading_override, grades_stop_on, student_check_ends_on, head_check_ends_on')
     .eq('school_id', ctx.school.id)
     .eq('id', periodId)
     .maybeSingle();
   if (error) return { ...empty, unavailable: true };
   if (!period) return empty;
 
-  const state = gradingState(period, schoolToday(ctx.school.timezone));
+  const today = schoolToday(ctx.school.timezone);
+  const phase = termPhase(period, today);
   let completedAt: string | null = null;
+  let missing: { studentId: string; name: string }[] = [];
   if (assignmentId) {
     const { data } = await supabase
       .from('average_completions')
@@ -76,14 +87,23 @@ export async function getCompletionState(ctx: TenantContext, classId: string, su
       .eq('academic_period_id', periodId)
       .maybeSingle();
     completedAt = (data as { completed_at: string } | null)?.completed_at ?? null;
+    if (!completedAt) {
+      const { data: rows } = await supabase.rpc('missing_averages' as never, { p_assignment: assignmentId, p_period: periodId } as never);
+      missing = ((rows ?? []) as { student_id: string; student_name: string }[]).map((r) => ({ studentId: r.student_id, name: r.student_name }));
+    }
   }
   return {
     assignmentId,
     completed: completedAt !== null,
     completedAt,
-    open: state.open,
-    window: { starts: period.grading_starts_on, ends: period.grading_ends_on, manual: period.grading_override !== null },
+    // « J'ai fini » se déclare tant que les notes ne sont pas figées ; la base
+    // vérifie en plus que chaque élève a une moyenne.
+    open: phase !== 'FROZEN',
+    window: { starts: period.grading_starts_on, ends: period.head_check_ends_on ?? period.grading_ends_on, manual: false },
     unavailable: false,
+    phase,
+    phaseMessage: termPhaseMessage(period, today),
+    missing,
   };
 }
 
@@ -99,7 +119,8 @@ export async function markAveragesComplete(ctx: TenantContext, classId: string, 
   });
   if (error) {
     if (error.code === '23505') return; // déjà marquées : idempotent
-    if (error.code === '42501') throw new AuthorizationError('La période de calcul des moyennes est fermée.');
+    // Refus de la base (notes figées, élèves sans moyenne) : son message est
+    // affiché tel quel par le formulaire.
     throw error;
   }
   await audit(ctx, { action: 'grading.complete', module: 'grading', entityType: 'teaching_assignment', entityId: assignmentId, after: { periodId } });
@@ -116,6 +137,6 @@ export async function reopenAverages(ctx: TenantContext, classId: string, subjec
     .eq('academic_period_id', periodId);
   if (error) throw error;
   // La base ne signale pas un refus de suppression : 0 ligne = fenêtre fermée ou rien à rouvrir.
-  if (!count) throw new AuthorizationError('Impossible de rouvrir : la période de calcul est fermée.');
+  if (!count) throw new AuthorizationError('Impossible de rouvrir : les notes de cette période sont figées.');
   await audit(ctx, { action: 'grading.reopen', module: 'grading', entityType: 'teaching_assignment', entityId: assignmentId, after: { periodId } });
 }

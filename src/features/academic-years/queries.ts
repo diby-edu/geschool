@@ -51,6 +51,10 @@ export type PeriodWindow = {
   grading_starts_on: string | null;
   grading_ends_on: string | null;
   grading_override: string | null;
+  /** Fin de trimestre (migration 0110). */
+  grades_stop_on: string | null;
+  student_check_ends_on: string | null;
+  head_check_ends_on: string | null;
 };
 
 /**
@@ -61,7 +65,7 @@ export async function listGradingWindows(ctx: TenantContext, yearId: string): Pr
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('academic_periods')
-    .select('id, grading_starts_on, grading_ends_on, grading_override')
+    .select('id, grading_starts_on, grading_ends_on, grading_override, grades_stop_on, student_check_ends_on, head_check_ends_on')
     .eq('school_id', ctx.school.id)
     .eq('academic_year_id', yearId);
   if (error) return null;

@@ -166,6 +166,14 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
   // doit rester lisible même si l'enseignant quitte l'établissement.
   const teacherFor = await teachersOfClass(ctx, classId, yearId);
 
+  // Dispenses d'EPS de la période (migration 0110).
+  const { data: exemptRows } = await supabase
+    .from('subject_exemptions')
+    .select('student_id, subject_id')
+    .eq('school_id', ctx.school.id)
+    .eq('academic_period_id', periodId);
+  const exemptKeys = new Set((exemptRows ?? []).map((r) => `${r.student_id}:${r.subject_id}`));
+
   // La dernière période de l'année porte, elle seule, la moyenne annuelle, la
   // mention de l'année et la décision de passage. Aucun réglage : c'est le rang
   // le plus haut dans l'ordre d'enseignement de la classe.
@@ -262,7 +270,8 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
         average: avg,
         // Le mot de la colonne « Appréciation » : le palier de la moyenne de
         // la matière, selon les seuils de l'établissement.
-        appreciation: tierFor(reporting.subjectTiers, avg)?.label ?? null,
+        // Dispensé d'EPS : pas de note, pas de points, et le mot à la place.
+        appreciation: exemptKeys.has(`${studentId}:${s.id}`) ? 'Dispensé' : (tierFor(reporting.subjectTiers, avg)?.label ?? null),
         // Une matière facultative qui n'entre pas dans la moyenne générale
         // (réglage « bonus » ou « hors moyenne ») ne porte pas de points : sa
         // note reste affichée, mais elle ne s'ajoute pas au total. En « elle

@@ -202,6 +202,11 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
         hint: 'Geste rare, réservé à la direction : l’enseignant est prévenu et le journal porte la mention « appliqué sans son accord ».',
       },
       {
+        code: 'grades.term_dates',
+        label: 'Fixer les dates de fin de trimestre',
+        hint: 'Arrêt des notes, fin de la vérification avec les élèves, fin de la vérification du professeur principal. Après la dernière date, les notes de la période sont figées.',
+      },
+      {
         code: 'grades.view_all',
         label: 'Voir les moyennes et classements de toute l’école',
         hint: 'Donne aussi, sur le tableau de bord, le bloc « Moyennes et bulletins » (avancement des enseignants, bulletins édités) pendant la période de calcul.',

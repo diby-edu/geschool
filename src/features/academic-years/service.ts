@@ -202,6 +202,54 @@ export async function setGradingWindow(ctx: TenantContext, periodId: string, sta
   await audit(ctx, { action: 'academic_periods.grading_window', module: 'academic_years', entityType: 'academic_period', entityId: periodId, after: { startsOn, endsOn } });
 }
 
+/**
+ * Fin de trimestre : arrêt des notes, fin de la vérification avec les élèves,
+ * fin de la vérification du professeur principal (migration 0110). Les trois,
+ * ou aucune. « Prolonger » = décaler une date. La base applique les règles.
+ */
+export async function setTermDates(
+  ctx: TenantContext,
+  periodId: string,
+  stopOn: string | null,
+  studentEndsOn: string | null,
+  headEndsOn: string | null,
+): Promise<void> {
+  requireWritable(ctx, 'grades.term_dates');
+  const filled = [stopOn, studentEndsOn, headEndsOn].filter(Boolean).length;
+  if (filled !== 0 && filled !== 3) {
+    throw new ValidationError('Renseignez les trois dates de fin de trimestre, ou aucune.');
+  }
+  if (stopOn && studentEndsOn && studentEndsOn < stopOn) {
+    throw new ValidationError('La vérification avec les élèves ne peut pas finir avant l’arrêt des notes.');
+  }
+  if (studentEndsOn && headEndsOn && headEndsOn < studentEndsOn) {
+    throw new ValidationError('La vérification du professeur principal suit celle avec les élèves.');
+  }
+  const supabase = await createClient();
+  const { data: before } = await supabase
+    .from('academic_periods')
+    .select('grades_stop_on, student_check_ends_on, head_check_ends_on')
+    .eq('school_id', ctx.school.id)
+    .eq('id', periodId)
+    .maybeSingle();
+  const { data, error } = await supabase
+    .from('academic_periods')
+    .update({ grades_stop_on: stopOn, student_check_ends_on: studentEndsOn, head_check_ends_on: headEndsOn })
+    .eq('school_id', ctx.school.id)
+    .eq('id', periodId)
+    .select('id');
+  if (error) throw error;
+  if (!data || data.length === 0) throw new NotFoundError('Période introuvable.');
+  await audit(ctx, {
+    action: 'academic_periods.term_dates',
+    module: 'grades',
+    entityType: 'academic_period',
+    entityId: periodId,
+    before: before ?? undefined,
+    after: { grades_stop_on: stopOn, student_check_ends_on: studentEndsOn, head_check_ends_on: headEndsOn },
+  });
+}
+
 /** Ouverture (OPEN) ou fermeture (CLOSED) manuelle de la periode de calcul ; null = retour au mode automatique (dates). */
 export async function setGradingOverride(ctx: TenantContext, periodId: string, mode: 'OPEN' | 'CLOSED' | null): Promise<void> {
   requireWritable(ctx, 'academic_years.manage');

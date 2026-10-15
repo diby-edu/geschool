@@ -10,14 +10,13 @@ import { getYear, listCalendarEvents, listGradingWindows, listPeriods } from '@/
 import { officialCalendarFor, officialScopes, officialBreakName, MOVABLE_HOLIDAYS_NOTE } from '@/features/academic-years/official-calendar-ci';
 import { CalendarEventForm } from '@/features/academic-years/components/CalendarEventForm';
 import { PeriodEditForm } from '@/features/academic-years/components/PeriodEditForm';
-import { gradingState } from '@/features/academic-years/grading';
+import { termPhase, TERM_PHASE_LABEL, frShortDate } from '@/features/academic-years/grading';
 import { schoolToday } from '@/features/dashboard/time';
-import { GradingWindowForm } from '@/features/academic-years/components/GradingWindowForm';
-import { SimpleSubmit } from '@/components/ui/simple-submit';
+import { TermDatesForm } from '@/features/academic-years/components/TermDatesForm';
 import { YEAR_STATUS_LABEL, PERIOD_KIND_LABEL, CALENDAR_KIND_LABEL, formatDate, longDate, daysBetween, periodPhase } from '@/features/academic-years/labels';
 import { EditableItem } from '@/features/academic-years/components/EditableItem';
 import {
-  updateYearAction, createPeriodAction, deletePeriodAction, setGradingWindowAction, setGradingOverrideAction,
+  updateYearAction, createPeriodAction, deletePeriodAction, setTermDatesAction,
   createCalendarEventAction, deleteCalendarEventAction, applyOfficialCalendarAction, updatePeriodAction, updateCalendarEventAction,
 } from '@/features/academic-years/actions';
 import { getConfig, getDayHours, getBreaks, listCyclesOverview } from '@/features/schedule/config';
@@ -81,6 +80,8 @@ export default async function YearDetailPage({
   const windows = await listGradingWindows(ctx, id);
   const today = schoolToday(ctx.school.timezone);
   const canManage = hasPermission(ctx, 'academic_years.manage');
+  // Fixer la fin de trimestre : un droit à part, cochable pour toute fonction.
+  const canTermDates = hasPermission(ctx, 'grades.term_dates');
   const editable = year.status === 'DRAFT' || year.status === 'ACTIVE';
 
   // La fiche d'une année est longue (trimestres, congés, horaires) : des onglets
@@ -347,57 +348,52 @@ export default async function YearDetailPage({
                         <div className="space-y-3 border-t px-5 py-4" id={`calcul-${p.id}`}>
                           {(() => {
                             const w = windows.get(p.id)!;
-                            const st = gradingState(w, today);
+                            const phase = termPhase(w, today);
+                            const set = Boolean(w.grades_stop_on);
+                            const tone =
+                              phase === 'FROZEN'
+                                ? 'var(--color-danger)'
+                                : phase === 'OPEN'
+                                  ? set ? 'var(--muted-foreground)' : 'var(--color-warning)'
+                                  : 'var(--color-success)';
                             return (
                               <>
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-sm font-medium">Calcul des moyennes</span>
+                                  <span className="text-sm font-medium">Fin de trimestre</span>
                                   <span
                                     className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                                    style={{
-                                      backgroundColor: st.open
-                                        ? 'color-mix(in oklch, var(--color-success) 18%, var(--surface))'
-                                        : st.source === 'none'
-                                          ? 'color-mix(in oklch, var(--color-danger) 14%, var(--surface))'
-                                          : 'var(--color-brand-muted)',
-                                      color: st.open
-                                        ? 'var(--color-success)'
-                                        : st.source === 'none'
-                                          ? 'var(--color-danger)'
-                                          : 'var(--muted-foreground)',
-                                    }}
+                                    style={{ backgroundColor: `color-mix(in oklch, ${tone} 15%, var(--surface))`, color: tone }}
                                   >
-                                    {/* Jamais configuré n'est pas « fermé » : l'un est une
-                                        décision, l'autre un oubli. */}
-                                    {st.source === 'none' ? 'Non configuré' : st.open ? 'Ouvert' : 'Fermé'}
-                                    {st.source === 'manual' ? ' (manuel)' : st.source === 'dates' ? ' (selon les dates)' : ''}
+                                    {set ? TERM_PHASE_LABEL[phase] : 'Dates non fixées'}
                                   </span>
                                 </div>
-                                <p className="text-xs text-[color:var(--muted-foreground)]">
-                                  {st.source === 'none'
-                                    ? 'Aucune date n’est encore fixée : tant qu’elle reste vide, aucun enseignant ne peut marquer ses moyennes « terminées » pour cette période. Les moyennes, elles, se calculent en permanence — ce réglage ne les bloque pas.'
-                                    : 'Les enseignants marquent leurs moyennes « terminées » pendant cette période ; elle se ferme automatiquement à la date de fin. Vous pouvez l’ouvrir ou la fermer à tout moment.'}
-                                </p>
-                                {canManage && editable ? (
-                                  <>
-                                    <GradingWindowForm
-                                      action={setGradingWindowAction.bind(null, slug, id, p.id)}
-                                      defaultStarts={w.grading_starts_on}
-                                      defaultEnds={w.grading_ends_on}
-                                      min={p.starts_on}
-                                      max={p.ends_on}
-                                    />
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      {st.open ? (
-                                        <SimpleSubmit small action={setGradingOverrideAction.bind(null, slug, p.id, 'CLOSED', id)} label="Fermer maintenant" />
-                                      ) : (
-                                        <SimpleSubmit small action={setGradingOverrideAction.bind(null, slug, p.id, 'OPEN', id)} label="Ouvrir maintenant" />
-                                      )}
-                                      {w.grading_override ? (
-                                        <SimpleSubmit small action={setGradingOverrideAction.bind(null, slug, p.id, 'AUTO', id)} label="Revenir au mode automatique" />
-                                      ) : null}
-                                    </div>
-                                  </>
+                                {set ? (
+                                  <ol className="list-decimal space-y-0.5 pl-5 text-xs text-[color:var(--muted-foreground)]">
+                                    <li>Arrêt des notes le {frShortDate(w.grades_stop_on!)} : plus de nouvelle évaluation.</li>
+                                    <li>
+                                      Vérification avec les élèves jusqu’au {frShortDate(w.student_check_ends_on!)} : chaque professeur
+                                      corrige ses notes et déclare « J’ai fini mes moyennes ».
+                                    </li>
+                                    <li>
+                                      Vérification du professeur principal jusqu’au {frShortDate(w.head_check_ends_on!)}. Le lendemain,
+                                      les notes sont figées.
+                                    </li>
+                                  </ol>
+                                ) : (
+                                  <p className="text-xs text-[color:var(--muted-foreground)]">
+                                    Aucune date : les professeurs saisissent leurs notes sans limite. Fixez l’arrêt des notes et
+                                    les deux vérifications pour organiser la fin du trimestre.
+                                  </p>
+                                )}
+                                {canTermDates && editable ? (
+                                  <TermDatesForm
+                                    action={setTermDatesAction.bind(null, slug, id, p.id)}
+                                    defaults={{
+                                      stopOn: w.grades_stop_on,
+                                      studentEndsOn: w.student_check_ends_on,
+                                      headEndsOn: w.head_check_ends_on,
+                                    }}
+                                  />
                                 ) : null}
                               </>
                             );
