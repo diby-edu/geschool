@@ -1,7 +1,7 @@
 import 'server-only';
+import { COURSE_HOUR_MINUTES } from '@/features/programme/hours';
 
 import { createClient } from '@/lib/supabase/server';
-import { getConfig } from '@/features/schedule/config';
 import type { TenantContext } from '@/lib/tenant/context';
 import { requireWritable } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
@@ -15,12 +15,10 @@ import type { TeacherInput } from './schemas';
  * pour les volumes du programme — un service se compte en séances, pas en
  * minutes d'horloge.
  */
-export async function schoolSessionMinutes(ctx: TenantContext): Promise<number> {
-  const yearId = ctx.academicYear?.id;
-  if (!yearId) return 60;
-  const config = await getConfig(ctx, yearId);
-  const minutes = config?.default_session_minutes;
-  return minutes && minutes > 0 ? minutes : 60;
+export async function schoolSessionMinutes(_ctx: TenantContext): Promise<number> {
+  // 1 cours = 1 heure (règle de l'établissement) : une séance de service vaut
+  // 60 en base, que le créneau dure 55 ou 60 minutes.
+  return COURSE_HOUR_MINUTES;
 }
 
 /** « 18 séances » -> minutes. Vide ou 0 = aucune borne. */
@@ -55,6 +53,8 @@ function toRow(ctx: TenantContext, input: TeacherInput, sessionMinutes: number) 
     // volumes horaires du programme.
     weekly_minutes_min: sessionsToMinutes(input.minSessions, sessionMinutes),
     weekly_minutes_max: sessionsToMinutes(input.maxSessions, sessionMinutes),
+    // Vide = le taux de l'école (paie à l'heure, migration 0116).
+    hourly_rate: input.hourlyRate === '' || input.hourlyRate === undefined ? null : Number(input.hourlyRate),
   };
 }
 

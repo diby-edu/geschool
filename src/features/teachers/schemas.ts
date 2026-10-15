@@ -34,6 +34,8 @@ export const teacherSchema = z.object({
    */
   minSessions: z.coerce.number().int().min(0).max(60).optional().or(z.literal('')),
   maxSessions: z.coerce.number().int().min(0).max(60).optional().or(z.literal('')),
+  /** Taux propre (F CFA / heure) : vacataire = taux horaire ; permanent = heures supplémentaires. */
+  hourlyRate: z.coerce.number().min(0, 'Le taux ne peut pas être négatif.').max(1_000_000).optional().or(z.literal('')),
 });
 
 export type TeacherInput = z.infer<typeof teacherSchema>;

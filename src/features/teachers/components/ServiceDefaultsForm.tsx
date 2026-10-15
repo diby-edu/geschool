@@ -18,7 +18,7 @@ import { EMPLOYMENT_LABELS, EMPLOYMENT_TYPES, type ServiceDefaults } from '../se
 export function ServiceDefaultsForm({
   action,
   defaults,
-  sessionMinutes,
+  sessionMinutes: _sessionMinutes,
   canEdit,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
@@ -38,14 +38,15 @@ export function ServiceDefaultsForm({
           <div className="border-b px-4 py-3">
             <p className="text-sm font-semibold">Service hebdomadaire par type de contrat</p>
             <p className="mt-1 text-xs text-[color:var(--muted-foreground)]">
-              En séances par semaine. Une séance dure {sessionMinutes} min dans votre établissement. Laissez vide si
-              vous ne fixez pas de borne — et sachez qu’une valeur saisie sur la fiche d’un enseignant l’emporte
-              toujours sur celle-ci.
+              En heures de cours par semaine : un cours compte pour une heure, quelle que soit la durée du créneau.
+              Pour un permanent, le maximum est son quota : au-delà, ses heures sont des heures supplémentaires,
+              payées à l’heure. Laissez vide si vous ne fixez pas de borne — une valeur saisie sur la fiche d’un
+              enseignant l’emporte toujours sur celle-ci.
             </p>
           </div>
 
           <ul>
-            {EMPLOYMENT_TYPES.map((type) => (
+            {EMPLOYMENT_TYPES.filter((t) => t === 'PERMANENT' || t === 'HOURLY').map((type) => (
               <li key={type} className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b px-4 py-2.5 last:border-0">
                 <span className="min-w-32 flex-1 text-sm font-medium">{EMPLOYMENT_LABELS[type]}</span>
 

@@ -1,4 +1,5 @@
 import 'server-only';
+import { COURSE_HOUR_MINUTES } from '@/features/programme/hours';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
@@ -171,8 +172,10 @@ export async function syncRequirementsFromAssignments(
       ? (await getConfigForClass(ctx, yearId, a.class_id))?.default_session_minutes ?? defaultSlotMinutes
       : defaultSlotMinutes;
     if (!slotMinutes) { skipped++; continue; } // ni grille de classe, ni grille par defaut : rien a convertir
-    const sessions = Math.max(1, Math.round(a.weekly_minutes / slotMinutes));
-    const duration = Math.max(slotMinutes, Math.round(a.weekly_minutes / sessions / slotMinutes) * slotMinutes);
+    // 1 cours = 1 heure : « 6 h » = 6 cours d'un créneau, que le créneau dure
+    // 55 ou 60 minutes. (Avant : 360 min / 55 = 6,5 -> 7 cours, un de trop.)
+    const sessions = Math.max(1, Math.round(a.weekly_minutes / COURSE_HOUR_MINUTES));
+    const duration = slotMinutes;
 
     const { data: req, error: reqErr } = await supabase
       .from('teaching_requirements')

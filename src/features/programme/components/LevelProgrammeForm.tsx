@@ -5,7 +5,7 @@ import { Alert } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { SubmitButton } from '@/features/auth/components/SubmitButton';
 import type { FormState } from '@/lib/forms';
-import { formatHours, minutesFromSessions, sessionsValue } from '../hours';
+import { COURSE_HOUR_MINUTES, formatHours, minutesFromSessions, sessionsValue } from '../hours';
 
 export type ProgrammeSubject = { id: string; code: string; name: string; defaultCoefficient: number };
 export type ProgrammeCurrent = Record<string, { coefficient: number; weeklyMinutes: number; mandatory: boolean }>;
@@ -60,7 +60,7 @@ export function LevelProgrammeForm({
             ? {
                 on: true,
                 coef: String(entry.coefficient),
-                sessions: sessionsValue(entry.weeklyMinutes, sessionMinutes),
+                sessions: sessionsValue(entry.weeklyMinutes, COURSE_HOUR_MINUTES),
                 fac: !entry.mandatory,
               }
             : { on: false, coef: '', sessions: '', fac: false },
@@ -86,7 +86,7 @@ export function LevelProgrammeForm({
     return sum + (Number.isFinite(n) ? n : 0);
   }, 0);
   const totalSessions = chosen.reduce((sum, s) => sum + (Number(rowOf(s.id).sessions) || 0), 0);
-  const totalMinutes = chosen.reduce((sum, s) => sum + minutesFromSessions(rowOf(s.id).sessions, sessionMinutes), 0);
+  const totalMinutes = chosen.reduce((sum, s) => sum + minutesFromSessions(rowOf(s.id).sessions, COURSE_HOUR_MINUTES), 0);
 
   if (subjects.length === 0) {
     return (
@@ -179,7 +179,7 @@ export function LevelProgrammeForm({
                       disabled={!canEdit}
                       aria-label={`Séances hebdomadaires de ${s.name}`}
                       placeholder="—"
-                      title={`Nombre de cours par semaine. Une séance dure ${sessionMinutes} min.`}
+                      title={`Nombre d’heures de cours par semaine. Un cours (créneau de ${sessionMinutes} min) compte pour 1 heure.`}
                       className="h-8 w-16 rounded-lg border px-2 text-center text-sm tabular-nums"
                       style={{ backgroundColor: 'var(--surface)' }}
                     />

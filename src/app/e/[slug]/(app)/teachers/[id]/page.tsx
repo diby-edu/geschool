@@ -71,6 +71,11 @@ export default async function EditTeacherPage({
           // Le service est stocké en minutes, saisi en séances.
           minSessions: teacher.weekly_minutes_min ? String(Math.round(teacher.weekly_minutes_min / sessionMinutes)) : '',
           maxSessions: teacher.weekly_minutes_max ? String(Math.round(teacher.weekly_minutes_max / sessionMinutes)) : '',
+          hourlyRate:
+            (teacher as { hourly_rate?: number | string | null }).hourly_rate === null ||
+            (teacher as { hourly_rate?: number | string | null }).hourly_rate === undefined
+              ? ''
+              : String((teacher as { hourly_rate?: number | string | null }).hourly_rate).replace('.', ','),
         }}
       />
 

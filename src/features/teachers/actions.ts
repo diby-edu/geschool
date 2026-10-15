@@ -32,6 +32,7 @@ function parse(fd: FormData) {
     diplomaDetail: fd.get('diplomaDetail') ?? '',
     minSessions: fd.get('minSessions') ?? '',
     maxSessions: fd.get('maxSessions') ?? '',
+    hourlyRate: String(fd.get('hourlyRate') ?? '').replace(/\s/g, '').replace(',', '.'),
   });
 }
 

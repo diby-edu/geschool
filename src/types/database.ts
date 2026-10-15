@@ -4138,6 +4138,7 @@ export type Database = {
           created_by: string | null
           diploma: string | null
           diploma_detail: string | null
+          hourly_rate: number | null
         }
         Insert: {
           id?: string
@@ -4165,6 +4166,7 @@ export type Database = {
           created_by?: string | null
           diploma?: string | null
           diploma_detail?: string | null
+          hourly_rate?: number | null
         }
         Update: {
           id?: string
@@ -4192,6 +4194,7 @@ export type Database = {
           created_by?: string | null
           diploma?: string | null
           diploma_detail?: string | null
+          hourly_rate?: number | null
         }
         Relationships: []
       }

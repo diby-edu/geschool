@@ -1,5 +1,7 @@
 'use server';
 
+import { COURSE_HOUR_MINUTES } from './hours';
+
 import { redirect } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
 import { runFormAction, type FormState } from '@/lib/forms';
@@ -11,7 +13,6 @@ import {
   saveCoefficientMatrix,
   saveLevelProgramme,
   saveSessionsMatrix,
-  sessionMinutesForLevel,
 } from './service';
 
 /** Charge la grille officielle ivoirienne, puis revient au programme avec le bilan. */
@@ -60,14 +61,14 @@ export async function saveLevelProgrammeAction(slug: string, _p: FormState, fd: 
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
     const levelId = String(fd.get('levelId') ?? '');
-    const slot = await sessionMinutesForLevel(ctx, levelId);
     const rows: ProgrammeRow[] = fd.getAll('sid').map((entry) => {
       const id = String(entry);
       return {
         subjectId: id,
         included: fd.get(`on:${id}`) != null,
         coefficient: coefficientOf(fd.get(`coef:${id}`)),
-        weeklyMinutes: minutesFromSessions(String(fd.get(`s:${id}`) ?? ''), slot),
+        // 1 séance = 1 heure de cours = 60, quelle que soit la durée du créneau.
+        weeklyMinutes: minutesFromSessions(String(fd.get(`s:${id}`) ?? ''), COURSE_HOUR_MINUTES),
         // Case « Fac. » cochée = matière facultative.
         mandatory: fd.get(`fac:${id}`) == null,
       };

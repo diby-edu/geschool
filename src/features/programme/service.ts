@@ -1,4 +1,5 @@
 import 'server-only';
+import { COURSE_HOUR_MINUTES } from './hours';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
@@ -117,29 +118,6 @@ export async function saveLevelProgramme(
 /** Durée d'une séance quand l'école n'a pas encore réglé sa grille horaire. */
 const DEFAULT_SESSION_MINUTES = 60;
 
-/**
- * Durée d'un créneau, par code de cycle officiel (CYCLE1, CYCLE2).
- *
- * Un établissement peut donner au premier cycle des créneaux de 55 min et au
- * second de 60 : la conversion des séances en minutes doit suivre. Sans année
- * active ni grille, on retombe sur une heure pleine — l'école corrigera, et
- * tout reste modifiable ensuite.
- */
-async function sessionMinutesByCycle(
-  ctx: TenantContext,
-  cycleIds: Map<string, string>,
-): Promise<Map<string, number>> {
-  const out = new Map<string, number>();
-  const yearId = ctx.academicYear?.id;
-  if (!yearId) return out;
-  for (const [code, id] of cycleIds) {
-    const config = await getConfigForCycle(ctx, yearId, id);
-    const minutes = config?.default_session_minutes;
-    if (minutes && minutes > 0) out.set(code, minutes);
-  }
-  return out;
-}
-
 export type OfficialProgrammeResult = { cycles: number; levels: number; subjects: number; entries: number };
 
 /**
@@ -232,11 +210,8 @@ export async function applyOfficialProgramme(ctx: TenantContext): Promise<Offici
   if (existingError) throw existingError;
   const present = new Set((existing ?? []).map((e) => `${e.level_id}:${e.subject_id}`));
 
-  // Le document compte des SÉANCES, pas des heures d'horloge : « Français 5 »,
-  // c'est cinq séances. Une séance dure ce que dure un créneau de cette école —
-  // 55 min chez l'une, 60 chez l'autre — et la durée peut différer par cycle.
-  // On convertit ici, contre la grille horaire réelle ; faute de grille, 60 min.
-  const slotByCycle = await sessionMinutesByCycle(ctx, cycleIds);
+  // Le document compte des SÉANCES : « Français 5 », c'est cinq heures de
+  // cours (1 cours = 1 h, quelle que soit la durée du créneau de l'école).
 
   const rows = OFFICIAL_CI_LEVELS.flatMap((level) =>
     Object.entries(OFFICIAL_CI_PROGRAMME[level.code] ?? {}).map(([subjectCode, entry]) => ({
@@ -244,7 +219,8 @@ export async function applyOfficialProgramme(ctx: TenantContext): Promise<Offici
       level_id: levelIds.get(level.code)!,
       subject_id: subjectIds.get(subjectCode)!,
       coefficient: entry.coefficient,
-      weekly_minutes: entry.sessions * (slotByCycle.get(level.cycle) ?? DEFAULT_SESSION_MINUTES),
+      // Grille officielle : « 6 séances » = 6 heures de cours (1 cours = 1 h).
+      weekly_minutes: entry.sessions * COURSE_HOUR_MINUTES,
       is_mandatory: !entry.optional,
     })),
   ).filter((r) => !present.has(`${r.level_id}:${r.subject_id}`));

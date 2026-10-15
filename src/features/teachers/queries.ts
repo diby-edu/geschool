@@ -76,7 +76,7 @@ export async function getTeacher(ctx: TenantContext, id: string) {
   const { data } = await supabase
     .from('teachers')
     .select(
-      'id, staff_number, first_name, last_name, gender, specialty, employment_type, status, hire_date, diploma, diploma_detail, weekly_minutes_min, weekly_minutes_max, user_id',
+      'id, staff_number, first_name, last_name, gender, specialty, employment_type, status, hire_date, diploma, diploma_detail, weekly_minutes_min, weekly_minutes_max, hourly_rate, user_id',
     )
     .eq('school_id', ctx.school.id)
     .eq('id', id)

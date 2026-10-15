@@ -118,6 +118,11 @@ export default async function TeachersPage({
             <Link href={`${base}/service`}>
               <Button variant="secondary">Service hebdomadaire</Button>
             </Link>
+            {hasPermission(ctx, 'teachers.payroll') ? (
+              <Link href={`${base}/heures`}>
+                <Button variant="secondary">Heures faites et paie</Button>
+              </Link>
+            ) : null}
             <Link href={`/e/${slug}/import?type=teachers`}>
               <Button variant="secondary">Importer / exporter</Button>
             </Link>

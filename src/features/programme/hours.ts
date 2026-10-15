@@ -51,6 +51,15 @@ const clamp = (m: number) => Math.min(Math.max(m, 0), 3000);
    d'une séance est celle des créneaux de l'établissement (55 min, 60 min…).
    -------------------------------------------------------------------------- */
 
+/**
+ * RÈGLE DE L'ÉTABLISSEMENT (2026-10-15) : un cours = UNE HEURE, que le créneau
+ * dure 50, 55 ou 60 minutes. Partout où l'on compte un volume (programme,
+ * affectations, service des enseignants, heures d'absence, heures faites,
+ * paie), une séance vaut 1 h, stockée 60 en base. Seule la grille de
+ * l'emploi du temps garde l'horaire réel de ses créneaux.
+ */
+export const COURSE_HOUR_MINUTES = 60;
+
 /** Minutes stockées -> nombre de séances affiché. */
 export function toSessions(minutes: number, sessionMinutes: number): number {
   if (!minutes || minutes <= 0 || sessionMinutes <= 0) return 0;

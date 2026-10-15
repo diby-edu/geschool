@@ -29,7 +29,8 @@ type Values = Partial<
     | 'diploma'
     | 'diplomaDetail'
     | 'minSessions'
-    | 'maxSessions',
+    | 'maxSessions'
+    | 'hourlyRate',
     string
   >
 >;
@@ -93,8 +94,10 @@ export function TeacherForm({
             <ChoiceCards
               name="employmentType"
               legend="Type de contrat"
-              options={EMPLOYMENT_OPTIONS}
-              defaultValue={v.employmentType ?? 'PERMANENT'}
+              // Un enseignant est permanent ou vacataire : les autres contrats
+              // ne servent pas pour les enseignants (décision du 2026-10-15).
+              options={EMPLOYMENT_OPTIONS.filter((o) => o.code === 'PERMANENT' || o.code === 'HOURLY')}
+              defaultValue={v.employmentType === 'HOURLY' ? 'HOURLY' : 'PERMANENT'}
               required
               error={err.employmentType}
             />
@@ -104,6 +107,14 @@ export function TeacherForm({
               </Field>
               <Field label="Spécialité" htmlFor="specialty" errors={err.specialty}>
                 <Input id="specialty" name="specialty" defaultValue={v.specialty} placeholder="Ex. Mathématiques" />
+              </Field>
+              <Field
+                label="Taux horaire propre (F CFA)"
+                htmlFor="hourlyRate"
+                errors={err.hourlyRate}
+                hint="Vacataire : son taux à l’heure. Permanent : le taux de ses heures supplémentaires. Vide = le taux de l’école."
+              >
+                <Input id="hourlyRate" name="hourlyRate" inputMode="decimal" defaultValue={v.hourlyRate} placeholder="Taux de l’école" />
               </Field>
               <Field label="Date de prise de fonction" htmlFor="hireDate" errors={err.hireDate} hint="Facultatif">
                 <Input id="hireDate" name="hireDate" type="date" defaultValue={v.hireDate} />

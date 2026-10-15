@@ -1,4 +1,5 @@
 import 'server-only';
+import { COURSE_HOUR_MINUTES } from '@/features/programme/hours';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
@@ -288,8 +289,15 @@ export async function generateSchedule(
 
   for (const r of requirements) {
     const label = `${r.subjects?.name ?? 'Cours'} — ${targetLabel(r)}`;
+    // Durée d'un cours en CRÉNEAUX. Sans durée fixée, on part des heures de
+    // cours (1 cours = 1 h, stocké 60) : 2 h par cours = 2 créneaux.
     const durMin = r.session_duration_minutes ?? Math.round(r.weekly_minutes / Math.max(1, r.sessions_count));
-    const durationSlots = Math.max(1, Math.round(durMin / slotMinutes));
+    const durationSlots = Math.max(
+      1,
+      r.session_duration_minutes
+        ? Math.round(r.session_duration_minutes / slotMinutes)
+        : Math.round(r.weekly_minutes / Math.max(1, r.sessions_count) / COURSE_HOUR_MINUTES),
+    );
 
     const teacherIds = r.teaching_requirement_teachers.map((t) => t.teacher_id);
     const classIds = r.teaching_requirement_targets.filter((t) => t.target_type === 'CLASS' && t.class_id).map((t) => t.class_id!);

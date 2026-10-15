@@ -3,7 +3,7 @@ import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
 import { getConfigForCycle } from '@/features/schedule/config';
-import { toSessions } from './hours';
+import { COURSE_HOUR_MINUTES, toSessions } from './hours';
 
 /**
  * Deux vues d'ensemble du programme, pour ne plus avancer à l'aveugle.
@@ -203,7 +203,7 @@ export async function getCoefficientMatrix(ctx: TenantContext, track?: string): 
     if (slot === undefined) continue;
     const key = `${e.level_id}:${e.subject_id}`;
     cells[key] = Number(e.coefficient);
-    sessions[key] = toSessions(e.weekly_minutes, slot);
+    sessions[key] = toSessions(e.weekly_minutes, COURSE_HOUR_MINUTES);
   }
 
   return { levels: withTrack, subjects: rows, cells, sessions };
