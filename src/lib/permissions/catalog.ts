@@ -263,6 +263,11 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
       { code: 'reports.view', label: 'Consulter les bulletins' },
       { code: 'reports.generate', label: 'Générer les bulletins' },
       {
+        code: 'reports.council_average',
+        label: 'Saisir la moyenne retenue par le conseil de classe',
+        hint: 'Repêchage ou dérogation : la moyenne retenue remplace la moyenne calculée sur le bulletin, sans mention, et le rang est recalculé. Inscrit au journal.',
+      },
+      {
         code: 'reports.matrix',
         label: 'Tirer les matrices (professeur principal et conseil de classe)',
         hint: 'Imprimer ou télécharger la matrice de n’importe quelle classe. Le professeur principal tire toujours celle de sa propre classe.',

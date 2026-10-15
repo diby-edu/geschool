@@ -7,6 +7,12 @@ import { AuthorizationError, NotFoundError } from '@/lib/errors';
 import { gradingParams, rpcArgs, subjectArgs } from '@/features/evaluations/scale';
 import { getMyTeacherId } from '@/features/schedule/my-schedule';
 import { rankWithTies, type Matrix, type MatrixRow, type MatrixSubject } from './matrix-core';
+import { councilAveragesFor } from './council';
+import { classTrack } from '@/features/evaluations/refs';
+import { listGradingPeriods, isLastPeriod, periodsBefore } from './periods';
+import { readReportingSettings } from './settings';
+import { weightOf } from './config';
+import { rounder } from './annual';
 
 /**
  * Qui tire la matrice d'une classe : le droit « Tirer les matrices »
@@ -66,7 +72,12 @@ function subjectOrder(s: { code: string | null } | null): number {
  * que les bulletins (barème, arrondi, notes en direct, matières facultatives) :
  * ce que le professeur principal vérifie est ce qui sera imprimé.
  */
-export async function buildMatrix(ctx: TenantContext, classId: string, periodId: string): Promise<Matrix> {
+export async function buildMatrix(
+  ctx: TenantContext,
+  classId: string,
+  periodId: string,
+  options: { council?: boolean } = {},
+): Promise<Matrix> {
   if (!(await canSeeMatrix(ctx, classId))) {
     throw new AuthorizationError('La matrice de cette classe est réservée à son professeur principal et à la direction.');
   }
@@ -153,18 +164,74 @@ export async function buildMatrix(ctx: TenantContext, classId: string, periodId:
     });
   }
 
-  const { data: ranking, error: rankErr } = await supabase.rpc('class_period_ranking' as never, {
-    p_class: classId,
-    p_period: periodId,
-    ...rpcArgs(params),
-  } as never);
-  if (rankErr) throw new Error(`Moyennes générales impossibles : ${rankErr.message}`);
-  const general = new Map(
-    ((ranking ?? []) as { student_id: string; general_average: number | string | null; rank_position: number | null }[]).map(
-      (r) => [r.student_id, { average: r.general_average === null ? null : Number(r.general_average), rank: r.rank_position }],
-    ),
-  );
-  const generalTies = rankWithTies(students.map((s) => general.get(s.id)?.average ?? null));
+  // Moyenne générale d'une période, telle qu'elle est (ou sera) imprimée :
+  // calculée, remplacée par la moyenne retenue du conseil s'il y en a une.
+  const ids = students.map((s) => s.id);
+  async function generalOf(pid: string, fromBulletins: boolean): Promise<(number | null)[]> {
+    const [{ data: ranking, error }, retained] = await Promise.all([
+      supabase.rpc('class_period_ranking' as never, { p_class: classId, p_period: pid, ...rpcArgs(params) } as never),
+      councilAveragesFor(ctx, ids, pid),
+    ]);
+    if (error) throw new Error(`Moyennes générales impossibles : ${error.message}`);
+    const live = new Map(
+      ((ranking ?? []) as { student_id: string; general_average: number | string | null }[]).map((r) => [
+        r.student_id,
+        r.general_average === null ? null : Number(r.general_average),
+      ]),
+    );
+    // Période passée : la moyenne IMPRIMÉE sur le bulletin fait foi (un élève
+    // arrivé d'une autre classe garde la sienne) ; sinon le calcul en direct.
+    const printed = new Map<string, number | null>();
+    if (fromBulletins) {
+      const { data: cards } = await supabase
+        .from('report_cards')
+        .select('student_id, general_average')
+        .eq('school_id', ctx.school.id)
+        .eq('academic_period_id', pid)
+        .in('student_id', ids);
+      for (const c of (cards ?? []) as { student_id: string; general_average: number | string | null }[]) {
+        printed.set(c.student_id, c.general_average === null ? null : Number(c.general_average));
+      }
+    }
+    return ids.map((id) => (retained.has(id) ? retained.get(id)! : printed.has(id) ? printed.get(id)! : (live.get(id) ?? null)));
+  }
+
+  const current = await generalOf(periodId, false);
+  const generalTies = rankWithTies(current);
+
+  // Matrice du conseil : rappel des périodes précédentes, et moyenne annuelle
+  // sur la dernière période de l'année (mêmes coefficients que le bulletin).
+  let recallLabels: string[] = [];
+  let recallValues: (number | null)[][] = [];
+  let annualValues: (number | null)[] | null = null;
+  if (options.council && ctx.academicYear) {
+    const [track, periods, reporting] = await Promise.all([
+      classTrack(ctx, classId),
+      listGradingPeriods(ctx, ctx.academicYear.id),
+      readReportingSettings(ctx),
+    ]);
+    const before = periodsBefore(periods, track, periodId);
+    recallLabels = before.map((p) => p.name);
+    recallValues = await Promise.all(before.map((p) => generalOf(p.id, true)));
+    if (isLastPeriod(periods, track, periodId)) {
+      const round = rounder(params.decimals, params.rounding);
+      const seq = periods.find((p) => p.id === periodId)?.sequence ?? before.length + 1;
+      annualValues = ids.map((_, i) => {
+        const parts = [...before.map((p, k) => [recallValues[k]![i]!, p.sequence] as const), [current[i]!, seq] as const];
+        if (parts.some(([v]) => v === null)) return null; // une période manquante : pas de moyenne annuelle
+        let pts = 0;
+        let w = 0;
+        for (const [v, s] of parts) {
+          const wt = weightOf(reporting.periodWeights, s);
+          pts += (v as number) * wt;
+          w += wt;
+        }
+        return w > 0 ? round(pts / w) : null;
+      });
+    }
+  }
+  const recallTies = recallValues.map((vals) => rankWithTies(vals));
+  const annualTies = annualValues ? rankWithTies(annualValues) : null;
 
   const subjectRanks = new Map(
     subjects.map((s) => [s.id, rankWithTies(students.map((st) => (exempt.has(`${st.id}:${s.id}`) ? null : (bySubject.get(s.id)?.get(st.id) ?? null))))]),
@@ -187,9 +254,9 @@ export async function buildMatrix(ctx: TenantContext, classId: string, periodId:
       name: st.name,
       female: st.female,
       cells,
-      general: { average: general.get(st.id)?.average ?? null, ...generalTies[i]! },
-      recalls: [],
-      annual: null,
+      general: { average: current[i] ?? null, ...generalTies[i]! },
+      recalls: recallValues.map((vals, k) => ({ average: vals[i] ?? null, ...recallTies[k]![i]! })),
+      annual: annualValues && annualTies ? { average: annualValues[i] ?? null, ...annualTies[i]! } : null,
     };
   });
 
@@ -202,7 +269,7 @@ export async function buildMatrix(ctx: TenantContext, classId: string, periodId:
     headTeacher: head ? `${head.gender === 'F' ? 'Mme' : 'M.'} ${head.last_name.toUpperCase()} ${head.first_name}` : null,
     subjects,
     rows,
-    recallLabels: [],
-    hasAnnual: false,
+    recallLabels,
+    hasAnnual: annualValues !== null,
   };
 }

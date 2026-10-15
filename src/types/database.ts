@@ -865,6 +865,42 @@ export type Database = {
         }
         Relationships: []
       }
+      council_averages: {
+        Row: {
+          school_id: string
+          academic_period_id: string
+          student_id: string
+          class_id: string
+          average: number
+          computed_average: number | null
+          reason: string
+          set_by: string | null
+          set_at: string
+        }
+        Insert: {
+          school_id: string
+          academic_period_id: string
+          student_id: string
+          class_id: string
+          average: number
+          computed_average?: number | null
+          reason: string
+          set_by?: string | null
+          set_at?: string
+        }
+        Update: {
+          school_id?: string
+          academic_period_id?: string
+          student_id?: string
+          class_id?: string
+          average?: number
+          computed_average?: number | null
+          reason?: string
+          set_by?: string | null
+          set_at?: string
+        }
+        Relationships: []
+      }
       credential_deliveries: {
         Row: {
           id: string

@@ -34,10 +34,12 @@ export default async function MatrixPrintPage({
   }
   if (!(await canSeeMatrix(ctx, classId))) notFound();
 
-  const m = await buildMatrix(ctx, classId, periodId);
+  const council = sp.type === 'conseil';
+  const m = await buildMatrix(ctx, classId, periodId, { council });
   await audit(ctx, { action: 'reports.matrix_view', module: 'reports', entityType: 'class', entityId: classId, after: { periodId } });
-  const sup10 = m.rows.filter((r) => (r.general.average ?? -1) >= 10).length;
-  const classes = m.rows.filter((r) => r.general.average !== null).length;
+  const ref = (r: (typeof m.rows)[number]) => (m.hasAnnual ? r.annual?.average : r.general.average) ?? null;
+  const sup10 = m.rows.filter((r) => (ref(r) ?? -1) >= 10).length;
+  const classes = m.rows.filter((r) => ref(r) !== null).length;
 
   return (
     <div className="space-y-3">
@@ -47,7 +49,7 @@ export default async function MatrixPrintPage({
         </p>
         <div className="flex gap-2">
           <PrintButton />
-          <a href={`/e/${slug}/api/matrice?class=${classId}&period=${periodId}`}>
+          <a href={`/e/${slug}/api/matrice?class=${classId}&period=${periodId}${council ? '&type=conseil' : ''}`}>
             <Button variant="secondary" size="sm">Télécharger (Excel)</Button>
           </a>
           <Link href={back}>
@@ -59,8 +61,17 @@ export default async function MatrixPrintPage({
       <div className="bg-white p-2 text-black">
         <div className="mb-1 flex items-end justify-between border-b-2 pb-1" style={{ borderColor: '#0b5b3e' }}>
           <div>
-            <h1 className="text-lg font-bold" style={{ color: '#0b5b3e' }}>Matrice du professeur principal</h1>
-            <p className="text-xs">{m.periodName} · vérification des moyennes avec les élèves et les professeurs</p>
+            <h1 className="text-lg font-bold" style={{ color: '#0b5b3e' }}>
+              {council ? 'Matrice du conseil de classe' : 'Matrice du professeur principal'}
+            </h1>
+            <p className="text-xs">
+              {m.periodName}
+              {council
+                ? m.recallLabels.length > 0
+                  ? ` · rappel : ${m.recallLabels.join(', ')}${m.hasAnnual ? ' · moyenne annuelle' : ''}`
+                  : ''
+                : ' · vérification des moyennes avec les élèves et les professeurs'}
+            </p>
           </div>
           <p className="text-right text-xs leading-snug">
             {m.schoolName}
@@ -81,14 +92,17 @@ export default async function MatrixPrintPage({
 
         <p className="mt-1 text-[10px] text-gray-600">
           Dispensé(e) : élève dispensé d’EPS, la matière ne compte pas dans sa moyenne générale. « — » : pas de moyenne
-          (matière non suivie, ou aucune note). Rang ex æquo noté « ex ». Moyennes générales supérieures ou égales à 10 :{' '}
+          (matière non suivie, ou aucune note). Rang ex æquo noté « ex ». {m.hasAnnual ? 'Moyennes annuelles' : 'Moyennes générales'} supérieures ou égales à 10 :{' '}
           <b>
             {sup10} / {classes}
           </b>
           {classes > 0 ? ` (${Math.round((sup10 / classes) * 100)} %)` : ''}.
         </p>
         <div className="mt-2 flex justify-between text-xs" style={{ breakInside: 'avoid' }}>
-          {['Le professeur principal', 'Date de la vérification', 'Visa de la direction'].map((t) => (
+          {(council
+            ? ['Le professeur principal', 'Le président du conseil', 'Le chef d’établissement']
+            : ['Le professeur principal', 'Date de la vérification', 'Visa de la direction']
+          ).map((t) => (
             <div key={t} className="w-[30%] border-t pt-1" style={{ height: '22mm', borderColor: '#555' }}>
               {t}
             </div>

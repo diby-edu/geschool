@@ -23,6 +23,7 @@ export function ClassVerificationCard({
   periodId,
   v,
   matrix,
+  onCouncil = false,
 }: {
   ctx: TenantContext;
   slug: string;
@@ -31,6 +32,8 @@ export function ClassVerificationCard({
   v: ClassVerification;
   /** Peut tirer la matrice de cette classe. */
   matrix: boolean;
+  /** Déjà sur la page du conseil : pas de lien vers elle-même. */
+  onCouncil?: boolean;
 }) {
   const st = v.status;
   const blockers = v.blockers;
@@ -84,9 +87,14 @@ export function ClassVerificationCard({
           </p>
         ) : null}
         <div className="flex flex-wrap items-center gap-2">
-          {matrix ? (
+          {matrix && !onCouncil ? (
             <Link href={`/e/${slug}/matrice?class=${classId}&period=${periodId}&retour=${encodeURIComponent(back)}`}>
               <Button variant="secondary" size="sm">Matrice de la classe</Button>
+            </Link>
+          ) : null}
+          {!onCouncil && (matrix || hasPermission(ctx, 'reports.council_average') || hasPermission(ctx, 'reports.validate')) ? (
+            <Link href={`/e/${slug}/conseil?class=${classId}&period=${periodId}`}>
+              <Button variant="secondary" size="sm">Conseil de classe</Button>
             </Link>
           ) : null}
           {hasPermission(ctx, 'grades.term_journal') ? (

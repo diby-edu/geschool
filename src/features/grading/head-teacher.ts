@@ -163,6 +163,8 @@ const ACTION_LABEL: Record<string, string> = {
   'grades.completion': '« J’ai fini mes moyennes »',
   'grades.exemption_add': 'Dispense d’EPS déclarée',
   'grades.exemption_remove': 'Dispense d’EPS retirée',
+  'grades.council_average': 'Moyenne retenue par le conseil',
+  'grades.council_average_remove': 'Moyenne retenue retirée',
 };
 
 const score = (v: unknown, absent: unknown) =>
@@ -187,6 +189,9 @@ export async function termJournal(_ctx: TenantContext, classId: string, periodId
       detail = `${score(r.before?.score, r.before?.is_absent)} → ${score(r.after?.score, r.after?.is_absent)}`;
     } else if (r.action === 'grades.unlock') {
       detail = `Motif : ${String(r.after?.reason ?? '')}`;
+    } else if (r.action.startsWith('grades.council_average')) {
+      const avant = r.before?.average ?? r.after?.computed;
+      detail = `${score(avant, false)} → ${r.after?.average === null || r.after?.average === undefined ? 'calculée' : score(r.after.average, false)} (${String(r.after?.reason ?? '')})`;
     } else if (r.action.startsWith('grades.exemption')) {
       detail = String(r.after?.student ?? '');
     }

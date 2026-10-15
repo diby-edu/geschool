@@ -13,6 +13,8 @@ import { audit } from '@/lib/audit';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 import type { TablesInsert } from '@/types/database';
 import { fetchAllRows } from '@/lib/supabase/pagination';
+import { councilAveragesFor } from '@/features/reporting/council';
+import { rankWithTies } from '@/features/reporting/matrix-core';
 
 export type GenerateResult = { generated: number };
 
@@ -119,6 +121,21 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
     ((rankData ?? []) as unknown as { student_id: string; general_average: number | null; rank_position: number | null; class_size: number }[])
       .map((r) => [r.student_id, r]),
   );
+  // Moyenne retenue par le conseil de classe (0113) : elle REMPLACE la moyenne
+  // calculée, sans mention, et le rang de toute la classe est recalculé.
+  const retained = await councilAveragesFor(ctx, [...ranking.keys()], periodId);
+  if (retained.size > 0) {
+    const ids = [...ranking.keys()];
+    const values = ids.map((id) => {
+      if (retained.has(id)) return retained.get(id)!;
+      const g = ranking.get(id)!.general_average;
+      return g === null ? null : Number(g);
+    });
+    const ranks = rankWithTies(values);
+    ids.forEach((id, i) => {
+      ranking.set(id, { ...ranking.get(id)!, general_average: values[i]!, rank_position: ranks[i]!.rank });
+    });
+  }
   const generalAverages = [...ranking.values()].map((r) => r.general_average).filter((a): a is number => a !== null).map(Number);
   // Arrondie selon le barème de l'établissement, comme les moyennes des élèves.
   const classRound = rounder(params.decimals, params.rounding);

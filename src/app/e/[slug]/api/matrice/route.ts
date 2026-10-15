@@ -15,9 +15,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   const periodId = url.searchParams.get('period') ?? '';
   try {
     const ctx = await getTenantContext(slug);
-    const m = await buildMatrix(ctx, classId, periodId);
+    const council = url.searchParams.get('type') === 'conseil';
+    const m = await buildMatrix(ctx, classId, periodId, { council });
     await audit(ctx, { action: 'reports.matrix_export', module: 'reports', entityType: 'class', entityId: classId, after: { periodId } });
-    const name = `matrice-${m.className}-${m.periodName}`.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9-]+/g, '-');
+    const name = `matrice-${council ? 'conseil-' : ''}${m.className}-${m.periodName}`.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9-]+/g, '-');
     return new Response(matrixToCsv(m), {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
