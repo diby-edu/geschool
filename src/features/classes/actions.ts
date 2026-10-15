@@ -6,7 +6,7 @@ import { redirect } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
 import { runFormAction, formValues, type FormState } from '@/lib/forms';
 import { classBatchSchema, classSchema } from './schemas';
-import { createClass, createClasses, updateClass, deleteClass, setClassStatus, bulkClassAction } from './service';
+import { createClass, createClasses, updateClass, deleteClass, setClassStatus, bulkClassAction, setHeadTeachers } from './service';
 
 const withValues =
   (fd: FormData) =>
@@ -99,5 +99,18 @@ export async function bulkClassesAction(
     if (r.reason) params.set('motif', r.reason);
     if (action !== 'archive') params.set('corbeille', '1');
     redirect(`/e/${slug}/classes?${params.toString()}`);
+  });
+}
+
+/** Professeurs principaux de toutes les classes, en un seul envoi. */
+export async function saveHeadTeachersAction(slug: string, _p: FormState, fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    const choices = new Map<string, string | null>();
+    for (const [key, value] of fd.entries()) {
+      if (key.startsWith('pp_') && typeof value === 'string') choices.set(key.slice(3), value || null);
+    }
+    const n = await setHeadTeachers(ctx, choices);
+    redirect(`/e/${slug}/classes/professeurs-principaux?enregistre=${n}`);
   });
 }

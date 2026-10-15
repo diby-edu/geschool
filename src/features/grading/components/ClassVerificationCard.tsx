@@ -61,7 +61,10 @@ export function ClassVerificationCard({
         </p>
         {!head ? (
           <p className="text-[color:var(--muted-foreground)]">
-            Aucun professeur principal n’est désigné : désignez-le sur la fiche de la classe.
+            Aucun professeur principal n’est désigné.{' '}
+            <Link href={`/e/${slug}/classes/professeurs-principaux`} className="font-medium underline">
+              Désigner les professeurs principaux
+            </Link>
           </p>
         ) : !certified ? (
           <div className="space-y-1 text-[color:var(--muted-foreground)]">

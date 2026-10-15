@@ -255,6 +255,9 @@ export default async function ClassesPage({
         action={
           <div className="flex flex-wrap items-center justify-end gap-3">
             <BackToSettings ctx={ctx} />
+            <Link href={`${base}/professeurs-principaux`}>
+              <Button variant="secondary">Professeurs principaux</Button>
+            </Link>
             <Link href={`/e/${slug}/import?type=classes`}>
               <Button variant="secondary">Importer / exporter</Button>
             </Link>

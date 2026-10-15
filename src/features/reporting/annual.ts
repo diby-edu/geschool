@@ -5,6 +5,8 @@ import type { TenantContext } from '@/lib/tenant/context';
 import { fetchAllRows } from '@/lib/supabase/pagination';
 import { weightOf, type PeriodWeights } from './config';
 import type { GradingPeriod } from './periods';
+import { annualFrom, type NewcomerAnnualMode } from './annual-core';
+import { previousSchoolAverages } from './previous-school';
 
 /**
  * La moyenne de l'année, et le rang qui va avec.
@@ -30,8 +32,13 @@ export async function annualAverages(
   currentAverages: Map<string, number | null>,
   weights: PeriodWeights,
   round: (n: number) => number,
+  mode: NewcomerAnnualMode = 'ATTENDED',
 ): Promise<AnnualResult> {
   const supabase = await createClient();
+  const external =
+    mode === 'PREVIOUS_SCHOOL'
+      ? await previousSchoolAverages(ctx, [...currentAverages.keys()], previous.map((p) => p.id))
+      : new Map<string, { average: number; school: string | null }>();
 
   type Row = { id: string; student_id: string; academic_period_id: string; general_average: number | null };
   // Les bulletins précédents se cherchent par ÉLÈVE, pas par classe : un élève
@@ -78,32 +85,22 @@ export async function annualAverages(
   const averages = new Map<string, number | null>();
   for (const [studentId, courante] of currentAverages) {
     const deja = parEleve.get(studentId);
-    let points = 0;
-    let poids = 0;
-    let complet = courante !== null;
-
-    for (const p of previous) {
-      const v = deja?.get(p.id) ?? null;
-      // Un élève arrivé en cours d'année n'a pas de bulletin au 1er trimestre :
-      // il n'aura pas de moyenne annuelle, et pas de rang. Jamais une moyenne
-      // calculée sur moins de périodes que ses camarades.
-      if (v === null || v === undefined) {
-        complet = false;
-        break;
-      }
-      const w = weightOf(weights, p.sequence);
-      points += v * w;
-      poids += w;
-    }
-
-    if (!complet || courante === null) {
-      averages.set(studentId, null);
-      continue;
-    }
-    const w = weightOf(weights, currentSequence);
-    points += courante * w;
-    poids += w;
-    averages.set(studentId, poids > 0 ? round(points / poids) : null);
+    // Élève arrivé en cours d'année : l'établissement choisit (0114) de
+    // calculer sur les périodes faites chez lui, ou avec les moyennes de
+    // l'ancienne école. Même règle que la matrice du conseil (annual-core).
+    averages.set(
+      studentId,
+      annualFrom(
+        previous.map((p) => ({
+          value: deja?.get(p.id) ?? null,
+          previousSchool: external.get(`${studentId}:${p.id}`)?.average ?? null,
+          weight: weightOf(weights, p.sequence),
+        })),
+        { value: courante, weight: weightOf(weights, currentSequence) },
+        mode,
+        round,
+      ),
+    );
   }
 
   // Le rang annuel, ex æquo compris. Un élève sans moyenne n'est pas classé.

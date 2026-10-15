@@ -13,6 +13,8 @@ import { listGradingPeriods, isLastPeriod, periodsBefore } from './periods';
 import { readReportingSettings } from './settings';
 import { weightOf } from './config';
 import { rounder } from './annual';
+import { annualFrom, periodValue } from './annual-core';
+import { previousSchoolAverages } from './previous-school';
 
 /**
  * Qui tire la matrice d'une classe : le droit « Tirer les matrices »
@@ -204,6 +206,9 @@ export async function buildMatrix(
   let recallLabels: string[] = [];
   let recallValues: (number | null)[][] = [];
   let annualValues: (number | null)[] | null = null;
+  let recallPeriodIds: string[] = [];
+  let newcomerMode: 'ATTENDED' | 'PREVIOUS_SCHOOL' = 'ATTENDED';
+  let recallSources: ('OURS' | 'PREVIOUS_SCHOOL' | 'NONE')[][] = [];
   if (options.council && ctx.academicYear) {
     const [track, periods, reporting] = await Promise.all([
       classTrack(ctx, classId),
@@ -212,22 +217,50 @@ export async function buildMatrix(
     ]);
     const before = periodsBefore(periods, track, periodId);
     recallLabels = before.map((p) => p.name);
-    recallValues = await Promise.all(before.map((p) => generalOf(p.id, true)));
+    const ours = await Promise.all(before.map((p) => generalOf(p.id, true)));
+    // Élève arrivé en cours d'année (0114) : selon le choix de l'établissement,
+    // la période manquante prend la moyenne de son ancienne école, ou reste vide.
+    const external =
+      reporting.newcomerAnnual === 'PREVIOUS_SCHOOL'
+        ? await previousSchoolAverages(ctx, ids, before.map((p) => p.id))
+        : new Map<string, { average: number; school: string | null }>();
+    const parts = (i: number) =>
+      before.map((p, k) => ({
+        value: ours[k]![i] ?? null,
+        previousSchool: external.get(`${ids[i]}:${p.id}`)?.average ?? null,
+        weight: weightOf(reporting.periodWeights, p.sequence),
+      }));
+    recallValues = before.map((_, k) => ids.map((__, i) => periodValue(parts(i)[k]!, reporting.newcomerAnnual)));
+    recallPeriodIds = before.map((p) => p.id);
+    newcomerMode = reporting.newcomerAnnual;
+    // « Arrivé en cours d'année » pour une période : inscrit dans l'établissement
+    // APRÈS son début. Un élève présent dès la rentrée sans note n'en est pas un.
+    const { data: enrolments } = await supabase
+      .from('student_enrollments')
+      .select('student_id, enrolled_on')
+      .eq('school_id', ctx.school.id)
+      .eq('academic_year_id', ctx.academicYear.id)
+      .in('student_id', ids);
+    const arrived = new Map<string, string>();
+    for (const e of (enrolments ?? []) as { student_id: string; enrolled_on: string | null }[]) {
+      if (!e.enrolled_on) continue;
+      const prev = arrived.get(e.student_id);
+      if (!prev || e.enrolled_on < prev) arrived.set(e.student_id, e.enrolled_on);
+    }
+    recallSources = ids.map((id, i) =>
+      parts(i).map((pt, k) => {
+        if (pt.value !== null) return 'OURS';
+        const came = arrived.get(id);
+        if (!came || came <= before[k]!.startsOn) return 'OURS'; // présent dès le début : pas un nouvel arrivant
+        return pt.previousSchool !== null ? 'PREVIOUS_SCHOOL' : 'NONE';
+      }),
+    );
     if (isLastPeriod(periods, track, periodId)) {
       const round = rounder(params.decimals, params.rounding);
       const seq = periods.find((p) => p.id === periodId)?.sequence ?? before.length + 1;
-      annualValues = ids.map((_, i) => {
-        const parts = [...before.map((p, k) => [recallValues[k]![i]!, p.sequence] as const), [current[i]!, seq] as const];
-        if (parts.some(([v]) => v === null)) return null; // une période manquante : pas de moyenne annuelle
-        let pts = 0;
-        let w = 0;
-        for (const [v, s] of parts) {
-          const wt = weightOf(reporting.periodWeights, s);
-          pts += (v as number) * wt;
-          w += wt;
-        }
-        return w > 0 ? round(pts / w) : null;
-      });
+      annualValues = ids.map((_, i) =>
+        annualFrom(parts(i), { value: current[i] ?? null, weight: weightOf(reporting.periodWeights, seq) }, reporting.newcomerAnnual, round),
+      );
     }
   }
   const recallTies = recallValues.map((vals) => rankWithTies(vals));
@@ -257,6 +290,7 @@ export async function buildMatrix(
       general: { average: current[i] ?? null, ...generalTies[i]! },
       recalls: recallValues.map((vals, k) => ({ average: vals[i] ?? null, ...recallTies[k]![i]! })),
       annual: annualValues && annualTies ? { average: annualValues[i] ?? null, ...annualTies[i]! } : null,
+      ...(recallSources[i] ? { recallSources: recallSources[i] } : {}),
     };
   });
 
@@ -270,6 +304,8 @@ export async function buildMatrix(
     subjects,
     rows,
     recallLabels,
+    recallPeriodIds,
+    newcomerMode,
     hasAnnual: annualValues !== null,
   };
 }

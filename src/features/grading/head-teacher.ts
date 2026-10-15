@@ -165,6 +165,8 @@ const ACTION_LABEL: Record<string, string> = {
   'grades.exemption_remove': 'Dispense d’EPS retirée',
   'grades.council_average': 'Moyenne retenue par le conseil',
   'grades.council_average_remove': 'Moyenne retenue retirée',
+  'grades.previous_school': 'Moyenne de l’ancienne école saisie',
+  'grades.previous_school_remove': 'Moyenne de l’ancienne école retirée',
 };
 
 const score = (v: unknown, absent: unknown) =>

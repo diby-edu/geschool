@@ -9,7 +9,9 @@ import {
   saveMentionsAction,
   saveDecisionsAction,
   savePeriodWeightsAction,
+  saveNewcomerModeAction,
 } from '@/features/reporting/actions';
+import { NewcomerModeForm } from '@/features/reporting/components/NewcomerModeForm';
 import { TiersForm } from '@/features/reporting/components/TiersForm';
 import { DecisionsForm } from '@/features/reporting/components/DecisionsForm';
 import { PeriodWeightsForm } from '@/features/reporting/components/PeriodWeightsForm';
@@ -27,6 +29,7 @@ const CONFIRMATIONS: Record<string, string> = {
   annee: 'Mentions de l’année enregistrées.',
   decisions: 'Décisions de fin d’année enregistrées.',
   coefficients: 'Calcul de la moyenne annuelle enregistré.',
+  nouveaux: 'Règle des élèves arrivés en cours d’année enregistrée.',
 };
 
 export default async function ReportingConfigPage({
@@ -117,6 +120,12 @@ export default async function ReportingConfigPage({
               de périodes.
             </Alert>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <NewcomerModeForm action={saveNewcomerModeAction.bind(null, slug)} mode={settings.newcomerAnnual} />
         </CardContent>
       </Card>
 

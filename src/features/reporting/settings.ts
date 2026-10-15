@@ -19,6 +19,7 @@ import {
   type Tier,
   type TierTone,
 } from './config';
+import type { NewcomerAnnualMode } from './annual-core';
 
 /**
  * Les règles d'écriture des bulletins de l'établissement.
@@ -39,6 +40,8 @@ export type ReportingSettings = {
   decisions: DecisionOption[];
   /** Poids de chaque période, par rang : { "1": 1, "2": 2, "3": 2 }. */
   periodWeights: PeriodWeights;
+  /** Élève arrivé en cours d'année : moyenne annuelle sur les périodes faites, ou avec l'ancienne école. */
+  newcomerAnnual: NewcomerAnnualMode;
 };
 
 export async function readReportingSettings(ctx: TenantContext): Promise<ReportingSettings> {
@@ -49,6 +52,7 @@ export async function readReportingSettings(ctx: TenantContext): Promise<Reporti
     yearMentions: cleanMentions(s.yearMentions, DEFAULT_YEAR_MENTIONS),
     decisions: cleanDecisions(s.decisions, DEFAULT_DECISIONS),
     periodWeights: cleanWeights(s.periodWeights),
+    newcomerAnnual: s.newcomerAnnual === 'PREVIOUS_SCHOOL' ? 'PREVIOUS_SCHOOL' : 'ATTENDED',
   };
 }
 

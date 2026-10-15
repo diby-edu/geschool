@@ -207,6 +207,7 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
         new Map([...ranking].map(([id, r]) => [id, r.general_average === null ? null : Number(r.general_average)])),
         reporting.periodWeights,
         round,
+        reporting.newcomerAnnual,
       )
     : null;
 

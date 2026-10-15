@@ -32,6 +32,11 @@ export type MatrixRow = {
   recalls: RankedValue[];
   /** Moyenne annuelle (dernière période, matrice du conseil). */
   annual: RankedValue | null;
+  /**
+   * Pour chaque période rappelée : la moyenne vient-elle de l'établissement,
+   * de l'ancienne école (élève arrivé en cours d'année), ou manque-t-elle ?
+   */
+  recallSources?: ('OURS' | 'PREVIOUS_SCHOOL' | 'NONE')[];
 };
 
 export type Matrix = {
@@ -44,6 +49,10 @@ export type Matrix = {
   rows: MatrixRow[];
   /** Libellés des périodes rappelées (« 1er trim. »…). */
   recallLabels: string[];
+  /** Identifiants des périodes rappelées, dans le même ordre. */
+  recallPeriodIds?: string[];
+  /** Règle de l'établissement pour l'élève arrivé en cours d'année. */
+  newcomerMode?: 'ATTENDED' | 'PREVIOUS_SCHOOL';
   hasAnnual: boolean;
 };
 

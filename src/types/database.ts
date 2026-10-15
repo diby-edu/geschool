@@ -2155,6 +2155,36 @@ export type Database = {
         }
         Relationships: []
       }
+      previous_school_averages: {
+        Row: {
+          school_id: string
+          academic_period_id: string
+          student_id: string
+          average: number
+          previous_school: string | null
+          entered_by: string | null
+          entered_at: string
+        }
+        Insert: {
+          school_id: string
+          academic_period_id: string
+          student_id: string
+          average: number
+          previous_school?: string | null
+          entered_by?: string | null
+          entered_at?: string
+        }
+        Update: {
+          school_id?: string
+          academic_period_id?: string
+          student_id?: string
+          average?: number
+          previous_school?: string | null
+          entered_by?: string | null
+          entered_at?: string
+        }
+        Relationships: []
+      }
       push_subscriptions: {
         Row: {
           id: string

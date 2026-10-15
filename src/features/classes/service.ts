@@ -7,6 +7,9 @@ import { audit } from '@/lib/audit';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import type { ClassBatchInput, ClassInput } from './schemas';
 import { planClasses } from './naming';
+import type { HeadTeacherRow } from './head-teachers-types';
+
+export type { HeadTeacherRow };
 
 function requireYear(ctx: TenantContext): string {
   if (!ctx.academicYear) {
@@ -208,4 +211,107 @@ export async function bulkClassAction(
     }
   }
   return { done, skipped, reason };
+}
+
+
+/**
+ * Désigner les professeurs principaux de toutes les classes d'un coup.
+ * Pour chaque classe : l'actuel, et une suggestion (l'enseignant qui y a le
+ * plus d'heures). Sans professeur principal, personne ne certifie la classe.
+ */
+export async function loadHeadTeacherBoard(ctx: TenantContext): Promise<{
+  rows: HeadTeacherRow[];
+  teachers: { id: string; name: string }[];
+}> {
+  const yearId = requireYear(ctx);
+  const supabase = await createClient();
+  const [{ data: classes }, { data: teachers }, { data: assignments }] = await Promise.all([
+    supabase
+      .from('classes')
+      .select('id, name, head_teacher_id, levels(name, sequence)')
+      .eq('school_id', ctx.school.id)
+      .eq('academic_year_id', yearId)
+      .eq('status', 'ACTIVE'),
+    supabase
+      .from('teachers')
+      .select('id, first_name, last_name')
+      .eq('school_id', ctx.school.id)
+      .is('deleted_at', null)
+      .order('last_name'),
+    supabase
+      .from('teaching_assignments')
+      .select('class_id, teacher_id, weekly_minutes')
+      .eq('school_id', ctx.school.id)
+      .eq('academic_year_id', yearId)
+      .eq('status', 'ACTIVE')
+      .not('class_id', 'is', null),
+  ]);
+
+  const minutes = new Map<string, Map<string, number>>();
+  for (const a of (assignments ?? []) as { class_id: string; teacher_id: string; weekly_minutes: number | null }[]) {
+    const m = minutes.get(a.class_id) ?? new Map<string, number>();
+    m.set(a.teacher_id, (m.get(a.teacher_id) ?? 0) + (a.weekly_minutes ?? 0));
+    minutes.set(a.class_id, m);
+  }
+
+  const rows = ((classes ?? []) as unknown as {
+    id: string;
+    name: string;
+    head_teacher_id: string | null;
+    levels: { name: string; sequence: number | null } | null;
+  }[])
+    .map((c) => {
+      const ranked = [...(minutes.get(c.id) ?? new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+      return {
+        classId: c.id,
+        className: c.name,
+        level: c.levels?.name ?? null,
+        currentId: c.head_teacher_id,
+        suggestionId: ranked[0] ?? null,
+        classTeacherIds: ranked,
+        seq: c.levels?.sequence ?? 999,
+      };
+    })
+    .sort((a, b) => a.seq - b.seq || a.className.localeCompare(b.className, 'fr', { numeric: true }))
+    .map(({ seq: _seq, ...r }) => r);
+
+  return {
+    rows,
+    teachers: ((teachers ?? []) as { id: string; first_name: string; last_name: string }[]).map((t) => ({
+      id: t.id,
+      name: `${t.last_name.toUpperCase()} ${t.first_name}`,
+    })),
+  };
+}
+
+/** Enregistre les choix ; seules les classes qui changent sont écrites. */
+export async function setHeadTeachers(ctx: TenantContext, choices: Map<string, string | null>): Promise<number> {
+  requireWritable(ctx, 'classes.update');
+  const supabase = await createClient();
+  const { data: current } = await supabase
+    .from('classes')
+    .select('id, name, head_teacher_id')
+    .eq('school_id', ctx.school.id)
+    .in('id', [...choices.keys()]);
+  let changed = 0;
+  for (const c of (current ?? []) as { id: string; name: string; head_teacher_id: string | null }[]) {
+    const next = choices.get(c.id) ?? null;
+    if (next === c.head_teacher_id) continue;
+    const { error } = await supabase
+      .from('classes')
+      .update({ head_teacher_id: next })
+      .eq('school_id', ctx.school.id)
+      .eq('id', c.id);
+    if (error) throw error;
+    changed += 1;
+    await audit(ctx, {
+      action: 'classes.head_teacher',
+      module: 'classes',
+      entityType: 'class',
+      entityId: c.id,
+      before: { head_teacher_id: c.head_teacher_id },
+      after: { head_teacher_id: next, class: c.name },
+    });
+  }
+  return changed;
 }

@@ -200,3 +200,13 @@ export async function resetTemplateAction(slug: string, _p: FormState, _fd: Form
     redirect(`/e/${slug}/bulletins/modele?reinitialise=1`);
   });
 }
+
+/** Élève arrivé en cours d'année : sur les périodes faites, ou avec l'ancienne école (0114). */
+export async function saveNewcomerModeAction(slug: string, _p: FormState, fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    const mode = fd.get('newcomerAnnual') === 'PREVIOUS_SCHOOL' ? 'PREVIOUS_SCHOOL' : 'ATTENDED';
+    await writeReportingSettings(ctx, { newcomerAnnual: mode });
+    redirect(`/e/${slug}/bulletins/config?enregistre=nouveaux`);
+  });
+}
