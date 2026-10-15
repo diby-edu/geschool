@@ -4314,6 +4314,7 @@ export type Database = {
           created_at: string
           updated_at: string
           preferred_room_type_id: string | null
+          block_hours: number[] | null
         }
         Insert: {
           id?: string
@@ -4337,6 +4338,7 @@ export type Database = {
           created_at?: string
           updated_at?: string
           preferred_room_type_id?: string | null
+          block_hours?: number[] | null
         }
         Update: {
           id?: string
@@ -4360,6 +4362,7 @@ export type Database = {
           created_at?: string
           updated_at?: string
           preferred_room_type_id?: string | null
+          block_hours?: number[] | null
         }
         Relationships: []
       }

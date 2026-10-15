@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useState } from 'react';
+import { blocksInput, describeBlocks, totalHours } from '@/features/schedule/blocks';
 import { Alert } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -53,8 +54,8 @@ export function RequirementsTable({
           <tr>
             <th className="px-3 py-2">Enseignement</th>
             <th className="px-3 py-2">Enseignant(s)</th>
-            <th className="px-3 py-2 text-center">Séances</th>
-            <th className="px-3 py-2 text-center">Durée</th>
+            <th className="px-3 py-2 text-center">Cours de la semaine</th>
+            <th className="px-3 py-2 text-center">Total</th>
             <th className="px-3 py-2">Salle</th>
             <th className="px-3 py-2">État</th>
             {canEdit ? <th className="px-3 py-2" /> : null}
@@ -110,15 +111,20 @@ function Row({
                 <Alert tone="error">{state.error}</Alert>
               </div>
             ) : null}
-            <div className="w-20">
-              <Field label="Séances" htmlFor={`s-${r.id}`} errors={err.sessionsCount}>
-                <Input id={`s-${r.id}`} name="sessionsCount" type="number" min="1" max="20" defaultValue={String(r.sessions_count)} />
+            <div className="w-44">
+              {/* Durée de chaque cours, en heures : 1 cours = 1 heure = 1 créneau. */}
+              <Field label="Découpage (heures)" htmlFor={`b-${r.id}`} errors={err.blocks}>
+                <Input
+                  id={`b-${r.id}`}
+                  name="blocks"
+                  defaultValue={blocksInput(r.blocks)}
+                  placeholder="2+2+2 ou 4+2"
+                  title="Durée de chaque cours de la semaine, en heures. 6 h : 1+1+1+1+1+1 (6 cours d’1 h), 2+2+2 (3 cours de 2 h), 4+2 (un cours de 4 h et un de 2 h)."
+                />
               </Field>
-            </div>
-            <div className="w-24">
-              <Field label="Durée (min)" htmlFor={`d-${r.id}`} errors={err.sessionDurationMinutes}>
-                <Input id={`d-${r.id}`} name="sessionDurationMinutes" type="number" min="15" step="5" defaultValue={String(r.session_duration_minutes ?? 60)} />
-              </Field>
+              <span className="text-xs text-[color:var(--muted-foreground)]">
+                {describeBlocks(r.blocks)} · {totalHours(r.blocks)} h / semaine
+              </span>
             </div>
             <div className="w-44">
               <Field label="Où ?" htmlFor={`rm-${r.id}`}>
@@ -198,8 +204,8 @@ function Row({
         </td>
       ) : (
         <>
-          <td className="px-3 py-2 text-center">{r.sessions_count}</td>
-          <td className="px-3 py-2 text-center">{r.session_duration_minutes ?? '—'} min</td>
+          <td className="px-3 py-2 text-center">{describeBlocks(r.blocks)}</td>
+          <td className="px-3 py-2 text-center">{totalHours(r.blocks)} h</td>
           <td className="px-3 py-2">{ROOM_LABEL[r.room_mode] ?? r.room_mode}</td>
           <td className="px-3 py-2">{STATUS_LABEL[r.status] ?? r.status}</td>
         </>

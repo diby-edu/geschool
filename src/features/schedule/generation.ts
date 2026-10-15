@@ -1,5 +1,6 @@
 import 'server-only';
 import { COURSE_HOUR_MINUTES } from '@/features/programme/hours';
+import { coursePlan } from './blocks';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
@@ -143,7 +144,7 @@ export async function generateSchedule(
     let q = supabase
       .from('teaching_requirements')
       .select(
-        'id, subject_id, weekly_minutes, sessions_count, session_duration_minutes, ' +
+        'id, subject_id, weekly_minutes, sessions_count, session_duration_minutes, block_hours, ' +
           'room_requirement_mode, required_room_id, required_room_type_id, preferred_room_id, ' +
           'preferred_room_type_id, min_capacity, required_features, ' +
           'subjects(name), ' +
@@ -397,12 +398,18 @@ export async function generateSchedule(
     // fusionne pas « si possible ».
     const blockRule = hardRules.find((x) => x.code === 'BLOCK_SESSIONS' && ruleAppliesTo(x, courseScope));
     const blockSize = blockRule ? Math.max(2, Number(blockRule.params.size) || 2) : 1;
-    const wholeBlocks = blockSize > 1 ? Math.floor(r.sessions_count / blockSize) : 0;
-    const leftover = r.sessions_count - wholeBlocks * blockSize;
-    const plan: number[] = [
-      ...Array.from({ length: wholeBlocks }, () => blockSize * durationSlots),
-      ...Array.from({ length: leftover }, () => durationSlots),
-    ];
+    // Les cours de la semaine, en heures = en créneaux (1 cours = 1 h) :
+    // découpage explicite (« 4+2 ») s'il existe, sinon N séances, regroupées
+    // par la règle « Grouper les séances ». Testé dans blocks.test.ts.
+    const plan = coursePlan(
+      {
+        blockHours: (r as { block_hours?: number[] | null }).block_hours ?? null,
+        sessionsCount: r.sessions_count,
+        sessionDurationMinutes: r.session_duration_minutes,
+        weeklyMinutes: r.weekly_minutes,
+      },
+      blockSize,
+    );
 
     for (let n = 0; n < plan.length; n++) {
       const index = tasks.length;

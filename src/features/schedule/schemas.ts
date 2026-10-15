@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseBlocks } from './blocks';
 
 /** Configuration de la grille horaire (docs/SCHEDULE_ENGINE.md §3). */
 /**
@@ -84,8 +85,15 @@ export type SessionInput = z.infer<typeof sessionSchema>;
 
 /** Reglage d'une exigence pedagogique (docs/DATABASE.md §7, additif §22). */
 export const requirementSchema = z.object({
-  sessionsCount: z.coerce.number().int().min(1, 'Au moins une séance.').max(20),
-  sessionDurationMinutes: z.coerce.number().int().min(15).max(480),
+  /** Durée de chaque cours de la semaine, en heures : « 4+2 » -> [4, 2]. */
+  blocks: z.string().transform((raw, c) => {
+    const r = parseBlocks(raw);
+    if (!r.ok) {
+      c.addIssue({ code: 'custom', message: r.error });
+      return z.NEVER;
+    }
+    return r.blocks;
+  }),
   roomMode: z.enum(['NONE', 'PREFERRED', 'REQUIRED_ROOM', 'REQUIRED_TYPE']),
   /**
    * Cible de la règle : « R:<uuid> » pour une salle précise, « T:<uuid> » pour

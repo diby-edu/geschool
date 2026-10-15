@@ -147,8 +147,7 @@ export async function updateRequirementAction(slug: string, id: string, _p: Form
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
     await updateRequirement(ctx, id, requirementSchema.parse({
-      sessionsCount: fd.get('sessionsCount'),
-      sessionDurationMinutes: fd.get('sessionDurationMinutes'),
+      blocks: String(fd.get('blocks') ?? ''),
       roomMode: fd.get('roomMode'),
       status: fd.get('status'),
       roomTarget: fd.get('roomTarget') ?? '',

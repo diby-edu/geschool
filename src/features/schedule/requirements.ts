@@ -1,5 +1,6 @@
 import 'server-only';
 import { COURSE_HOUR_MINUTES } from '@/features/programme/hours';
+import { coursePlan, totalHours } from './blocks';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
@@ -18,6 +19,8 @@ export type RequirementRow = {
   weekly_minutes: number;
   sessions_count: number;
   session_duration_minutes: number | null;
+  /** Durée de chaque cours de la semaine, en heures. */
+  blocks: number[];
   room_mode: string;
   /** « R:<uuid> » ou « T:<uuid> » : la cible de la règle, quel que soit le mode. */
   room_target: string;
@@ -40,7 +43,7 @@ export async function listRequirements(ctx: TenantContext, yearId: string): Prom
     let q = supabase
       .from('teaching_requirements')
       .select(
-        'id, created_at, weekly_minutes, sessions_count, session_duration_minutes, room_requirement_mode, status, ' +
+        'id, created_at, weekly_minutes, sessions_count, session_duration_minutes, block_hours, room_requirement_mode, status, ' +
           'required_room_id, required_room_type_id, preferred_room_id, preferred_room_type_id, ' +
           'min_capacity, required_features, ' +
           'subjects(name), ' +
@@ -63,6 +66,7 @@ export async function listRequirements(ctx: TenantContext, yearId: string): Prom
     weekly_minutes: number;
     sessions_count: number;
     session_duration_minutes: number | null;
+    block_hours: number[] | null;
     room_requirement_mode: string;
     required_room_id: string | null;
     required_room_type_id: string | null;
@@ -90,6 +94,13 @@ export async function listRequirements(ctx: TenantContext, yearId: string): Prom
     weekly_minutes: r.weekly_minutes,
     sessions_count: r.sessions_count,
     session_duration_minutes: r.session_duration_minutes,
+    // Les cours de la semaine, en heures : « 4 h + 2 h », « 3 cours de 2 h ».
+    blocks: coursePlan({
+      blockHours: r.block_hours,
+      sessionsCount: r.sessions_count,
+      sessionDurationMinutes: r.session_duration_minutes,
+      weeklyMinutes: r.weekly_minutes,
+    }),
     room_mode: r.room_requirement_mode,
     room_target:
       r.required_room_id !== null
@@ -226,8 +237,11 @@ export async function updateRequirement(ctx: TenantContext, id: string, input: R
     .from('teaching_requirements')
     .update(
       {
-        sessions_count: input.sessionsCount,
-        session_duration_minutes: input.sessionDurationMinutes,
+        // Le découpage fait foi : nombre de cours, durée de chacun, total.
+        block_hours: input.blocks,
+        sessions_count: input.blocks.length,
+        session_duration_minutes: input.blocks.every((b) => b === input.blocks[0]) ? input.blocks[0]! * COURSE_HOUR_MINUTES : null,
+        weekly_minutes: totalHours(input.blocks) * COURSE_HOUR_MINUTES,
         min_capacity: input.minCapacity ?? null,
         required_features: input.requiredFeatures,
         status: input.status,
