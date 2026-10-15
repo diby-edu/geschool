@@ -12,9 +12,31 @@
  *
  * Cas des groupes (§6 du moteur) : deux groupes d'une meme classe peuvent avoir
  * cours en meme temps (langues) ; mais une seance de la classe entiere et une
- * seance d'un de ses groupes ne le peuvent pas. Le recouvrement groupe/classe
- * est fourni par `groupClassMap` (group_id -> class_id).
+ * seance d'un de ses groupes ne le peuvent pas. Un groupe peut reunir
+ * PLUSIEURS classes (§16) : toutes comptent.
+ *
+ * Deux groupes DIFFERENTS qui ont au moins un eleve en commun (Espagnol et
+ * option Latin) ne peuvent pas non plus avoir cours en meme temps : l'eleve ne
+ * peut pas etre a deux endroits. Le contexte des groupes fournit leurs
+ * classes et leurs eleves.
  */
+
+/** Ce que l'on sait des groupes : leurs classes, et leurs eleves. */
+export type GroupContext = {
+  classesOf: ReadonlyMap<string, readonly string[]>;
+  studentsOf?: ReadonlyMap<string, ReadonlySet<string>>;
+};
+
+const EMPTY_GROUPS: GroupContext = { classesOf: new Map() };
+
+/** Accepte l'ancienne forme (group_id -> une classe) ou le contexte complet. */
+function toGroupContext(groups: GroupContext | ReadonlyMap<string, string> | undefined): GroupContext {
+  if (!groups) return EMPTY_GROUPS;
+  if ('classesOf' in groups) return groups as GroupContext;
+  const classesOf = new Map<string, string[]>();
+  for (const [g, c] of groups as ReadonlyMap<string, string>) classesOf.set(g, [c]);
+  return { classesOf };
+}
 
 export type ValidatorSession = {
   id: string;
@@ -45,13 +67,30 @@ function overlaps(a: ValidatorSession, b: ValidatorSession): boolean {
 }
 
 /** Classes effectivement occupees par une seance (cibles directes + classes des groupes). */
-function effectiveClasses(s: ValidatorSession, groupClassMap: Map<string, string>): Set<string> {
+function effectiveClasses(s: ValidatorSession, groups: GroupContext): Set<string> {
   const set = new Set(s.classIds);
   for (const g of s.groupIds) {
-    const c = groupClassMap.get(g);
-    if (c) set.add(c);
+    for (const c of groups.classesOf.get(g) ?? []) set.add(c);
   }
   return set;
+}
+
+/** Un eleve commun a un groupe de A et a un AUTRE groupe de B ? Renvoie le couple. */
+function sharedStudentGroups(a: ValidatorSession, b: ValidatorSession, groups: GroupContext): [string, string] | null {
+  const studentsOf = groups.studentsOf;
+  if (!studentsOf) return null;
+  for (const ga of a.groupIds) {
+    const sa = studentsOf.get(ga);
+    if (!sa || sa.size === 0) continue;
+    for (const gb of b.groupIds) {
+      if (gb === ga) continue;
+      const sb = studentsOf.get(gb);
+      if (!sb || sb.size === 0) continue;
+      const [small, big] = sa.size <= sb.size ? [sa, sb] : [sb, sa];
+      for (const st of small) if (big.has(st)) return [ga, gb];
+    }
+  }
+  return null;
 }
 
 function shared<T>(a: Iterable<T>, b: Set<T>): T | null {
@@ -62,14 +101,15 @@ function shared<T>(a: Iterable<T>, b: Set<T>): T | null {
 /**
  * Detecte tous les conflits durs d'un ensemble de seances.
  *
- * @param groupClassMap group_id -> class_id, pour le recouvrement groupe/classe.
- *   Une seance de classe entiere et une seance d'un groupe de cette classe
- *   entrent en conflit (les eleves du groupe sont dans la classe).
+ * @param groupsInput les classes et les eleves de chaque groupe. Une seance de
+ *   classe entiere et une seance d'un groupe de cette classe entrent en
+ *   conflit ; deux groupes qui partagent un eleve aussi.
  */
 export function detectConflicts(
   sessions: ValidatorSession[],
-  groupClassMap: Map<string, string> = new Map(),
+  groupsInput?: GroupContext | ReadonlyMap<string, string>,
 ): ScheduleConflict[] {
+  const groups = toGroupContext(groupsInput);
   const conflicts: ScheduleConflict[] = [];
 
   for (let i = 0; i < sessions.length; i++) {
@@ -100,13 +140,23 @@ export function detectConflicts(
       // classe ENTIERE (classIds) et que l'autre occupe cette meme classe,
       // directement ou via un de ses groupes. Deux groupes distincts d'une
       // meme classe (langues) ne se genent pas : eleves differents.
-      const effA = effectiveClasses(a, groupClassMap);
-      const effB = effectiveClasses(b, groupClassMap);
+      const effA = effectiveClasses(a, groups);
+      const effB = effectiveClasses(b, groups);
       const cA = shared(a.classIds, effB); // classe entiere de A occupee par B
       const cB = shared(b.classIds, effA); // classe entiere de B occupee par A
       const c = cA ?? cB;
       if (c && !g) {
         conflicts.push(conflict('CLASS', a, b, c, `Classe en double : « ${a.label} » et « ${b.label} » au même moment.`));
+      }
+
+      // Deux groupes differents qui ont des eleves en commun.
+      if (!g && !c) {
+        const pair = sharedStudentGroups(a, b, groups);
+        if (pair) {
+          conflicts.push(
+            conflict('GROUP', a, b, pair[0], `Élèves en double : « ${a.label} » et « ${b.label} » ont des élèves en commun, au même moment.`),
+          );
+        }
       }
     }
   }
@@ -128,9 +178,34 @@ function conflict(
 export function conflictsFor(
   candidate: ValidatorSession,
   existing: ValidatorSession[],
-  groupClassMap?: Map<string, string>,
+  groups?: GroupContext | ReadonlyMap<string, string>,
 ): ScheduleConflict[] {
-  return detectConflicts([candidate, ...existing], groupClassMap).filter(
+  return detectConflicts([candidate, ...existing], groups).filter(
     (c) => c.aId === candidate.id || c.bId === candidate.id,
   );
+}
+
+/**
+ * Couples de groupes qui partagent au moins un élève (pour le solveur : il ne
+ * doit pas les placer à la même heure).
+ */
+export function overlappingGroupPairs(context: GroupContext): [string, string][] {
+  const studentsOf = context.studentsOf;
+  if (!studentsOf) return [];
+  const groups = [...studentsOf.entries()].filter(([, s]) => s.size > 0);
+  const pairs: [string, string][] = [];
+  for (let i = 0; i < groups.length; i++) {
+    for (let j = i + 1; j < groups.length; j++) {
+      const [ga, sa] = groups[i]!;
+      const [gb, sb] = groups[j]!;
+      const [small, big] = sa.size <= sb.size ? [sa, sb] : [sb, sa];
+      for (const st of small) {
+        if (big.has(st)) {
+          pairs.push([ga, gb]);
+          break;
+        }
+      }
+    }
+  }
+  return pairs;
 }

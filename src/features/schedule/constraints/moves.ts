@@ -9,7 +9,9 @@ import { loadValidatorSessions } from '../sessions';
 import { getConfig, getConfigForClass, listSlots } from '../config';
 import { listRules } from './service';
 import type { CourseScope } from './apply';
-import { moveProblems, type SlotChoice } from './move-check';
+import { blocksOf, moveProblems, spanOf, type SlotChoice } from './move-check';
+import { loadGroupContextFor } from '../group-context';
+import { prepareVersionForEdit, resyncPublishedSession } from '../version-guard';
 
 export { moveProblems } from './move-check';
 export type { SlotChoice, MoveVerdict } from './move-check';
@@ -35,7 +37,7 @@ export async function moveOptions(ctx: TenantContext, versionId: string, session
   const [{ data: sessionRaw }, sessions, rules] = await Promise.all([
     supabase
       .from('schedule_sessions')
-      .select('id, subject_id, academic_year_id, start_slot_id, schedule_session_targets(class_id)')
+      .select('id, subject_id, academic_year_id, start_slot_id, end_slot_id, schedule_session_targets(class_id)')
       .eq('school_id', ctx.school.id)
       .eq('id', sessionId)
       .maybeSingle(),
@@ -47,6 +49,7 @@ export async function moveOptions(ctx: TenantContext, versionId: string, session
     subject_id: string;
     academic_year_id: string;
     start_slot_id: string;
+    end_slot_id: string | null;
     schedule_session_targets: { class_id: string | null }[];
   } | null;
   if (!session) throw new NotFoundError('Séance introuvable.');
@@ -78,13 +81,18 @@ export async function moveOptions(ctx: TenantContext, versionId: string, session
     .map((r) => ({ code: r.code, scopeType: r.scopeType, scopeId: r.scopeId, params: r.params, summary: r.summary }));
 
   // La grille renvoie du snake_case ; le validateur raisonne en camelCase.
-  const choices: SlotChoice[] = slotRows.map(
+  const gridSlots: SlotChoice[] = slotRows.map(
     (r) => ({ id: r.id, dayOfWeek: r.day_of_week, startsAt: r.starts_at.slice(0, 5), endsAt: r.ends_at.slice(0, 5) }),
   );
+  // Un cours de 2 h se déplace en entier, sur deux créneaux qui se suivent :
+  // le placer sur un seul créneau lui faisait perdre une heure, sans le dire.
+  const span = spanOf(gridSlots, session.start_slot_id, session.end_slot_id);
+  const choices = blocksOf(gridSlots, span);
+  const groups = await loadGroupContextFor(ctx, sessions);
 
   return choices.map((slot) => {
     const isCurrent = slot.id === session.start_slot_id;
-    const reasons = isCurrent ? [] : moveProblems(sessions, sessionId, slot, scope, hard);
+    const reasons = isCurrent ? [] : moveProblems(sessions, sessionId, slot, scope, hard, groups);
     return { slot, ok: reasons.length === 0, reasons, current: isCurrent };
   });
 }
@@ -106,7 +114,16 @@ export async function moveSession(
   const chosen = options.find((o) => o.slot.id === slotId);
   if (!chosen) throw new ValidationError('Ce créneau n’appartient pas à la grille horaire.');
   if (!chosen.ok) throw new ValidationError(chosen.reasons.join(' '));
+  if (chosen.current) return;
 
+  // Vérifiée : repasse en brouillon, à revalider. Publiée : droit de publier
+  // exigé, et le changement s'applique dès maintenant (le passé ne bouge pas).
+  const { published } = await prepareVersionForEdit(ctx, versionId);
+
+  const toMin = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return (h ?? 0) * 60 + (m ?? 0);
+  };
   const supabase = await createClient();
   const { error, count } = await supabase
     .from('schedule_sessions')
@@ -114,22 +131,26 @@ export async function moveSession(
       {
         day_of_week: chosen.slot.dayOfWeek,
         start_slot_id: chosen.slot.id,
-        end_slot_id: chosen.slot.id,
+        end_slot_id: chosen.slot.endId ?? chosen.slot.id,
         starts_at: chosen.slot.startsAt,
         ends_at: chosen.slot.endsAt,
+        duration_minutes: toMin(chosen.slot.endsAt) - toMin(chosen.slot.startsAt),
       },
       { count: 'exact' },
     )
     .eq('school_id', ctx.school.id)
+    .eq('schedule_version_id', versionId)
     .eq('id', sessionId);
   if (error) throw error;
   if (!count) throw new NotFoundError('Séance introuvable.');
+
+  if (published) await resyncPublishedSession(sessionId);
 
   await audit(ctx, {
     action: 'schedule.session_move',
     module: 'schedule',
     entityType: 'schedule_session',
     entityId: sessionId,
-    after: { slotId, day: chosen.slot.dayOfWeek, from: chosen.slot.startsAt },
+    after: { slotId, day: chosen.slot.dayOfWeek, from: chosen.slot.startsAt, published },
   });
 }

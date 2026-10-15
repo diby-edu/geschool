@@ -7,6 +7,7 @@ import { audit } from '@/lib/audit';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { detectConflicts } from '@/lib/schedule/validator';
 import { loadValidatorSessions } from './sessions';
+import { loadGroupContextFor } from './group-context';
 import { materializeOccurrences } from './occurrences';
 import { readSettings } from '@/features/settings/school-settings';
 
@@ -111,7 +112,7 @@ export async function publishVersion(ctx: TenantContext, id: string): Promise<vo
   }
 
   const sessions = await loadValidatorSessions(ctx, id);
-  const hard = detectConflicts(sessions);
+  const hard = detectConflicts(sessions, await loadGroupContextFor(ctx, sessions));
   if (hard.length > 0) {
     throw new ConflictError(
       `Publication impossible : ${hard.length} conflit(s) a resoudre. Premier : ${hard[0]!.message}`,
@@ -195,7 +196,7 @@ export async function validateVersion(ctx: TenantContext, id: string, note: stri
   if (version.status === 'VALIDATED') return;
 
   const sessions = await loadValidatorSessions(ctx, id);
-  const hard = detectConflicts(sessions);
+  const hard = detectConflicts(sessions, await loadGroupContextFor(ctx, sessions));
   if (hard.length > 0) {
     throw new ConflictError(
       `Validation impossible : ${hard.length} conflit(s) à résoudre. Premier : ${hard[0]!.message}`,

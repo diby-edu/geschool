@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { SimpleSubmit } from '@/components/ui/simple-submit';
 import { moveOptions } from '@/features/schedule/constraints/moves';
 import { moveSessionAction } from '@/features/schedule/actions';
+import { getVersion } from '@/features/schedule/versions';
 
 export const metadata: Metadata = { title: 'Déplacer une séance' };
 
@@ -29,7 +30,30 @@ export default async function MoveSessionPage({
   const { slug, versionId, sessionId } = await params;
   const ctx = await getTenantContext(slug);
   requirePageAccess(ctx, 'schedule.view');
-  const canMove = hasPermission(ctx, 'schedule.update');
+  const version = await getVersion(ctx, versionId);
+  // Archivée : c'est de l'histoire. Publiée : on peut changer un créneau, avec
+  // le droit de modifier ; le changement vaut dès maintenant (le passé reste).
+  const locked = !version || version.status === 'ARCHIVED';
+  const published = version?.status === 'PUBLISHED';
+  const canMove = hasPermission(ctx, 'schedule.update') && !locked;
+
+  if (locked) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4">
+        <PageHeader
+          title="Déplacer cette séance"
+          action={
+            <Link href={`/e/${slug}/schedule/${versionId}`} className="text-sm text-[color:var(--muted-foreground)] hover:underline">
+              Retour
+            </Link>
+          }
+        />
+        <Alert tone="info">
+          Cette version est archivée : elle ne se modifie plus.
+        </Alert>
+      </div>
+    );
+  }
 
   const options = await moveOptions(ctx, versionId, sessionId);
   const byDay = new Map<number, typeof options>();
@@ -54,6 +78,13 @@ export default async function MoveSessionPage({
           </Link>
         }
       />
+
+      {published ? (
+        <Alert tone="info">
+          Emploi du temps en service : le cours changera de place dès maintenant. Les cours déjà passés et leurs appels
+          restent à leur ancienne heure.
+        </Alert>
+      ) : null}
 
       <Alert tone={possible > 0 ? 'info' : 'error'}>
         {possible > 0

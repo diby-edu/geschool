@@ -6,7 +6,8 @@ import { requireWritable } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
 import { ConflictError, ValidationError } from '@/lib/errors';
 import type { TablesInsert } from '@/types/database';
-import { detectConflicts, type ValidatorSession } from '@/lib/schedule/validator';
+import { detectConflicts, overlappingGroupPairs } from '@/lib/schedule/validator';
+import { loadGroupContext, loadGroupContextFor } from './group-context';
 import { getConfig, getConfigForCycle, listCyclesOverview } from './config';
 import { loadValidatorSessions } from './sessions';
 import { listRules } from './constraints/service';
@@ -473,6 +474,29 @@ export async function generateSchedule(
     if (classes.length > 0) groupParentClasses[String(gIndex)] = classes;
   }
 
+  // Deux groupes qui partagent des élèves (Espagnol et option Latin) ne
+  // doivent pas avoir cours à la même heure. Le solveur ne connaît que « un
+  // même groupe ne fait pas deux choses à la fois » : chaque couple reçoit
+  // donc un groupe commun, posé sur les cours des deux. Aucun changement du
+  // service de résolution n'est nécessaire.
+  const realGroupIds = [...groupIx.entries()].map(([gid]) => gid);
+  const groupContext = await loadGroupContext(ctx, realGroupIds);
+  const pairs = overlappingGroupPairs(groupContext);
+  if (pairs.length > 0) {
+    const extraByGroup = new Map<number, number[]>();
+    for (const [ga, gb] of pairs) {
+      const shared = groupIx.get(`shared:${ga}:${gb}`);
+      for (const g of [ga, gb]) {
+        const gi = groupIx.get(g);
+        extraByGroup.set(gi, [...(extraByGroup.get(gi) ?? []), shared]);
+      }
+    }
+    for (const t of tasks) {
+      const extra = t.groupIndexes.flatMap((gi) => extraByGroup.get(gi) ?? []);
+      if (extra.length > 0) t.groupIndexes = [...new Set([...t.groupIndexes, ...extra])];
+    }
+  }
+
   // index de salle -> uuid, pour relier les affectations aux salles reelles.
   const roomIdByIndex = new Map<number, string>();
   for (const [rid, ri] of roomIx.entries()) roomIdByIndex.set(ri, rid);
@@ -643,8 +667,7 @@ export async function generateSchedule(
     // trouve, le solveur et le validateur divergent : incoherence bloquante
     // (docs/SOLVER_API.md §5).
     const vsessions = await loadValidatorSessions(ctx, versionId);
-    const map = buildGroupClassMap(vsessions, groupToClasses);
-    const conflicts = detectConflicts(vsessions, map);
+    const conflicts = detectConflicts(vsessions, await loadGroupContextFor(ctx, vsessions));
     if (conflicts.length > 0) {
       // N'annuler QUE ce que CE lancement a insere : une version ciblee
       // (targetVersionId) peut deja contenir les seances, validees, d'un
@@ -1168,20 +1191,6 @@ function classNameOf(cid: string, metas: TaskMeta[]): string {
     if (t?.classes) return t.classes.name;
   }
   return 'inconnue';
-}
-
-function buildGroupClassMap(sessions: ValidatorSession[], groupToClasses: Map<string, string[]>): Map<string, string> {
-  // Le validateur independant retient une classe par groupe. En presence de
-  // plusieurs classes (§16), on prend la premiere : le solveur reste l'autorite,
-  // ce controle est une defense en profondeur.
-  const map = new Map<string, string>();
-  for (const s of sessions) {
-    for (const g of s.groupIds) {
-      const classes = groupToClasses.get(g);
-      if (classes && classes[0]) map.set(g, classes[0]);
-    }
-  }
-  return map;
 }
 
 async function finishInfeasible(

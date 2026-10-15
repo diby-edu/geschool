@@ -8,6 +8,10 @@ import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { conflictsFor, type ValidatorSession } from '@/lib/schedule/validator';
 import { fetchAllRows } from '@/lib/supabase/pagination';
 import type { SessionInput } from './schemas';
+import { loadGroupContextFor } from './group-context';
+import { prepareVersionForEdit, resyncPublishedSession, sessionHasHistory } from './version-guard';
+import { listRules } from './constraints/service';
+import { blockingRules } from './constraints/apply';
 
 // Page reduite (au lieu du plafond PostgREST de 1000) : la policy RLS de
 // schedule_sessions (app.can_see_session) est couteuse par ligne — mesure,
@@ -246,7 +250,9 @@ export async function addSession(ctx: TenantContext, versionId: string, input: S
   const duration = hmToMin(endsAt) - hmToMin(startsAt);
   if (duration <= 0) throw new ValidationError('Le créneau de fin doit suivre celui de début.');
 
-  // Validation independante AVANT insertion
+  // Validation independante AVANT insertion : les memes controles qu'un
+  // deplacement (conflits de ressources, groupes compris, et regles de l'ecole :
+  // indisponibilites, demi-journees interdites...).
   const candidate: ValidatorSession = {
     id: 'candidate',
     label: 'Nouveau cours',
@@ -259,12 +265,29 @@ export async function addSession(ctx: TenantContext, versionId: string, input: S
     roomIds: input.roomId ? [input.roomId] : [],
   };
   const existing = await loadValidatorSessions(ctx, versionId);
-  const conflicts = conflictsFor(candidate, existing);
+  const conflicts = conflictsFor(candidate, existing, await loadGroupContextFor(ctx, existing));
   if (conflicts.length > 0) {
     throw new ConflictError(conflicts[0]!.message);
   }
+  const hardRules = (await listRules(ctx))
+    .filter((r) => r.enabled && r.severity === 'HARD')
+    .map((r) => ({ code: r.code, scopeType: r.scopeType, scopeId: r.scopeId, params: r.params, summary: r.summary }));
+  const blocked = blockingRules(
+    hardRules,
+    { subjectId: input.subjectId, classIds: [input.classId], levelIds: [], teacherIds: candidate.teacherIds },
+    { day: dayOfWeek, startMin: candidate.startMin, endMin: candidate.endMin },
+  );
+  if (blocked.length > 0) {
+    throw new ConflictError(`Votre règle « ${blocked[0]!.summary} » l’interdit.`);
+  }
 
-  // Insertion
+  // Version verifiee : repasse en brouillon (a revalider). Version publiee :
+  // droit de publier exige, le cours prend effet des maintenant.
+  const { published } = await prepareVersionForEdit(ctx, versionId);
+
+  // Insertion : la seance, puis sa classe, son enseignant, sa salle. Si une
+  // etape echoue, la seance est retiree (cascade) : jamais un cours sans
+  // classe ou sans enseignant laisse dans la grille.
   const { data: session, error } = await supabase
     .from('schedule_sessions')
     .insert({
@@ -284,19 +307,30 @@ export async function addSession(ctx: TenantContext, versionId: string, input: S
     .single();
   if (error) throw error;
 
-  await supabase.from('schedule_session_targets').insert({
-    school_id: ctx.school.id, session_id: session.id, target_type: 'CLASS', class_id: input.classId,
-  });
-  if (input.teacherId) {
-    await supabase.from('schedule_session_teachers').insert({
-      school_id: ctx.school.id, session_id: session.id, teacher_id: input.teacherId, role: 'LEAD',
+  try {
+    const target = await supabase.from('schedule_session_targets').insert({
+      school_id: ctx.school.id, session_id: session.id, target_type: 'CLASS', class_id: input.classId,
     });
+    if (target.error) throw target.error;
+    if (input.teacherId) {
+      const teacher = await supabase.from('schedule_session_teachers').insert({
+        school_id: ctx.school.id, session_id: session.id, teacher_id: input.teacherId, role: 'LEAD',
+      });
+      if (teacher.error) throw teacher.error;
+    }
+    if (input.roomId) {
+      const room = await supabase.from('schedule_session_rooms').insert({
+        school_id: ctx.school.id, session_id: session.id, room_id: input.roomId, is_primary: true,
+      });
+      if (room.error) throw room.error;
+    }
+  } catch (err) {
+    await supabase.from('schedule_sessions').delete().eq('school_id', ctx.school.id).eq('id', session.id);
+    throw err;
   }
-  if (input.roomId) {
-    await supabase.from('schedule_session_rooms').insert({
-      school_id: ctx.school.id, session_id: session.id, room_id: input.roomId, is_primary: true,
-    });
-  }
+
+  // Emploi du temps publie : les seances datees a venir sont creees tout de suite.
+  if (published) await resyncPublishedSession(session.id);
 
   await audit(ctx, { action: 'schedule.session_add', module: 'schedule', entityType: 'schedule_session', entityId: session.id });
 }
@@ -304,6 +338,19 @@ export async function addSession(ctx: TenantContext, versionId: string, input: S
 export async function deleteSession(ctx: TenantContext, sessionId: string): Promise<void> {
   requireWritable(ctx, 'schedule.delete');
   const supabase = await createClient();
+  const { data: owner } = await supabase
+    .from('schedule_sessions')
+    .select('schedule_version_id')
+    .eq('school_id', ctx.school.id)
+    .eq('id', sessionId)
+    .maybeSingle();
+  if (!owner) throw new NotFoundError('Séance introuvable.');
+  const { published } = await prepareVersionForEdit(ctx, owner.schedule_version_id);
+  if (published && (await sessionHasHistory(ctx, sessionId))) {
+    throw new ConflictError(
+      'Ce cours a déjà eu lieu : le supprimer effacerait ses appels et ses absences. Vous pouvez le déplacer.',
+    );
+  }
   const { error, count } = await supabase
     .from('schedule_sessions')
     .delete({ count: 'exact' })
@@ -311,5 +358,13 @@ export async function deleteSession(ctx: TenantContext, sessionId: string): Prom
     .eq('id', sessionId);
   if (error) throw error;
   if (!count) throw new NotFoundError('Séance introuvable.');
+  // Emploi du temps en service : signal « en direct » pour les écrans ouverts.
+  if (published) {
+    await supabase
+      .from('schedule_versions')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('school_id', ctx.school.id)
+      .eq('id', owner.schedule_version_id);
+  }
   await audit(ctx, { action: 'schedule.session_delete', module: 'schedule', entityType: 'schedule_session', entityId: sessionId });
 }

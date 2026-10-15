@@ -12,6 +12,7 @@ import { listSessionsWithValidator } from '@/features/schedule/sessions';
 import { listYearClasses, listActiveSubjects } from '@/features/assignments/queries';
 import { listActiveTeachers } from '@/features/teachers/queries';
 import { detectConflicts } from '@/lib/schedule/validator';
+import { loadGroupContextFor } from '@/features/schedule/group-context';
 import {
   addSessionAction,
   deleteSessionAction,
@@ -91,11 +92,14 @@ export default async function ScheduleEditorPage({
     .order('code');
   const rooms = (roomsData ?? []).map((r) => ({ id: r.id, name: `${r.code} — ${r.name}` }));
 
-  const conflicts = detectConflicts(validatorSessions);
+  const conflicts = detectConflicts(validatorSessions, await loadGroupContextFor(ctx, validatorSessions));
   const workingDays = (config?.working_days as number[] | undefined) ?? [];
   const selectedClass = selectedClassId;
   const editable = version.status === 'DRAFT' || version.status === 'VALIDATED';
-  const canEdit = hasPermission(ctx, 'schedule.create') && editable;
+  // L'emploi du temps publié se modifie aussi (changer un créneau en cours
+  // d'année), par qui a le droit de le modifier : le changement est immédiat.
+  const isPublished = version.status === 'PUBLISHED';
+  const canEdit = hasPermission(ctx, 'schedule.create') && (editable || isPublished);
   // Figer une séance reste possible sur une version publiée : c'est même là
   // que l'école le fait, juste avant de relancer une génération.
   const canLock = hasPermission(ctx, 'schedule.lock');
@@ -146,6 +150,14 @@ export default async function ScheduleEditorPage({
         />
       ) : null}
 
+      {isPublished && canEdit ? (
+        <Alert tone="info">
+          Emploi du temps en service. Vous pouvez déplacer, ajouter ou retirer un cours : le changement s&apos;applique
+          dès maintenant, pour les enseignants, les élèves et l&apos;appel. Les cours déjà passés et leurs appels ne
+          changent pas.
+        </Alert>
+      ) : null}
+
       {version.status === 'DRAFT' && version.source === 'GENERATED' && hasPermission(ctx, 'schedule.generate') ? (
         <Alert tone="info">
           Généré automatiquement. Si l&apos;établissement a plusieurs cycles avec leur propre grille, vous pouvez{' '}
@@ -170,7 +182,9 @@ export default async function ScheduleEditorPage({
           </CardContent>
         </Card>
       ) : sessions.length > 0 ? (
-        <Alert tone="success">Aucun conflit. L&apos;emploi du temps peut être publié.</Alert>
+        <Alert tone="success">
+          {isPublished ? 'Aucun conflit.' : 'Aucun conflit. L’emploi du temps peut être publié.'}
+        </Alert>
       ) : null}
 
       {classes.length > 1 ? (
