@@ -787,6 +787,39 @@ export type Database = {
         }
         Relationships: []
       }
+      class_term_status: {
+        Row: {
+          school_id: string
+          academic_period_id: string
+          class_id: string
+          certified_at: string | null
+          certified_by: string | null
+          unlocked_at: string | null
+          unlocked_by: string | null
+          unlock_reason: string | null
+        }
+        Insert: {
+          school_id: string
+          academic_period_id: string
+          class_id: string
+          certified_at?: string | null
+          certified_by?: string | null
+          unlocked_at?: string | null
+          unlocked_by?: string | null
+          unlock_reason?: string | null
+        }
+        Update: {
+          school_id?: string
+          academic_period_id?: string
+          class_id?: string
+          certified_at?: string | null
+          certified_by?: string | null
+          unlocked_at?: string | null
+          unlocked_by?: string | null
+          unlock_reason?: string | null
+        }
+        Relationships: []
+      }
       classes: {
         Row: {
           id: string
@@ -1282,6 +1315,48 @@ export type Database = {
           decision_reason?: string | null
           created_at?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      grade_flags: {
+        Row: {
+          id: string
+          school_id: string
+          academic_period_id: string
+          class_id: string
+          student_id: string
+          subject_id: string
+          raised_by: string | null
+          raised_at: string
+          status: string
+          resolved_by: string | null
+          resolved_at: string | null
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          academic_period_id: string
+          class_id: string
+          student_id: string
+          subject_id: string
+          raised_by?: string | null
+          raised_at?: string
+          status?: string
+          resolved_by?: string | null
+          resolved_at?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          academic_period_id?: string
+          class_id?: string
+          student_id?: string
+          subject_id?: string
+          raised_by?: string | null
+          raised_at?: string
+          status?: string
+          resolved_by?: string | null
+          resolved_at?: string | null
         }
         Relationships: []
       }

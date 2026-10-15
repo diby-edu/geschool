@@ -46,6 +46,25 @@ export async function getMyTaughtClasses(ctx: TenantContext): Promise<MyClass[]>
   for (const c of (headOf ?? []) as unknown as ClassRef[]) {
     byId.set(c.id, { id: c.id, name: c.name, level: c.levels?.name ?? null });
   }
+  // Le professeur d'un GROUPE (LV2, option) enseigne aussi aux classes de ce
+  // groupe : sans elles, il n'atteignait ni ses moyennes ni « J'ai fini ».
+  const { data: groupAsg } = await supabase
+    .from('teaching_assignments')
+    .select('groups(group_classes(classes(id, name, status, academic_year_id, levels(name))))')
+    .eq('school_id', ctx.school.id)
+    .eq('academic_year_id', yearId)
+    .eq('teacher_id', teacherId)
+    .eq('status', 'ACTIVE')
+    .not('group_id', 'is', null);
+  type GroupClass = { classes: (ClassRef & { status: string; academic_year_id: string }) | null };
+  for (const r of (groupAsg ?? []) as unknown as { groups: { group_classes: GroupClass[] } | null }[]) {
+    for (const gc of r.groups?.group_classes ?? []) {
+      const c = gc.classes;
+      if (c && c.status === 'ACTIVE' && c.academic_year_id === yearId && !byId.has(c.id)) {
+        byId.set(c.id, { id: c.id, name: c.name, level: c.levels?.name ?? null });
+      }
+    }
+  }
   return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -69,8 +88,23 @@ export async function getMySubjectsForClass(ctx: TenantContext, classId: string)
     .eq('class_id', classId)
     .eq('status', 'ACTIVE');
 
+  // Matières enseignées à un GROUPE de cette classe (LV2, option).
+  const { data: links } = await supabase.from('group_classes').select('group_id').eq('school_id', ctx.school.id).eq('class_id', classId);
+  const groupIds = (links ?? []).map((l) => l.group_id);
+  const { data: byGroup } =
+    groupIds.length > 0
+      ? await supabase
+          .from('teaching_assignments')
+          .select('subject_id, subjects(id, name)')
+          .eq('school_id', ctx.school.id)
+          .eq('academic_year_id', yearId)
+          .eq('teacher_id', teacherId)
+          .in('group_id', groupIds)
+          .eq('status', 'ACTIVE')
+      : { data: [] };
+
   const byId = new Map<string, string>();
-  for (const r of (data ?? []) as unknown as { subject_id: string; subjects: { id: string; name: string } | null }[]) {
+  for (const r of [...(data ?? []), ...(byGroup ?? [])] as unknown as { subject_id: string; subjects: { id: string; name: string } | null }[]) {
     if (r.subjects) byId.set(r.subjects.id, r.subjects.name);
   }
   return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));

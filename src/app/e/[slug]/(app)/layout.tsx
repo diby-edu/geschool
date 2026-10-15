@@ -13,6 +13,7 @@ import { roleLabel, type RoleCode } from '@/lib/permissions/roles';
 import { SupportBanner } from '@/components/layout/SupportBanner';
 import { AttendanceSyncButton } from '@/features/attendance/components/AttendanceSyncButton';
 import { hasPermission } from '@/lib/permissions';
+import { myHeadClasses } from '@/features/reporting/matrix';
 
 /**
  * Garde de l'espace etablissement. getTenantContext resout le tenant depuis le
@@ -64,14 +65,17 @@ export default async function SchoolAppLayout({
       : primaryRole
         ? roleLabel(primaryRole)
         : 'Membre';
-  const topBar = await loadTopBar(ctx, roleLabel_);
+  const [topBar, headClasses] = await Promise.all([
+    loadTopBar(ctx, roleLabel_),
+    roles.includes('TEACHER') ? myHeadClasses(ctx) : Promise.resolve([]),
+  ]);
 
   return (
     <AppShell
       topBar={topBar}
       brand={ctx.school.shortName ?? ctx.school.name}
       subtitle={ctx.academicYear?.name ?? 'Aucune année active'}
-      nav={buildSchoolNav(ctx, space)}
+      nav={buildSchoolNav(ctx, space, { headTeacher: headClasses.length > 0 })}
       headerExtra={
         <>
           <LiveRefresh schoolId={ctx.school.id} tables={LIVE_TABLES} />

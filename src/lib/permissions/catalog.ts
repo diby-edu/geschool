@@ -207,6 +207,16 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
         hint: 'Arrêt des notes, fin de la vérification avec les élèves, fin de la vérification du professeur principal. Après la dernière date, les notes de la période sont figées.',
       },
       {
+        code: 'grades.unlock_class',
+        label: 'Déverrouiller une classe certifiée',
+        hint: 'Rouvre les notes d’une classe déjà certifiée par son professeur principal (ou figée). Motif obligatoire, inscrit au journal ; le professeur principal devra certifier de nouveau.',
+      },
+      {
+        code: 'grades.term_journal',
+        label: 'Consulter le journal de fin de trimestre',
+        hint: 'Toutes les corrections de notes, dispenses, signalements, certifications et déverrouillages d’une classe.',
+      },
+      {
         code: 'grades.view_all',
         label: 'Voir les moyennes et classements de toute l’école',
         hint: 'Donne aussi, sur le tableau de bord, le bloc « Moyennes et bulletins » (avancement des enseignants, bulletins édités) pendant la période de calcul.',
@@ -252,6 +262,11 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
     items: [
       { code: 'reports.view', label: 'Consulter les bulletins' },
       { code: 'reports.generate', label: 'Générer les bulletins' },
+      {
+        code: 'reports.matrix',
+        label: 'Tirer les matrices (professeur principal et conseil de classe)',
+        hint: 'Imprimer ou télécharger la matrice de n’importe quelle classe. Le professeur principal tire toujours celle de sa propre classe.',
+      },
       { code: 'reports.validate', label: 'Valider les bulletins (conseil de classe)' },
       {
         code: 'reports.sign',

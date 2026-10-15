@@ -315,7 +315,7 @@ async function teachersOfClass(
   const supabase = await createClient();
   type Teacher = { first_name: string; last_name: string; gender: string | null } | null;
   const label = (t: NonNullable<Teacher>) => {
-    const civilite = t.gender === 'FEMALE' ? 'Mme' : t.gender === 'MALE' ? 'M.' : '';
+    const civilite = t.gender === 'F' ? 'Mme' : t.gender === 'M' ? 'M.' : '';
     return `${civilite} ${t.last_name} ${t.first_name}`.trim();
   };
 

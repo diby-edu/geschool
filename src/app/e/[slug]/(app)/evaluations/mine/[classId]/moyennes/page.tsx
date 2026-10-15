@@ -15,6 +15,8 @@ import { SimpleSubmit } from '@/components/ui/simple-submit';
 import { getCompletionState } from '@/features/grading/completion';
 import { completeAveragesAction, reopenAveragesAction, setExemptionAction } from '@/features/grading/actions';
 import { isEps, listExemptions } from '@/features/grading/exemptions';
+import { listFlags } from '@/features/grading/head-teacher';
+import { resolveFlagAction } from '@/features/grading/head-teacher-actions';
 
 export const metadata: Metadata = { title: 'Moyennes et classement' };
 
@@ -80,12 +82,15 @@ export default async function MyClassRankingPage({
     );
   }
 
-  const [ranking, completion, eps, exempted] = await Promise.all([
+  const [ranking, completion, eps, exempted, flags] = await Promise.all([
     computeLiveRanking(ctx, classId, period.id, subject.id),
     getCompletionState(ctx, classId, subject.id, period.id),
     isEps(ctx, subject.id),
     listExemptions(ctx, period.id, subject.id),
+    listFlags(ctx, classId, period.id, subject.id),
   ]);
+  const openFlags = flags.filter((f) => f.status === 'OPEN');
+  const flagged = new Set(openFlags.map((f) => f.studentId));
   // Seul le professeur d'EPS de la classe déclare une dispense (la base le vérifie).
   const canExempt = eps && completion.assignmentId !== null && completion.phase !== 'FROZEN';
 
@@ -99,6 +104,28 @@ export default async function MyClassRankingPage({
 
       {sp.exempted ? <Alert tone="success">Élève déclaré dispensé d’EPS pour cette période.</Alert> : null}
       {sp.unexempted ? <Alert tone="info">Dispense retirée : l’élève peut de nouveau recevoir des notes.</Alert> : null}
+      {sp.flag ? <Alert tone="success">Signalement réglé : le professeur principal le voit.</Alert> : null}
+      {openFlags.length > 0 ? (
+        <Card>
+          <CardContent className="space-y-2 text-sm">
+            <p className="font-semibold">Signalé par le professeur principal ({openFlags.length})</p>
+            <p className="text-[color:var(--muted-foreground)]">
+              L’élève vient vous voir. Corrigez sa note s’il y a une erreur, puis validez : « Corrigé » ou « Maintenu ».
+            </p>
+            <ul className="divide-y rounded-[--radius-card] border" style={{ borderColor: 'var(--border)' }}>
+              {openFlags.map((f) => (
+                <li key={f.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                  <b>{f.student}</b>
+                  <span className="flex gap-2">
+                    <SimpleSubmit small action={resolveFlagAction.bind(null, slug, classId, subject.id, period.id, f.id, 'CORRECTED')} label="Corrigé" />
+                    <SimpleSubmit small action={resolveFlagAction.bind(null, slug, classId, subject.id, period.id, f.id, 'MAINTAINED')} label="Maintenu" />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
       {completion.phaseMessage ? (
         <Alert tone={completion.phase === 'FROZEN' ? 'error' : 'info'}>{completion.phaseMessage}</Alert>
       ) : null}
@@ -152,7 +179,11 @@ export default async function MyClassRankingPage({
         // Moyenne + Rang, en lecture seule.
         <ul className="divide-y overflow-hidden rounded-[--radius-card] border" style={{ borderColor: 'var(--border)' }}>
           {ranking.rows.map((r) => (
-            <li key={r.studentId} className="flex items-center gap-3 px-3 py-2.5">
+            <li
+              key={r.studentId}
+              className="flex items-center gap-3 px-3 py-2.5"
+              style={flagged.has(r.studentId) ? { backgroundColor: 'color-mix(in oklch, var(--color-warning) 18%, transparent)' } : undefined}
+            >
               <StudentAvatar name={r.name} photoUrl={r.photoUrl} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{r.name}</span>

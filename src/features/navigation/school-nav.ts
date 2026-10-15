@@ -51,7 +51,7 @@ const MODULES: NavDef[] = [
 /** Modules qu'ouvre l'espace Enseignant (son menu ne montre pas ceux de la Direction). */
 const TEACHER_SPACE_PATHS = new Set(['schedule', 'evaluations', 'attendance', 'bulletins', 'annonces', 'programme', 'discipline']);
 
-export function buildSchoolNav(ctx: TenantContext, space: Space): NavItem[] {
+export function buildSchoolNav(ctx: TenantContext, space: Space, extra: { headTeacher?: boolean } = {}): NavItem[] {
   const base = `/e/${ctx.school.slug}`;
   const nav: NavItem[] = [{ href: `${base}/dashboard`, label: 'Tableau de bord', icon: 'dashboard' }];
 
@@ -78,6 +78,12 @@ export function buildSchoolNav(ctx: TenantContext, space: Space): NavItem[] {
     if (hasAnyPermission(ctx, m.any)) {
       nav.push({ href: `${base}/${m.path}`, label: m.label, section: m.section, icon: m.icon });
     }
+  }
+
+  // Le professeur principal d'une classe a son espace : la matrice de SA classe,
+  // les signalements, la certification. Visible seulement pour lui.
+  if (extra.headTeacher && featureEnabled(ctx.disabledFeatures, 'grades')) {
+    nav.push({ href: `${base}/professeur-principal`, label: 'Professeur principal', section: QUOTIDIEN, icon: 'notes' });
   }
 
   // Notifications (cloche) et Paramètres (menu de la photo) vivent desormais dans

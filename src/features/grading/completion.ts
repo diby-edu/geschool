@@ -44,15 +44,19 @@ async function findAssignment(ctx: TenantContext, classId: string, subjectId: st
     .is('deleted_at', null)
     .maybeSingle();
   if (!teacher) return null;
+  const { data: links } = await supabase.from('group_classes').select('group_id').eq('school_id', ctx.school.id).eq('class_id', classId);
+  const groupIds = (links ?? []).map((l) => l.group_id);
+  // L'affectation de la classe entière, ou celle d'un GROUPE de la classe (LV2, option).
+  const target = groupIds.length > 0 ? `class_id.eq.${classId},group_id.in.(${groupIds.join(',')})` : `class_id.eq.${classId}`;
   const { data } = await supabase
     .from('teaching_assignments')
     .select('id, academic_period_id')
     .eq('school_id', ctx.school.id)
     .eq('academic_year_id', ctx.academicYear.id)
     .eq('teacher_id', teacher.id)
-    .eq('class_id', classId)
     .eq('subject_id', subjectId)
-    .eq('status', 'ACTIVE');
+    .eq('status', 'ACTIVE')
+    .or(target);
   const rows = (data ?? []) as { id: string; academic_period_id: string | null }[];
   // Une affectation propre à la période prime sur celle de toute l'année.
   return (rows.find((r) => r.academic_period_id === periodId) ?? rows.find((r) => r.academic_period_id === null))?.id ?? null;
