@@ -1,7 +1,8 @@
 import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
-import { callRpc } from '@/lib/supabase/rpc';
+import { callRpc, type RpcResult } from '@/lib/supabase/rpc';
+import { createShortMemo } from '@/lib/short-memo';
 import type { TenantContext } from '@/lib/tenant/context';
 import { hasPermission } from '@/lib/permissions';
 import { personName } from '@/lib/person-name';
@@ -16,6 +17,8 @@ import type { DashParams } from './params';
 import type { BlockKey, DashboardPlan, KpiKey } from './profiles';
 import { loadPeriods, loadStaffDashboard, type StaffDashboard } from './staff';
 import { addDays, currentPeriod, schoolToday } from './time';
+import { buildPayroll } from '@/features/teachers/payroll';
+import { formatFcfa } from '@/features/teachers/payroll-core';
 import type { ActivityItem, LowClass, TodoItem } from './types';
 
 /**
@@ -95,6 +98,16 @@ export type RoleDashboard = {
   todos: TodoItem[];
 };
 
+/**
+ * Moyennes par classe : 175 000 notes relues par calcul sur un grand établissement
+ * (2 à 4 s), alors qu'elles ne changent qu'à la publication d'une évaluation. Gardées
+ * 2 minutes par personne : les rechargements automatiques du tableau de bord ne les
+ * recalculent plus à chaque fois.
+ */
+const classAveragesMemo = createShortMemo<RpcResult<ClassAverage[]>>(2 * 60_000);
+/** Paie du mois (une lecture de tous les cours du mois) : même raison, même durée. */
+const payrollMemo = createShortMemo<Awaited<ReturnType<typeof buildPayroll>>>(2 * 60_000);
+
 const fr = (n: number) => n.toLocaleString('fr-FR');
 const plural = (n: number, one: string, many: string) => (n > 1 ? many : one);
 const avg1 = (n: number) => n.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -145,6 +158,7 @@ export async function loadRoleDashboard(ctx: TenantContext, plan: DashboardPlan,
     teachersNoAccess,
     feed,
     announcements,
+    payroll,
   ] = await Promise.all([
     needStaff
       ? loadStaffDashboard(ctx, params, { overview: false, day: needDay, grading: needGrading, watch: b.has('watch') })
@@ -153,7 +167,15 @@ export async function loadRoleDashboard(ctx: TenantContext, plan: DashboardPlan,
       ? callRpc<LowClass[]>(supabase, 'dashboard_low_attendance_classes', { p_school: schoolId, p_from: addDays(today, -6), p_to: today, p_now: nowIso, p_limit: 500 })
       : Promise.resolve(null),
     any('schoolAverage', 'classesBelow', 'classAverages') && period
-      ? callRpc<ClassAverage[]>(supabase, 'dashboard_class_averages', { p_school: schoolId, p_period: period.id })
+      ? classAveragesMemo(`${ctx.user.id}:${schoolId}:${period.id}`, async () => {
+          const r = await callRpc<ClassAverage[]>(supabase, 'dashboard_class_averages', { p_school: schoolId, p_period: period.id });
+          // Rien de gardé quand le calcul n'a rien rendu (délai dépassé, droit refusé).
+          if (r.data === null) throw r;
+          return r;
+        }).catch((r: unknown) => {
+          if (r && typeof r === 'object' && 'missing' in r) return r as RpcResult<ClassAverage[]>;
+          throw r;
+        })
       : Promise.resolve(null),
     any('toClose', 'lateAssessments', 'assessmentsPeriod', 'teachersWithout', 'assessmentActivity') && period
       ? callRpc<AssessmentActivity>(supabase, 'dashboard_assessment_activity', { p_school: schoolId, p_period: period.id, p_today: today, p_limit: 8 })
@@ -204,6 +226,10 @@ export async function loadRoleDashboard(ctx: TenantContext, plan: DashboardPlan,
       : Promise.resolve(null),
     b.has('activity') ? loadActivity(supabase, schoolId) : Promise.resolve(null),
     b.has('announcements') ? listAnnouncements(ctx) : Promise.resolve(null),
+    // Paie du mois en cours (calcul de la page « Heures faites et paie »).
+    any('hoursDoneMonth', 'payrollMonth', 'unattestedHours')
+      ? payrollMemo(`${ctx.user.id}:${schoolId}:${today.slice(0, 7)}`, () => buildPayroll(ctx, today.slice(0, 7)))
+      : Promise.resolve(null),
   ]);
 
   const base = `/e/${ctx.school.slug}`;
@@ -470,6 +496,44 @@ export async function loadRoleDashboard(ctx: TenantContext, plan: DashboardPlan,
             href: `${base}/access?status=NOT_ACTIVATED`,
           });
         break;
+      case 'hoursDoneMonth':
+        if (payroll)
+          push({
+            key,
+            label: 'Heures faites ce mois',
+            value: fr(payroll.reduce((n, r) => n + r.result.doneHours, 0)),
+            unit: 'h',
+            sub: `Cours dont l’appel est fait · ${fr(payroll.length)} ${plural(payroll.length, 'enseignant', 'enseignants')}`,
+            module: 'enseignants',
+            href: page('teachers.payroll', `${base}/teachers/heures`),
+          });
+        break;
+      case 'payrollMonth':
+        if (payroll)
+          push({
+            key,
+            label: 'À payer ce mois',
+            value: formatFcfa(payroll.reduce((n, r) => n + r.result.amount, 0)),
+            sub: 'Vacataires et heures supplémentaires des permanents, à ce jour',
+            module: 'enseignants',
+            href: page('teachers.payroll', `${base}/teachers/heures`),
+          });
+        break;
+      case 'unattestedHours': {
+        const h = payroll ? payroll.reduce((n, r) => n + r.result.unattestedHours, 0) : null;
+        if (h !== null)
+          push({
+            key,
+            label: 'Cours sans appel',
+            value: fr(h),
+            unit: 'h',
+            sub: 'Ce mois : non payés tant que l’appel n’est pas fait',
+            module: 'enseignants',
+            href: page('teachers.payroll', `${base}/teachers/heures`),
+            alert: h > 0,
+          });
+        break;
+      }
       case 'teachersNoAccess':
         if (teachersNoAccess !== null)
           push({

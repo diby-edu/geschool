@@ -21,10 +21,14 @@ describe('staffSchema', () => {
     expect(r.error?.issues[0]?.message).toBe('Choisissez au moins une fonction.');
   });
 
-  it('refuse le fondateur, le comptable, l’enseignant et le parent comme fonction du personnel', () => {
-    for (const code of ['SCHOOL_ADMIN', 'ACCOUNTANT', 'TEACHER', 'PARENT', 'STUDENT']) {
+  it('refuse le fondateur, l’enseignant et le parent comme fonction du personnel', () => {
+    for (const code of ['SCHOOL_ADMIN', 'TEACHER', 'PARENT', 'STUDENT']) {
       expect(staffSchema.safeParse({ ...valid, functions: [code] }).success).toBe(false);
     }
+  });
+
+  it('accepte le comptable (paie à l’heure des enseignants)', () => {
+    expect(staffSchema.safeParse({ ...valid, functions: ['ACCOUNTANT'] }).success).toBe(true);
   });
 
   it('accepte plusieurs fonctions cumulées', () => {

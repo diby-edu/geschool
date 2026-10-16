@@ -42,14 +42,14 @@ describe('fonctions du personnel', () => {
     for (const code of STAFF_FUNCTIONS) expect(ROLE_CODES).toContain(code);
   });
 
-  it('excluent le fondateur, le comptable, les enseignants, parents et élèves', () => {
-    for (const code of ['SCHOOL_ADMIN', 'ACCOUNTANT', 'TEACHER', 'PARENT', 'STUDENT']) {
+  it('excluent le fondateur, les enseignants, parents et élèves', () => {
+    for (const code of ['SCHOOL_ADMIN', 'TEACHER', 'PARENT', 'STUDENT']) {
       expect(STAFF_FUNCTIONS as readonly string[]).not.toContain(code);
     }
   });
 
   it('comprennent les fonctions demandées', () => {
-    for (const code of ['DIRECTOR', 'DEPUTY_DIRECTOR', 'CENSOR', 'EDUCATION_INSPECTOR', 'HEAD_SUPERVISOR', 'SUPERVISOR', 'SECRETARY', 'IT_ADMIN']) {
+    for (const code of ['DIRECTOR', 'DEPUTY_DIRECTOR', 'CENSOR', 'EDUCATION_INSPECTOR', 'HEAD_SUPERVISOR', 'SUPERVISOR', 'SECRETARY', 'IT_ADMIN', 'ACCOUNTANT']) {
       expect(STAFF_FUNCTIONS as readonly string[]).toContain(code);
     }
   });

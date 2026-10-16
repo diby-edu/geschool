@@ -10,6 +10,7 @@ export const FUNCTION_HINTS: Record<StaffFunction, string> = {
   SUPERVISOR: 'Absences, retards, discipline.',
   SECRETARY: 'Inscriptions, dossiers, documents.',
   IT_ADMIN: 'Comptes et accès ; aucun accès aux notes ni aux bulletins.',
+  ACCOUNTANT: 'Heures faites et paie à l’heure des enseignants (vacataires, heures supplémentaires).',
 };
 
 export const STATE_LABEL = {

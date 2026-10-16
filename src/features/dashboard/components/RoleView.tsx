@@ -9,6 +9,7 @@ import {
   KeyRound,
   Megaphone,
   ShieldCheck,
+  Wallet,
   UserPlus,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -34,7 +35,7 @@ type Sp = Record<string, string | string[] | undefined>;
 
 /**
  * Tableau de bord PAR FONCTION (directeur, censeur, surveillant général,
- * éducateur, inspecteur, secrétaire, informaticien) — le fondateur garde
+ * éducateur, inspecteur, secrétaire, informaticien, comptable) — le fondateur garde
  * StaffView. Le plan (profiles.ts) fixe les indicateurs de la fonction et retire
  * ceux dont le droit est décoché ; une personne à plusieurs fonctions voit
  * l'union, sans doublon.
@@ -83,6 +84,9 @@ const FOCUS_ACTIONS: Record<Focus, (base: string) => Action[]> = {
     { label: 'Gestion des accès', href: `${base}/access`, Icon: KeyRound, group: 'module', perm: 'access_accounts.view' },
     { label: 'Importer / exporter', href: `${base}/import`, Icon: FileSpreadsheet, group: 'module', perm: IMPORT },
     { label: 'Journal', href: `${base}/audit`, Icon: History, group: 'module', perm: 'audit.view' },
+  ],
+  payroll: (base) => [
+    { label: 'Heures faites et paie', href: `${base}/teachers/heures`, Icon: Wallet, group: 'module', perm: 'teachers.payroll' },
   ],
 };
 

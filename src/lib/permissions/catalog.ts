@@ -102,6 +102,16 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
       { code: 'teachers.create', label: 'Ajouter un enseignant' },
       { code: 'teachers.update', label: 'Modifier la fiche d’un enseignant' },
       { code: 'teachers.delete', label: 'Archiver un enseignant' },
+      {
+        code: 'teachers.manage_availability',
+        label: 'Régler les disponibilités d’un enseignant',
+        hint: 'Moments où l’enseignant ne peut pas avoir cours : la génération de l’emploi du temps les respecte.',
+      },
+      {
+        code: 'teachers.payroll',
+        label: 'Voir les heures faites et la paie à l’heure',
+        hint: 'Page « Heures faites et paie » (vacataires, heures supplémentaires des permanents), son export, et ses indicateurs au tableau de bord.',
+      },
       { code: 'assignments.view', label: 'Voir qui enseigne quoi, dans quelle classe' },
       { code: 'assignments.manage', label: 'Attribuer les enseignants aux classes et matières' },
     ],
@@ -167,6 +177,11 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
         code: 'schedule.lock',
         label: 'Figer une séance',
         hint: 'Une séance figée garde sa place à la régénération suivante.',
+      },
+      {
+        code: 'schedule.validate',
+        label: 'Valider une version de l’emploi du temps',
+        hint: 'Étape avant la publication : la version est relue et acceptée.',
       },
       { code: 'schedule.publish', label: 'Publier une version de l’emploi du temps' },
     ],
@@ -317,6 +332,7 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
       { code: 'access_accounts.reset', label: 'Réinitialiser un mot de passe' },
       { code: 'access_accounts.disable', label: 'Suspendre un accès' },
       { code: 'access_accounts.reactivate', label: 'Réactiver un accès suspendu' },
+      { code: 'access_accounts.view_history', label: 'Consulter l’historique des accès (connexions, envois, suspensions)' },
     ],
   },
   {

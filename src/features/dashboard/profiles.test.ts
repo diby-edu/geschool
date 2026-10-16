@@ -13,9 +13,8 @@ describe('Qui garde le tableau complet', () => {
     expect(usesFullDashboard(['SCHOOL_ADMIN', 'CENSOR'])).toBe(true);
   });
 
-  it('une personne sans fonction qui ait un angle propre (Super Admin, comptable)', () => {
+  it('une personne sans fonction qui ait un angle propre (Super Admin)', () => {
     expect(usesFullDashboard([])).toBe(true);
-    expect(usesFullDashboard(['ACCOUNTANT'])).toBe(true);
   });
 
   it('pas les autres fonctions du personnel', () => {

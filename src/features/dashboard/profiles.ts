@@ -7,7 +7,8 @@ import type { RoleCode } from '@/lib/permissions/roles';
  * Chaque fonction du personnel a son angle : le directeur suit la pédagogie, le
  * censeur l'assiduité, le surveillant général la vie scolaire, l'éducateur les
  * appels et justificatifs, l'inspecteur la qualité pédagogique, la secrétaire
- * les inscriptions, l'informaticien les comptes. Le fondateur garde le tableau
+ * les inscriptions, l'informaticien les comptes, le comptable la paie des
+ * enseignants. Le fondateur garde le tableau
  * complet (StaffView) — comme le Super Admin et toute personne sans fonction
  * reconnue.
  *
@@ -23,7 +24,7 @@ import type { RoleCode } from '@/lib/permissions/roles';
  * Fonctions pures : testées sans base (profiles.test.ts).
  */
 
-export type Focus = 'pedagogy' | 'attendance' | 'schoolLife' | 'followUp' | 'inspection' | 'enrollment' | 'accounts';
+export type Focus = 'pedagogy' | 'attendance' | 'schoolLife' | 'followUp' | 'inspection' | 'enrollment' | 'accounts' | 'payroll';
 
 export type KpiKey =
   | 'callsToday'
@@ -50,7 +51,10 @@ export type KpiKey =
   | 'failedDeliveries'
   | 'suspendedAccesses'
   | 'notActivated'
-  | 'teachersNoAccess';
+  | 'teachersNoAccess'
+  | 'hoursDoneMonth'
+  | 'payrollMonth'
+  | 'unattestedHours';
 
 export type BlockKey =
   | 'day'
@@ -99,6 +103,10 @@ export const KPI_NEEDS: Record<KpiKey, Need> = {
   suspendedAccesses: { all: ['access_accounts.view'] },
   notActivated: { all: ['access_accounts.view'] },
   teachersNoAccess: { all: ['teachers.view'] },
+  // Paie à l'heure : le droit « Heures faites et paie », quelle que soit la fonction.
+  hoursDoneMonth: { all: ['teachers.payroll'] },
+  payrollMonth: { all: ['teachers.payroll'] },
+  unattestedHours: { all: ['teachers.payroll'] },
 };
 
 export const BLOCK_NEEDS: Record<BlockKey, Need> = {
@@ -151,6 +159,11 @@ export const FOCUS_LAYOUT: Record<Focus, { label: string; kpis: readonly KpiKey[
     kpis: ['notActivated', 'parentsPending', 'failedDeliveries', 'suspendedAccesses', 'teachersNoAccess'],
     blocks: ['accessQueue', 'activity'],
   },
+  payroll: {
+    label: 'Paie des enseignants',
+    kpis: ['hoursDoneMonth', 'payrollMonth', 'unattestedHours'],
+    blocks: [],
+  },
 };
 
 /** Angle de chaque fonction du personnel. Le fondateur n'en a pas : il garde le tableau complet. */
@@ -163,10 +176,11 @@ export const FUNCTION_FOCUS: Partial<Record<RoleCode, Focus>> = {
   EDUCATION_INSPECTOR: 'inspection',
   SECRETARY: 'enrollment',
   IT_ADMIN: 'accounts',
+  ACCOUNTANT: 'payroll',
 };
 
 /** Ordre d'affichage quand une personne cumule plusieurs fonctions : de la direction vers le support. */
-const FOCUS_ORDER: readonly Focus[] = ['pedagogy', 'inspection', 'attendance', 'schoolLife', 'followUp', 'enrollment', 'accounts'];
+const FOCUS_ORDER: readonly Focus[] = ['pedagogy', 'inspection', 'attendance', 'schoolLife', 'followUp', 'enrollment', 'accounts', 'payroll'];
 
 /** Le tableau complet (celui du fondateur) : fondateur, ou personne sans fonction qui ait un angle propre. */
 export function usesFullDashboard(roles: readonly string[]): boolean {

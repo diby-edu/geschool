@@ -48,8 +48,9 @@ const ROLE_LABELS: Record<RoleCode, string> = {
  * Fonctions du PERSONNEL ADMINISTRATIF que le fondateur peut attribuer et dont il
  * règle les droits (page « Rôles et droits », module Personnel). Les enseignants
  * se gèrent dans Enseignants ; parents et élèves n'ont pas de droits réglables.
- * Le Comptable n'y figure pas : le produit ne gère pas l'argent des inscriptions
- * (sa ligne est conservée en base, elle n'est ni proposée ni dupliquée).
+ * Le Comptable y figure depuis le 2026-10-16 (paie à l'heure des enseignants) :
+ * le produit ne gère toujours pas l'argent des inscriptions, mais le fondateur
+ * peut confier « Heures faites et paie » à la personne de son choix.
  * Le Fondateur (SCHOOL_ADMIN) est à part : complet et non modifiable.
  */
 export const STAFF_FUNCTIONS = [
@@ -61,6 +62,7 @@ export const STAFF_FUNCTIONS = [
   'SUPERVISOR',
   'SECRETARY',
   'IT_ADMIN',
+  'ACCOUNTANT',
 ] as const satisfies readonly RoleCode[];
 
 export type StaffFunction = (typeof STAFF_FUNCTIONS)[number];
