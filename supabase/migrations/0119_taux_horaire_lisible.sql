@@ -1,0 +1,11 @@
+-- =============================================================================
+-- 0119 — Le taux horaire de la fiche enseignant redevient lisible
+-- =============================================================================
+-- Depuis 0059, la table teachers n'est lisible que colonne par colonne. La
+-- colonne hourly_rate ajoutée en 0116 n'a pas reçu ce droit : toute lecture de
+-- la fiche qui la demande était refusée (« permission denied for table
+-- teachers »), et la fiche d'un enseignant répondait « Page introuvable » —
+-- pour le directeur comme pour tous.
+--
+-- Le taux suit la fiche : qui peut lire la fiche (RLS de 0053) lit son taux.
+grant select (hourly_rate) on public.teachers to authenticated;

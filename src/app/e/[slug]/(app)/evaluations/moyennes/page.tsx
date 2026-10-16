@@ -107,7 +107,7 @@ export default async function AveragesPage({
                     <td className="px-3 py-2 text-center font-medium">{r.rank ?? '—'}</td>
                     <td className="px-3 py-2 font-mono text-xs text-[color:var(--muted-foreground)]">{r.matricule}</td>
                     <td className="px-3 py-2">{r.name}</td>
-                    <td className="px-3 py-2 text-right font-medium">{r.average != null ? r.average.toFixed(2) : '—'}</td>
+                    <td className="px-3 py-2 text-right font-medium">{r.average != null ? r.average.toFixed(2).replace('.', ',') : '—'}</td>
                   </tr>
                 ))}
               </tbody>

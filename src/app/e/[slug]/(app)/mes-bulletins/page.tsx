@@ -39,7 +39,7 @@ export default async function MesBulletinsPage({ params }: { params: Promise<{ s
                     <div className="text-xs text-[color:var(--muted-foreground)]">{b.klass}</div>
                   </div>
                   <div className="text-right text-sm">
-                    <div className="font-semibold">{b.average != null ? b.average.toFixed(2) : '—'}</div>
+                    <div className="font-semibold">{b.average != null ? b.average.toFixed(2).replace('.', ',') : '—'}</div>
                     <div className="text-xs text-[color:var(--muted-foreground)]">Rang {b.rank ?? '—'}</div>
                   </div>
                 </div>

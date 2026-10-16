@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
+import { fetchAllRows } from '@/lib/supabase/pagination';
 import type { TenantContext } from '@/lib/tenant/context';
 
 export type AbsenceRow = {
@@ -24,19 +25,30 @@ export async function listAbsences(
   opts: { from: string; to: string; classId?: string },
 ): Promise<AbsenceRow[]> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from('attendance_records')
-    .select(
-      'id, status, minutes_late, comment, ' +
-        'students(matricule, first_name, last_name), ' +
-        'attendance_registers(session_occurrences(occurs_on, ' +
-        'schedule_sessions(subjects(name), schedule_session_targets(class_id, classes(name)))))',
-    )
-    .eq('school_id', ctx.school.id)
-    .in('status', ['ABSENT', 'LATE'])
-    .order('recorded_at', { ascending: false });
+  // Filtre de dates EN BASE (sur la date du cours), et lecture complète par
+  // pages : avant, toutes les absences de l'école étaient lues puis filtrées
+  // ici — lent (8 s pour 37 000 absences) et tronqué sans le dire à 1 000
+  // lignes par PostgREST, donc des absences manquaient dans la liste.
+  const data = await fetchAllRows((cursor) => {
+    let q = supabase
+      .from('attendance_records')
+      .select(
+        'id, status, minutes_late, comment, ' +
+          'students(matricule, first_name, last_name), ' +
+          'attendance_registers!inner(session_occurrences!inner(occurs_on, ' +
+          'schedule_sessions(subjects(name), schedule_session_targets(class_id, classes(name)))))',
+      )
+      .eq('school_id', ctx.school.id)
+      .in('status', ['ABSENT', 'LATE'])
+      .gte('attendance_registers.session_occurrences.occurs_on', opts.from)
+      .lte('attendance_registers.session_occurrences.occurs_on', opts.to)
+      .order('id')
+      .limit(1000);
+    if (cursor) q = q.gt('id', cursor);
+    return q as unknown as PromiseLike<{ data: { id: string }[] | null; error: { message: string } | null }>;
+  });
 
-  const rows = ((data ?? []) as unknown as {
+  const rows = (data as unknown as {
     id: string;
     status: string;
     minutes_late: number;

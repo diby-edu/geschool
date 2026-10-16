@@ -70,7 +70,7 @@ export default async function MesNotesPage({
   }
 
   const notes = await loadChildNotes(ctx, child, premier(sp.periode));
-  const note = (n: number | null) => (n === null ? '—' : n.toFixed(notes.decimals));
+  const note = (n: number | null) => (n === null ? '—' : n.toFixed(notes.decimals).replace('.', ','));
   const lien = (p: { enfant?: string; periode?: string }) => {
     const q = new URLSearchParams();
     q.set('enfant', p.enfant ?? child.id);

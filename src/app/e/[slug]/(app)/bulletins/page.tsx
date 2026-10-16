@@ -183,7 +183,7 @@ export default async function BulletinsPage({
                       <td className="px-3 py-2 text-center font-medium">{b.rank ?? '—'}</td>
                       <td className="px-3 py-2 font-mono text-xs text-[color:var(--muted-foreground)]">{b.matricule}</td>
                       <td className="px-3 py-2">{b.student}</td>
-                      <td className="px-3 py-2 text-right font-medium">{b.general_average != null ? b.general_average.toFixed(2) : '—'}</td>
+                      <td className="px-3 py-2 text-right font-medium">{b.general_average != null ? b.general_average.toFixed(2).replace('.', ',') : '—'}</td>
                       <td className="px-3 py-2">{bulletinStateLabel(b.status, b.signed)}</td>
                       <td className="px-3 py-2 text-right">
                         <Link href={`${base}/${b.id}`} className="text-sm text-[color:var(--color-brand)] hover:underline">Voir</Link>

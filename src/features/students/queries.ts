@@ -37,6 +37,10 @@ export async function listStudents(
       count: 'exact',
     })
     .eq('school_id', ctx.school.id)
+    // Filtre redit sur la fiche élève : sans lui, la base parcourt les élèves de
+    // TOUTES les écoles et évalue le droit de lecture ligne par ligne (12 s pour
+    // 5 600 élèves, au-delà du délai). Avec lui : l'index de l'école, 0,3 s.
+    .eq('students.school_id', ctx.school.id)
     .eq('academic_year_id', yearId)
     .eq('status', 'ENROLLED');
 

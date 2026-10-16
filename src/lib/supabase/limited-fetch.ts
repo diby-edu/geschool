@@ -44,15 +44,20 @@ export function isConnectionFailure(error: unknown): boolean {
 }
 
 /**
- * Lectures sans effet de bord, que l'on peut lancer deux fois sans risque : GET/HEAD, et les fonctions SQL
- * de consultation (dashboard_*, my_*, is_*). Toute autre ecriture est exclue : une requete partie sans
+ * Lectures sans effet de bord, que l'on peut lancer deux fois sans risque : GET/HEAD, et les petites
+ * fonctions SQL de consultation (my_*, is_*). Toute autre ecriture est exclue : une requete partie sans
  * reponse a pu etre executee. Une nouvelle fonction de consultation doit suivre ce nommage pour en profiter.
+ *
+ * Les agregats du tableau de bord (dashboard_*) n'en font plus partie (2026-10-16) : sur un grand
+ * etablissement, certains prennent 2 a 4 s POUR DE BON. Relances a 1,5 s, ils tournaient trois fois en
+ * base (annuler la requete HTTP n'arrete pas la requete SQL) : la base saturait et tout depassait le
+ * delai de 8 s. Une connexion qui n'a pas pu s'etablir reste, elle, retentee (voir NOT_SENT).
  */
 export function isSafeToRepeat(input: Parameters<typeof fetch>[0], init?: RequestInit): boolean {
   if (input instanceof Request) return false;
   const method = (init?.method ?? 'GET').toUpperCase();
   if (method === 'GET' || method === 'HEAD') return true;
-  return method === 'POST' && /\/rest\/v1\/rpc\/(dashboard_|my_|is_)/.test(String(input));
+  return method === 'POST' && /\/rest\/v1\/rpc\/(my_|is_)/.test(String(input));
 }
 
 /**

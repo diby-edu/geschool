@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
@@ -51,8 +51,21 @@ export function LiveRefresh({ schoolId, tables }: { schoolId: string; tables: re
   const router = useRouter();
   const [state, setState] = useState<State>('connecting');
   const tablesKey = tables.join(',');
+  // Un rafraîchissement à la fois. Un écran lourd (tableau de bord d'un grand
+  // établissement) peut mettre plus de 10 s à se recalculer : sans ce verrou,
+  // le sondage de secours en relançait un autre avant la fin du premier, et
+  // les calculs s'empilaient en base jusqu'à dépasser tous les délais.
+  const [pending, startTransition] = useTransition();
+  const pendingRef = useRef(false);
+  useEffect(() => {
+    pendingRef.current = pending;
+  }, [pending]);
 
   useEffect(() => {
+    const reload = () => {
+      if (pendingRef.current) return;
+      startTransition(() => router.refresh());
+    };
     const supabase = createClient();
     let disposed = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -83,7 +96,7 @@ export function LiveRefresh({ schoolId, tables }: { schoolId: string; tables: re
         return;
       }
       stopDefer();
-      router.refresh();
+      reload();
     };
     const schedule = () => {
       const now = Date.now();
@@ -94,7 +107,7 @@ export function LiveRefresh({ schoolId, tables }: { schoolId: string; tables: re
     const startPoll = () => {
       if (poll) return;
       poll = setInterval(() => {
-        if (canRefresh() && !isHeld() && !isTyping()) router.refresh();
+        if (canRefresh() && !isHeld() && !isTyping()) reload();
       }, FALLBACK_POLL_MS);
     };
     const stopPoll = () => {

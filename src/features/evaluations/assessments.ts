@@ -47,7 +47,9 @@ export function statusLabel(s: string): string {
  * ecole de 4 000 eleves). Une lecture sans bornes s'arretait a 1 000 lignes
  * sans le dire, et le compteur de notes saisies relisait toutes les notes de
  * toutes ces evaluations — plafonne lui aussi, donc faux. Le compte vient
- * maintenant de la base, evaluation par evaluation (`grades(count)`).
+ * maintenant de la base, pour les SEULES evaluations de la page (0124) : demande
+ * avec le tri (`grades(count)`), il etait calcule pour les 10 848 avant la
+ * pagination (~32 s, delai depasse).
  */
 export async function listAssessments(
   ctx: TenantContext,
@@ -60,7 +62,7 @@ export async function listAssessments(
     .from('assessments')
     .select(
       'id, title, assessment_date, max_score, coefficient, sequence_number, status, ' +
-        'subjects(name), classes(name), groups(name), assessment_types(name), academic_periods(name), grades(count)',
+        'subjects(name), classes(name), groups(name), assessment_types(name), academic_periods(name)',
       { count: 'exact' },
     )
     .eq('school_id', ctx.school.id)
@@ -89,8 +91,16 @@ export async function listAssessments(
     groups: { name: string } | null;
     assessment_types: { name: string } | null;
     academic_periods: { name: string } | null;
-    grades: { count: number }[];
   }[];
+
+  const graded = new Map<string, number>();
+  if (rows.length > 0) {
+    const { data: counts, error: countError } = await supabase.rpc('assessment_grade_counts' as never, {
+      p_ids: rows.map((r) => r.id),
+    } as never);
+    if (countError) throw countError;
+    for (const c of (counts ?? []) as { assessment_id: string; graded: number }[]) graded.set(c.assessment_id, c.graded);
+  }
 
   const list = rows.map((r) => ({
     id: r.id,
@@ -105,7 +115,7 @@ export async function listAssessments(
     coefficient: r.coefficient,
     sequence_number: r.sequence_number,
     status: r.status,
-    graded: r.grades[0]?.count ?? 0,
+    graded: graded.get(r.id) ?? 0,
     total: 0,
   }));
 

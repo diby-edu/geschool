@@ -60,39 +60,42 @@ export default async function ScheduleEditorPage({
   const version = await getVersion(ctx, versionId);
   if (!version) notFound();
 
-  const [{ rows: sessions, validator: validatorSessions }, classes, subjects, teachers] = await Promise.all([
+  // Deux vagues de lectures en parallèle (avant : neuf lectures l'une après
+  // l'autre, ~4 s de plus sur un établissement de 2 000 cours).
+  const supabase = await createClient();
+  const [{ rows: sessions, validator: validatorSessions }, classes, subjects, teachers, { data: roomsData }, etapeExigee] = await Promise.all([
     listSessionsWithValidator(ctx, versionId),
     listYearClasses(ctx, version.academic_year_id),
     listActiveSubjects(ctx),
     listActiveTeachers(ctx),
+    // Salles
+    supabase.from('rooms').select('id, code, name').eq('school_id', ctx.school.id).eq('is_active', true).order('code'),
+    // On ne publie que ce qui a été vérifié — sauf si l'école a retiré l'étape.
+    validationRequired(ctx),
   ]);
-
-  const selectedClassId = (Array.isArray(sp.class) ? sp.class[0] : sp.class) ?? classes[0]?.id ?? null;
-  // Grille de la classe affichee : sa grille de cycle si son cycle en a une
-  // (recreation propre, horaires propres…), sinon la grille par defaut de
-  // l'annee — jamais un melange des deux dans le meme ecran.
-  const config = selectedClassId
-    ? await getConfigForClass(ctx, version.academic_year_id, selectedClassId)
-    : await getConfig(ctx, version.academic_year_id);
-  const slots = config ? await listSlots(ctx, config.id) : [];
-  // Pauses de CETTE grille (récréations, déjeuner) : elles apparaissent dans les
-  // colonnes, pour qu'on voie tout de suite l'horaire réel d'une journée.
-  const [pauses, gridDayHours, gridBreaks] = config
-    ? await Promise.all([listPauses(ctx, config.id), getDayHours(ctx, config.id), getBreaks(ctx, config.id)])
-    : [[], [], []];
-  const gridScope = config?.cycle_id ? 'grille propre à ce cycle' : 'grille de l’établissement';
-
-  // Salles
-  const supabase = await createClient();
-  const { data: roomsData } = await supabase
-    .from('rooms')
-    .select('id, code, name')
-    .eq('school_id', ctx.school.id)
-    .eq('is_active', true)
-    .order('code');
   const rooms = (roomsData ?? []).map((r) => ({ id: r.id, name: `${r.code} — ${r.name}` }));
 
-  const conflicts = detectConflicts(validatorSessions, await loadGroupContextFor(ctx, validatorSessions));
+  const selectedClassId = (Array.isArray(sp.class) ? sp.class[0] : sp.class) ?? classes[0]?.id ?? null;
+  const [{ config, slots, pauses, gridDayHours, gridBreaks }, groupContext] = await Promise.all([
+    (async () => {
+      // Grille de la classe affichee : sa grille de cycle si son cycle en a une
+      // (recreation propre, horaires propres…), sinon la grille par defaut de
+      // l'annee — jamais un melange des deux dans le meme ecran.
+      const config = selectedClassId
+        ? await getConfigForClass(ctx, version.academic_year_id, selectedClassId)
+        : await getConfig(ctx, version.academic_year_id);
+      // Pauses de CETTE grille (récréations, déjeuner) : elles apparaissent dans les
+      // colonnes, pour qu'on voie tout de suite l'horaire réel d'une journée.
+      const [slots, pauses, gridDayHours, gridBreaks] = config
+        ? await Promise.all([listSlots(ctx, config.id), listPauses(ctx, config.id), getDayHours(ctx, config.id), getBreaks(ctx, config.id)])
+        : [[], [], [], []];
+      return { config, slots, pauses, gridDayHours, gridBreaks };
+    })(),
+    loadGroupContextFor(ctx, validatorSessions),
+  ]);
+  const gridScope = config?.cycle_id ? 'grille propre à ce cycle' : 'grille de l’établissement';
+
+  const conflicts = detectConflicts(validatorSessions, groupContext);
   const workingDays = (config?.working_days as number[] | undefined) ?? [];
   const selectedClass = selectedClassId;
   const editable = version.status === 'DRAFT' || version.status === 'VALIDATED';
@@ -103,8 +106,6 @@ export default async function ScheduleEditorPage({
   // Figer une séance reste possible sur une version publiée : c'est même là
   // que l'école le fait, juste avant de relancer une génération.
   const canLock = hasPermission(ctx, 'schedule.lock');
-  // On ne publie que ce qui a été vérifié — sauf si l'école a retiré l'étape.
-  const etapeExigee = await validationRequired(ctx);
   const verifie = version.status === 'VALIDATED' || !etapeExigee;
   const canPublish = hasPermission(ctx, 'schedule.publish') && editable && verifie;
   const canValidate = hasPermission(ctx, 'schedule.validate') && editable;

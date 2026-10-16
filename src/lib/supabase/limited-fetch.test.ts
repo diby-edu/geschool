@@ -93,9 +93,12 @@ describe('isSafeToRepeat', () => {
     expect(isSafeToRepeat(`${rest}/students?select=id`)).toBe(true);
     expect(isSafeToRepeat(`${rest}/students`, { method: 'HEAD' })).toBe(true);
     expect(isSafeToRepeat('https://p.supabase.co/auth/v1/user')).toBe(true);
-    for (const fn of ['dashboard_day_overview', 'my_permission_codes', 'is_platform_admin']) {
+    for (const fn of ['my_permission_codes', 'is_platform_admin']) {
       expect(isSafeToRepeat(`${rest}/rpc/${fn}`, { method: 'POST', body: '{}' })).toBe(true);
     }
+  });
+  it('ne relance pas les agregats du tableau de bord (lents pour de bon : ils tourneraient trois fois)', () => {
+    expect(isSafeToRepeat(`${rest}/rpc/dashboard_class_averages`, { method: 'POST', body: '{}' })).toBe(false);
   });
   it('exclut toute ecriture et toute fonction inconnue', () => {
     expect(isSafeToRepeat(`${rest}/students`, { method: 'POST', body: '{}' })).toBe(false);

@@ -142,13 +142,19 @@ export async function buildMatrix(
   const ordered = [...((programme ?? []) as unknown as ProgRow[])].sort(
     (a, b) => subjectOrder(a.subjects) - subjectOrder(b.subjects) || (a.subjects?.name ?? '').localeCompare(b.subjects?.name ?? '', 'fr'),
   );
-  for (const r of ordered) {
-    const { data: rows, error } = await supabase.rpc('class_subject_averages' as never, {
-      p_class: classId,
-      p_period: periodId,
-      p_subject: r.subject_id,
-      ...subjectArgs(params),
-    } as never);
+  // Toutes les matières en même temps (une à une : 12 allers-retours de suite).
+  const perSubject = await Promise.all(
+    ordered.map((r) =>
+      supabase.rpc('class_subject_averages' as never, {
+        p_class: classId,
+        p_period: periodId,
+        p_subject: r.subject_id,
+        ...subjectArgs(params),
+      } as never),
+    ),
+  );
+  for (const [i, r] of ordered.entries()) {
+    const { data: rows, error } = perSubject[i]!;
     if (error) throw new Error(`Moyennes de « ${r.subjects?.name ?? 'matière'} » impossibles : ${error.message}`);
     const avg = new Map(
       ((rows ?? []) as { student_id: string; average: number | string | null }[]).map((x) => [

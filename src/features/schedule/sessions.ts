@@ -13,11 +13,11 @@ import { prepareVersionForEdit, resyncPublishedSession, sessionHasHistory } from
 import { listRules } from './constraints/service';
 import { blockingRules } from './constraints/apply';
 
-// Page reduite (au lieu du plafond PostgREST de 1000) : la policy RLS de
-// schedule_sessions (app.can_see_session) est couteuse par ligne — mesure,
-// une page de 1000 lignes avec ses relations imbriquees peut depasser le
-// statement_timeout Postgres a elle seule (cf. lib/supabase/pagination).
-const SCHEDULE_SESSIONS_PAGE_SIZE = 200;
+// Le plafond PostgREST (1000). La page etait reduite a 200 tant que la policy
+// RLS de schedule_sessions appelait app.can_see_session ligne par ligne ; depuis
+// 0126 le droit est calcule une fois par requete. Mesure (2026-10-16, 2 072 cours) :
+// 11 pages de 200 en serie = 7,4 s pour la page d'une version.
+const SCHEDULE_SESSIONS_PAGE_SIZE = 1000;
 
 export type SessionRow = {
   id: string;

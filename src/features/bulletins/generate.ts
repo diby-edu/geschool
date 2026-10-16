@@ -143,16 +143,22 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
     generalAverages.length > 0 ? classRound(generalAverages.reduce((a, b) => a + b, 0) / generalAverages.length) : null;
   const classSize = [...ranking.values()][0]?.class_size ?? studentIds.length;
 
-  // Moyennes par matière pour toute la classe (une requête par matière).
+  // Moyennes par matière pour toute la classe (une requête par matière, lancées ensemble).
   type SubjStat = { average: Map<string, number | null>; classAvg: number | null; min: number | null; max: number | null; rank: Map<string, number> };
   const subjStats = new Map<string, SubjStat>();
-  for (const s of subjects) {
-    const { data: rows, error: subjErr } = await supabase.rpc('class_subject_averages' as never, {
-      p_class: classId,
-      p_period: periodId,
-      p_subject: s.id,
-      ...subjectArgs(params),
-    } as never);
+  // Toutes les matières en même temps, plutôt qu'une à une.
+  const perSubject = await Promise.all(
+    subjects.map((s) =>
+      supabase.rpc('class_subject_averages' as never, {
+        p_class: classId,
+        p_period: periodId,
+        p_subject: s.id,
+        ...subjectArgs(params),
+      } as never),
+    ),
+  );
+  for (const [i, s] of subjects.entries()) {
+    const { data: rows, error: subjErr } = perSubject[i]!;
     if (subjErr) throw new Error(`Calcul des moyennes de « ${s.name} » impossible : ${subjErr.message}`);
     const list = ((rows ?? []) as unknown as { student_id: string; average: number | null }[]).map((r) => ({ student_id: r.student_id, average: r.average === null ? null : Number(r.average) }));
     const avgMap = new Map(list.map((r) => [r.student_id, r.average]));

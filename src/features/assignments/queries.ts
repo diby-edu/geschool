@@ -46,9 +46,11 @@ export async function listYearClasses(ctx: TenantContext, yearId: string): Promi
     .select('id, name')
     .eq('school_id', ctx.school.id)
     .eq('academic_year_id', yearId)
-    .eq('status', 'ACTIVE')
-    .order('code');
-  return (data ?? []) as { id: string; name: string }[];
+    .eq('status', 'ACTIVE');
+  // Tri naturel : « 3ème 2 » avant « 3ème 10 » (la base trie « 10 » avant « 2 »).
+  return ((data ?? []) as { id: string; name: string }[]).sort((a, b) =>
+    a.name.localeCompare(b.name, 'fr', { numeric: true }),
+  );
 }
 
 export async function listActiveSubjects(ctx: TenantContext): Promise<{ id: string; name: string }[]> {

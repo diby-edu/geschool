@@ -63,7 +63,9 @@ export async function buildPayroll(ctx: TenantContext, month: string): Promise<P
   const since = weekStart(from);
   const supabase = await createClient();
   const [{ data: rows, error }, { data: teachers }, rates, defaults] = await Promise.all([
-    supabase.rpc('teacher_course_hours' as never, { p_school: ctx.school.id, p_from: since, p_to: to } as never),
+    // Une ligne par enseignant (0129) : par cours, la réponse était coupée à
+    // 1 000 lignes par PostgREST et la paie d'un grand établissement était fausse.
+    supabase.rpc('teacher_course_hours_by_teacher' as never, { p_school: ctx.school.id, p_from: since, p_to: to } as never),
     supabase
       .from('teachers')
       .select('id, first_name, last_name, employment_type, weekly_minutes_max, hourly_rate')
@@ -76,18 +78,14 @@ export async function buildPayroll(ctx: TenantContext, month: string): Promise<P
   if (error) throw error;
 
   const byTeacher = new Map<string, PayrollRow['courses']>();
-  for (const r of (rows ?? []) as {
+  for (const t of (rows ?? []) as {
     teacher_id: string;
-    occurs_on: string;
-    starts_at: string;
-    hours: number;
-    done: boolean;
-    class_name: string | null;
-    subject: string;
+    courses: { occurs_on: string; starts_at: string; hours: number; done: boolean; class_name: string | null; subject: string }[];
   }[]) {
-    const list = byTeacher.get(r.teacher_id) ?? [];
-    list.push({ date: r.occurs_on, startsAt: r.starts_at, hours: r.hours, done: r.done, className: r.class_name, subject: r.subject });
-    byTeacher.set(r.teacher_id, list);
+    byTeacher.set(
+      t.teacher_id,
+      t.courses.map((r) => ({ date: r.occurs_on, startsAt: r.starts_at, hours: r.hours, done: r.done, className: r.class_name, subject: r.subject })),
+    );
   }
 
   return ((teachers ?? []) as {
