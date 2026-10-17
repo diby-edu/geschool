@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
 import { callRpc, type RpcResult } from '@/lib/supabase/rpc';
+import { fetchAllRows } from '@/lib/supabase/pagination';
 import { createShortMemo } from '@/lib/short-memo';
 import type { TenantContext } from '@/lib/tenant/context';
 import { hasPermission } from '@/lib/permissions';
@@ -188,7 +189,12 @@ export async function loadRoleDashboard(ctx: TenantContext, plan: DashboardPlan,
       : Promise.resolve(null),
     b.has('justifications') ? listJustifications(ctx, 'PENDING') : Promise.resolve(null),
     k.has('bulletinsToValidate') && yearId
-      ? supabase.from('report_cards').select('class_id').eq('school_id', schoolId).eq('academic_year_id', yearId).eq('status', 'GENERATED').limit(10000)
+      ? // Par paquets : PostgREST coupe à 1 000 lignes, le nombre de classes était sous-compté.
+        fetchAllRows<{ id: string; class_id: string }>((cursor) => {
+          let q = supabase.from('report_cards').select('id, class_id').eq('school_id', schoolId).eq('academic_year_id', yearId).eq('status', 'GENERATED').order('id').limit(1000);
+          if (cursor) q = q.gt('id', cursor);
+          return q;
+        })
       : Promise.resolve(null),
     k.has('scheduleStatus') && yearId
       ? headCount(supabase.from('schedule_versions').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).eq('academic_year_id', yearId).eq('status', 'PUBLISHED'))
@@ -238,7 +244,7 @@ export async function loadRoleDashboard(ctx: TenantContext, plan: DashboardPlan,
   const averages = classAverages?.data ?? null;
   const act = activity?.data ?? null;
   const absent = absentees?.data ?? null;
-  const bulletinClasses = bulletins?.data ? new Set((bulletins.data as { class_id: string }[]).map((r) => r.class_id)).size : null;
+  const bulletinClasses = bulletins ? new Set(bulletins.map((r) => r.class_id)).size : null;
   const page = (code: string, href: string) => (hasPermission(ctx, code) ? href : undefined);
   const dash = `${base}/dashboard`;
 

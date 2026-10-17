@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
+import { fetchAllRows } from '@/lib/supabase/pagination';
 import type { TenantContext } from '@/lib/tenant/context';
 import { myChildrenIds } from '@/features/family/children';
 import type { BulletinRow, BulletinDetail } from './types';
@@ -271,4 +272,34 @@ function toDetail(
         rank: it.rank,
       })),
   };
+}
+
+export type PrintableClass = { id: string; name: string; level: string; levelSequence: number; bulletins: number };
+
+/**
+ * Les classes de l'année avec leur nombre de bulletins pour une période — pour
+ * cocher plusieurs classes à éditer d'un coup (page « Bulletins à imprimer »).
+ */
+export async function listClassesForBulletinPrint(ctx: TenantContext, yearId: string, periodId: string): Promise<PrintableClass[]> {
+  const supabase = await createClient();
+  const [{ data: classes, error }, cards] = await Promise.all([
+    supabase
+      .from('classes')
+      .select('id, name, levels(name, sequence)')
+      .eq('school_id', ctx.school.id)
+      .eq('academic_year_id', yearId)
+      .eq('status', 'ACTIVE'),
+    // Une ligne par bulletin, lue par paquets : PostgREST coupe toute réponse à 1 000 lignes.
+    fetchAllRows<{ id: string; class_id: string }>((cursor) => {
+      let q = supabase.from('report_cards').select('id, class_id').eq('school_id', ctx.school.id).eq('academic_period_id', periodId).order('id').limit(1000);
+      if (cursor) q = q.gt('id', cursor);
+      return q;
+    }),
+  ]);
+  if (error) throw error;
+  const count = new Map<string, number>();
+  for (const r of cards) count.set(r.class_id, (count.get(r.class_id) ?? 0) + 1);
+  return ((classes ?? []) as unknown as { id: string; name: string; levels: { name: string; sequence: number } | null }[])
+    .map((c) => ({ id: c.id, name: c.name, level: c.levels?.name ?? 'Autres', levelSequence: c.levels?.sequence ?? 99, bulletins: count.get(c.id) ?? 0 }))
+    .sort((a, b) => a.levelSequence - b.levelSequence || a.name.localeCompare(b.name, 'fr', { numeric: true }));
 }

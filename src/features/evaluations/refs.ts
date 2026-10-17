@@ -125,13 +125,15 @@ export async function listClasses(ctx: TenantContext, yearId: string): Promise<C
   const supabase = await createClient();
   const { data } = await supabase
     .from('classes')
-    .select('id, name, code, level_id')
+    .select('id, name, code, level_id, levels(sequence)')
     .eq('school_id', ctx.school.id)
     .eq('academic_year_id', yearId)
-    .eq('status', 'ACTIVE')
-    .order('code');
+    .eq('status', 'ACTIVE');
   const byLevel = await trackByLevel(ctx);
-  return (data ?? []).map((c) => ({ id: c.id, name: c.name, track: byLevel.get(c.level_id) ?? 'GENERAL' }));
+  // Par niveau (6ème d'abord), puis tri naturel : « 3ème 2 » avant « 3ème 10 ».
+  return ((data ?? []) as unknown as { id: string; name: string; level_id: string; levels: { sequence: number } | null }[])
+    .sort((a, b) => (a.levels?.sequence ?? 99) - (b.levels?.sequence ?? 99) || a.name.localeCompare(b.name, 'fr', { numeric: true }))
+    .map((c) => ({ id: c.id, name: c.name, track: byLevel.get(c.level_id) ?? 'GENERAL' }));
 }
 
 export async function listSubjects(ctx: TenantContext): Promise<Ref[]> {

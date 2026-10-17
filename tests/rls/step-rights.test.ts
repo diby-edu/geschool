@@ -74,8 +74,9 @@ beforeAll(async () => {
   people.rh = await personWith('rh', ['teachers.view']);
 
   const version = await db.query(
-    `insert into schedule_versions (school_id, academic_year_id, number, name, status)
-     values ($1, $2, 99, 'Version de test', 'VALIDATED') returning id`,
+    // Une version VALIDEE porte sa date de validation (contrainte de 0091).
+    `insert into schedule_versions (school_id, academic_year_id, number, name, status, validated_at)
+     values ($1, $2, 99, 'Version de test', 'VALIDATED', now()) returning id`,
     [f.a.schoolId, f.a.yearId],
   );
   versionId = version.rows[0].id as string;

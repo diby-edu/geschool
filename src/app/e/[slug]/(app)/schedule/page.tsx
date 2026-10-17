@@ -46,7 +46,15 @@ export default async function SchedulePage({
     const slots = await getMyWeeklySchedule(ctx);
     return (
       <div className="mx-auto max-w-3xl space-y-6">
-        <PageHeader title="Mon emploi du temps" {...(ctx.academicYear ? { description: `Année ${ctx.academicYear.name}` } : {})} />
+        <PageHeader
+          title="Mon emploi du temps"
+          {...(ctx.academicYear ? { description: `Année ${ctx.academicYear.name}` } : {})}
+          action={
+            <Link href={`${base}/imprimer`}>
+              <Button variant="secondary">Télécharger (PDF)</Button>
+            </Link>
+          }
+        />
         <MyWeekSchedule slots={slots} />
       </div>
     );
@@ -84,6 +92,11 @@ export default async function SchedulePage({
             {hasAnyGrid && canGenerate ? (
               <Link href={`${base}/generate`}>
                 <Button>Générer automatiquement</Button>
+              </Link>
+            ) : null}
+            {hasAnyGrid && hasPermission(ctx, 'schedule.view_all') ? (
+              <Link href={`${base}/imprimer`}>
+                <Button variant="secondary">Télécharger</Button>
               </Link>
             ) : null}
             <Link href={`${base}/regles`}>

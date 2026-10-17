@@ -227,9 +227,10 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
 
   const nextLevel = isLast ? await nextLevelName(ctx, klass.level_id) : null;
 
-  // Snapshot par élève.
-  let generated = 0;
-  for (const studentId of studentIds) {
+  // Snapshot par élève. Écritures GROUPÉES (une pour les bulletins, une pour
+  // effacer leurs lignes, une pour les réécrire) : une par élève, c'était
+  // 3 allers-retours × 50 élèves = 42 s pour une classe (mesuré le 2026-10-16).
+  const cardOf = (studentId: string): TablesInsert<'report_cards'> => {
     const r = ranking.get(studentId);
     const generalAverage = r?.general_average === null || r?.general_average === undefined ? null : Number(r.general_average);
 
@@ -241,52 +242,43 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
     const yearMention = isLast ? tierFor(reporting.yearMentions, annualAverage) : null;
     const decision = isLast ? suggestDecision(reporting.decisions, annualAverage) : null;
 
-    const { data: card, error: cardErr } = await supabase
-      .from('report_cards')
-      .upsert(
-        {
-          school_id: ctx.school.id,
-          academic_year_id: yearId,
-          academic_period_id: periodId,
-          student_id: studentId,
-          class_id: classId,
-          status: 'GENERATED',
-          general_average: r?.general_average ?? null,
-          rank: r?.rank_position ?? null,
-          class_size: classSize,
-          class_average: classGeneralAvg,
-          // La mention de l'année remplace celle de la période sur le dernier
-          // bulletin : c'est le bilan qui compte, pas le dernier trimestre.
-          distinction: (yearMention ?? mention)?.code ?? 'NONE',
-          distinction_label: (yearMention ?? mention)?.label ?? null,
-          annual_average: annualAverage,
-          annual_rank: annual?.ranks.get(studentId) ?? null,
-          // Une PROPOSITION : le conseil de classe reste souverain et peut en
-          // changer avant de valider.
-          decision: decision?.code ?? null,
-          decision_label: decision ? fillDecisionLabel(decision.label, klass.name, nextLevel) : null,
-          absences_count: absences.get(studentId) ?? 0,
-          lateness_count: lateness.get(studentId) ?? 0,
-          absence_hours_unjustified: unjustifiedHours.get(studentId) ?? 0,
-          generated_at: new Date().toISOString(),
-          // Un bulletin regenere doit etre revalide puis resigne.
-          signed_at: null,
-          signed_by: null,
-        } satisfies TablesInsert<'report_cards'>,
-        { onConflict: 'student_id,academic_period_id' },
-      )
-      .select('id')
-      .single();
-    if (cardErr) throw cardErr;
-
-    // Remplacer les lignes de matière.
-    await supabase.from('report_card_items').delete().eq('school_id', ctx.school.id).eq('report_card_id', card.id);
-    const items: TablesInsert<'report_card_items'>[] = subjects.map((s, i) => {
+    return {
+      school_id: ctx.school.id,
+      academic_year_id: yearId,
+      academic_period_id: periodId,
+      student_id: studentId,
+      class_id: classId,
+      status: 'GENERATED',
+      general_average: r?.general_average ?? null,
+      rank: r?.rank_position ?? null,
+      class_size: classSize,
+      class_average: classGeneralAvg,
+      // La mention de l'année remplace celle de la période sur le dernier
+      // bulletin : c'est le bilan qui compte, pas le dernier trimestre.
+      distinction: (yearMention ?? mention)?.code ?? 'NONE',
+      distinction_label: (yearMention ?? mention)?.label ?? null,
+      annual_average: annualAverage,
+      annual_rank: annual?.ranks.get(studentId) ?? null,
+      // Une PROPOSITION : le conseil de classe reste souverain et peut en
+      // changer avant de valider.
+      decision: decision?.code ?? null,
+      decision_label: decision ? fillDecisionLabel(decision.label, klass.name, nextLevel) : null,
+      absences_count: absences.get(studentId) ?? 0,
+      lateness_count: lateness.get(studentId) ?? 0,
+      absence_hours_unjustified: unjustifiedHours.get(studentId) ?? 0,
+      generated_at: new Date().toISOString(),
+      // Un bulletin regenere doit etre revalide puis resigne.
+      signed_at: null,
+      signed_by: null,
+    };
+  };
+  const itemsOf = (studentId: string, cardId: string): TablesInsert<'report_card_items'>[] =>
+    subjects.map((s, i): TablesInsert<'report_card_items'> => {
       const st = subjStats.get(s.id)!;
       const avg = st.average.get(studentId) ?? null;
       return {
         school_id: ctx.school.id,
-        report_card_id: card.id,
+        report_card_id: cardId,
         subject_id: s.id,
         subject_name_snapshot: s.name,
         teacher_name_snapshot: teacherFor(studentId, s.id),
@@ -309,9 +301,27 @@ export async function generateForClass(ctx: TenantContext, classId: string, peri
         sequence: i,
       };
     });
-    if (items.length > 0) await supabase.from('report_card_items').insert(items);
-    generated++;
+
+  const { data: cards, error: cardErr } = await supabase
+    .from('report_cards')
+    .upsert(studentIds.map(cardOf), { onConflict: 'student_id,academic_period_id' })
+    .select('id, student_id');
+  if (cardErr) throw cardErr;
+  const cardIds = (cards ?? []).map((c) => c.id);
+  for (let i = 0; i < cardIds.length; i += 150) {
+    const { error } = await supabase
+      .from('report_card_items')
+      .delete()
+      .eq('school_id', ctx.school.id)
+      .in('report_card_id', cardIds.slice(i, i + 150));
+    if (error) throw error;
   }
+  const items = (cards ?? []).flatMap((c) => itemsOf(c.student_id, c.id));
+  for (let i = 0; i < items.length; i += 1000) {
+    const { error } = await supabase.from('report_card_items').insert(items.slice(i, i + 1000));
+    if (error) throw error;
+  }
+  const generated = cardIds.length;
 
   await audit(ctx, { action: 'reports.generate', module: 'reports', entityType: 'report_card', after: { classId, periodId, generated } });
   return { generated };

@@ -87,7 +87,19 @@ export default async function BulletinsPage({
       {sp.published !== undefined ? <Alert tone="success">{sp.published} bulletin(s) publié(s).</Alert> : null}
       {sp.unpublished !== undefined ? <Alert tone="info">{sp.unpublished} bulletin(s) dépublié(s).</Alert> : null}
 
-      <PageHeader title="Bulletins" description={`Année ${ctx.academicYear.name}`} />
+      <PageHeader
+        title="Bulletins"
+        description={`Année ${ctx.academicYear.name}`}
+        action={
+          canPrint ? (
+            <Link href={`${base}/imprimer${periodId ? `?period=${periodId}` : ''}`}>
+              <Button variant="secondary" size="sm">
+                Télécharger plusieurs classes
+              </Button>
+            </Link>
+          ) : undefined
+        }
+      />
 
       <Card>
         <CardContent>

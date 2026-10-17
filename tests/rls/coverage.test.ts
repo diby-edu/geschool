@@ -24,9 +24,35 @@ afterAll(async () => {
   await db?.end();
 });
 
+/**
+ * Tables ou l'application n'ecrit JAMAIS directement : l'ecriture passe par une
+ * fonction SECURITY DEFINER qui verifie elle-meme le droit (ou par le serveur,
+ * avec le client d'administration). Sans policy d'ecriture, toute ecriture
+ * directe est REFUSEE — c'est voulu. La lecture, elle, reste exigee.
+ * Verifie le 2026-10-16 : aucun insert/update/delete direct dans src/ hors
+ * des cas listes en commentaire.
+ */
+const WRITE_BY_FUNCTION: Record<string, string> = {
+  attendance_alerts: 'serveur (client d administration, services/attendance-alerts.ts)',
+  sms_messages: 'serveur (client d administration, services/sms-log.ts)',
+  class_term_status: 'certify_class / unlock_class (0111)',
+  grade_flags: 'flag_grade / resolve_grade_flag (0111)',
+  council_averages: 'set_council_average (0113)',
+  previous_school_averages: 'set_previous_school_average (0114)',
+  subject_exemptions: 'fonctions de dispense EPS (0110)',
+  payment_receipts: 'app.issue_receipt (0102), lecture seule cote application',
+  // Ecritures partielles : l'application n'utilise que les operations couvertes.
+  average_completions: 'insert/delete directs (completion.ts), jamais update',
+  grade_change_requests: 'insert/update directs (corrections.ts), jamais delete',
+};
+
 describe('Couverture RLS', () => {
   it('aucune table tenant sans RLS activee, forcee et ses quatre policies', async () => {
-    const { rows } = await db.query('select * from app.tenant_tables_without_rls()');
+    const { rows: all } = await db.query('select * from app.tenant_tables_without_rls()');
+    // Une table « ecrite par fonction » doit quand meme etre activee, forcee et lisible.
+    const rows = all.filter(
+      (r) => !(r.table_name in WRITE_BY_FUNCTION && r.rls_enabled && r.rls_forced && r.has_select),
+    );
 
     if (rows.length > 0) {
       const detail = rows
@@ -86,11 +112,13 @@ describe('Couverture RLS', () => {
     }
   });
 
-  it('les fonctions de CALCUL ne sont pas SECURITY DEFINER', async () => {
+  it('les fonctions de CALCUL ne contournent pas la RLS sans verifier le droit', async () => {
     // Elles renvoient des donnees : en DEFINER, elles contourneraient la RLS
-    // et un parent obtiendrait la moyenne de n'importe quel eleve.
+    // et un parent obtiendrait la moyenne de n'importe quel eleve. Seule
+    // exception admise : class_period_ranking (0077, pour la vitesse), qui
+    // verifie ELLE-MEME le droit (app.can_view_class_grades) avant tout calcul.
     const { rows } = await db.query(`
-      select p.proname, p.prosecdef
+      select p.proname, p.prosecdef, p.prosrc
       from pg_proc p
       join pg_namespace n on n.oid = p.pronamespace
       where n.nspname = 'app'
@@ -101,6 +129,10 @@ describe('Couverture RLS', () => {
 
     expect(rows.length).toBe(3);
     for (const fn of rows) {
+      if (fn.proname === 'class_period_ranking' && fn.prosecdef) {
+        expect(fn.prosrc, 'class_period_ranking DEFINER doit verifier can_view_class_grades').toContain('app.can_view_class_grades(p_class)');
+        continue;
+      }
       expect(fn.prosecdef, `${fn.proname} ne doit PAS etre SECURITY DEFINER`).toBe(false);
     }
   });
@@ -125,10 +157,15 @@ describe('Couverture RLS', () => {
 
   it('le catalogue de permissions et les roles systeme sont en place', async () => {
     const perms = await db.query('select count(*)::int as n from permissions');
-    const roles = await db.query('select count(*)::int as n from roles where is_system');
+    const roles = await db.query('select code from roles where is_system and school_id is null order by code');
 
     expect(perms.rows[0].n).toBeGreaterThanOrEqual(120);
-    expect(roles.rows[0].n).toBe(9);
+    // 9 au depart (0028), + directeur adjoint, surveillant general, inspecteur
+    // d'education et informaticien (0050).
+    expect(roles.rows.map((r) => r.code)).toEqual([
+      'ACCOUNTANT', 'CENSOR', 'DEPUTY_DIRECTOR', 'DIRECTOR', 'EDUCATION_INSPECTOR', 'HEAD_SUPERVISOR',
+      'IT_ADMIN', 'PARENT', 'SCHOOL_ADMIN', 'SECRETARY', 'STUDENT', 'SUPERVISOR', 'TEACHER',
+    ]);
   });
 
   it('PARENT et STUDENT ne portent aucune permission', async () => {
@@ -165,7 +202,7 @@ describe('Couverture RLS', () => {
     ]);
   });
 
-  it('storage.objects porte les quatre policies de l application', async () => {
+  it('storage.objects porte les policies de l application (documents, bulletins, photo de profil)', async () => {
     const { rows } = await db.query(`
       select p.polname
       from pg_policy p
@@ -178,6 +215,10 @@ describe('Couverture RLS', () => {
     `);
 
     expect(rows.map((r) => r.polname)).toEqual([
+      // Sa propre photo de profil : chacun la gere seul.
+      'geschool_avatar_self_delete',
+      'geschool_avatar_self_insert',
+      'geschool_avatar_self_update',
       'geschool_objects_delete',
       'geschool_objects_insert',
       'geschool_objects_select',
