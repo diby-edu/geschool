@@ -8,8 +8,12 @@ import { createClient } from '@/lib/supabase/server';
  * Trois questions auxquelles ce module répond, et qu'aucun écran ne posait :
  * est-ce que ça grandit, est-ce que ça sert, et qui paie.
  *
- * Tout passe par le client RLS : seul un administrateur de la plateforme voit
- * ces lignes, et c'est la base qui le garantit, pas cette fonction.
+ * Tout est compté EN BASE (migration 0130) : PostgREST plafonne chaque réponse
+ * à 1 000 lignes, et lire les tables brutes pour compter en mémoire rendait des
+ * chiffres faux dès la 1 001e ligne (5 600 élèves, 560 000 notes). Les trois
+ * fonctions ne rendent qu'une ligne par école, par mois, ou une ligne de
+ * totaux ; elles refusent tout autre compte qu'un administrateur de la
+ * plateforme — c'est la base qui le garantit, pas cette fonction.
  */
 
 export type MonthPoint = {
@@ -50,6 +54,32 @@ export type PlatformStats = {
 
 const MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
+/** Les tables dont la présence d'une ligne dit qu'une école se sert du module. */
+const MODULES: { module: string; table: string }[] = [
+  { module: 'Élèves', table: 'students' },
+  { module: 'Emploi du temps', table: 'schedule_sessions' },
+  { module: 'Présences', table: 'attendance_registers' },
+  { module: 'Notes', table: 'grades' },
+  { module: 'Bulletins', table: 'report_cards' },
+  { module: 'Discipline', table: 'discipline_incidents' },
+  { module: 'Annonces', table: 'announcements' },
+];
+
+type LigneEcole = {
+  school_id: string;
+  name: string;
+  slug: string;
+  status: string;
+  created_at: string;
+  disabled_modules: number;
+  students: number;
+  staff: number;
+  last_seen: string | null;
+  modules_used: string[] | null;
+};
+type LigneMois = { month: string; schools: number; students: number; revenue: number | string };
+type LigneTotaux = { cashed_in: number | string; outstanding: number | string; currency: string | null };
+
 export async function getPlatformStats(months = 12): Promise<PlatformStats> {
   const supabase = await createClient();
   const debut = new Date();
@@ -58,23 +88,16 @@ export async function getPlatformStats(months = 12): Promise<PlatformStats> {
   debut.setHours(0, 0, 0, 0);
   const depuis = debut.toISOString();
 
-  const [{ data: ecoles }, { data: eleves }, { data: paiements }, { data: membres }, { data: activite }] =
-    await Promise.all([
-      supabase.from('schools').select('id, name, slug, status, created_at, disabled_features'),
-      supabase.from('students').select('school_id, created_at').is('deleted_at', null),
-      supabase.from('payments').select('amount, currency, status, paid_at, created_at'),
-      supabase.from('school_memberships').select('school_id, status'),
-      // Le dernier signe de vie de chaque école.
-      //
-      // PAS `access_events` : il ne retient que la vie d'un compte (créé,
-      // activé, suspendu) — 8 lignes sur douze mois, ce qui faisait passer pour
-      // dormantes des écoles actives. Le journal d'audit, lui, enregistre
-      // chaque geste réel : 202 lignes sur la même période.
-      supabase.from('audit_logs').select('school_id, created_at').gte('created_at', depuis).order('created_at', { ascending: false }).limit(5000),
-    ]);
+  const [parEcole, parMois, totaux] = await Promise.all([
+    supabase.rpc('platform_school_stats' as never, { p_since: depuis } as never),
+    supabase.rpc('platform_monthly_stats' as never, { p_since: depuis } as never),
+    supabase.rpc('platform_payment_totals' as never),
+  ]);
+  // Un échec doit se voir : des zéros silencieux sont exactement le défaut
+  // que ces fonctions corrigent.
+  for (const r of [parEcole, parMois, totaux]) if (r.error) throw new Error(r.error.message);
 
-  type Ecole = { id: string; name: string; slug: string; status: string; created_at: string; disabled_features: string[] | null };
-  const listeEcoles = (ecoles ?? []) as unknown as Ecole[];
+  const ecoles = (parEcole.data ?? []) as unknown as LigneEcole[];
 
   // --- Évolution mois par mois ---------------------------------------------
   const cases = new Map<string, MonthPoint>();
@@ -84,56 +107,33 @@ export async function getPlatformStats(months = 12): Promise<PlatformStats> {
     const clef = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     cases.set(clef, { month: clef, label: `${MOIS[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`, schools: 0, students: 0, revenue: 0 });
   }
-  const ajoute = (iso: string | null, champ: 'schools' | 'students' | 'revenue', valeur = 1) => {
-    if (!iso) return;
-    const c = cases.get(iso.slice(0, 7));
-    if (c) c[champ] += valeur;
-  };
-
-  for (const e of listeEcoles) ajoute(e.created_at, 'schools');
-  for (const el of (eleves ?? []) as { created_at: string }[]) ajoute(el.created_at, 'students');
-
-  let cashedIn = 0;
-  let outstanding = 0;
-  let currency = 'XOF';
-  for (const p of (paiements ?? []) as { amount: number; currency: string; status: string; paid_at: string | null; created_at: string }[]) {
-    const montant = Number(p.amount) || 0;
-    if (p.currency) currency = p.currency;
-    if (p.status === 'CONFIRMED' || p.status === 'SETTLED' || p.status === 'PAID') {
-      cashedIn += montant;
-      ajoute(p.paid_at ?? p.created_at, 'revenue', montant);
-    } else if (p.status !== 'CANCELLED' && p.status !== 'REFUNDED') {
-      outstanding += montant;
-    }
+  for (const m of (parMois.data ?? []) as unknown as LigneMois[]) {
+    const c = cases.get(m.month);
+    if (!c) continue;
+    c.schools = m.schools;
+    c.students = m.students;
+    c.revenue = Number(m.revenue) || 0;
   }
+
+  const t = ((totaux.data ?? []) as unknown as LigneTotaux[])[0];
+  const cashedIn = Number(t?.cashed_in) || 0;
+  const outstanding = Number(t?.outstanding) || 0;
+  const currency = t?.currency ?? 'XOF';
 
   // --- Par établissement ----------------------------------------------------
-  const elevesPar = compte((eleves ?? []) as { school_id: string }[], (r) => r.school_id);
-  const membresPar = compte(
-    ((membres ?? []) as { school_id: string; status: string }[]).filter((m) => m.status === 'ACTIVE'),
-    (r) => r.school_id,
-  );
-  const vuPar = new Map<string, string>();
-  for (const a of (activite ?? []) as { school_id: string | null; created_at: string }[]) {
-    if (a.school_id && !vuPar.has(a.school_id)) vuPar.set(a.school_id, a.created_at);
-  }
-
   const maintenant = Date.now();
-  const schools: SchoolStat[] = listeEcoles
-    .map((e) => {
-      const vu = vuPar.get(e.id) ?? null;
-      return {
-        id: e.id,
-        name: e.name,
-        slug: e.slug,
-        status: e.status,
-        students: elevesPar.get(e.id) ?? 0,
-        staff: membresPar.get(e.id) ?? 0,
-        lastSeen: vu,
-        idleDays: vu ? Math.floor((maintenant - new Date(vu).getTime()) / 86_400_000) : null,
-        disabledModules: (e.disabled_features ?? []).length,
-      };
-    })
+  const schools: SchoolStat[] = ecoles
+    .map((e) => ({
+      id: e.school_id,
+      name: e.name,
+      slug: e.slug,
+      status: e.status,
+      students: e.students,
+      staff: e.staff,
+      lastSeen: e.last_seen,
+      idleDays: e.last_seen ? Math.floor((maintenant - new Date(e.last_seen).getTime()) / 86_400_000) : null,
+      disabledModules: e.disabled_modules,
+    }))
     .sort((a, b) => b.students - a.students);
 
   // Une école qu'on n'a pas vue depuis un mois est en train de partir : c'est
@@ -141,47 +141,13 @@ export async function getPlatformStats(months = 12): Promise<PlatformStats> {
   const dormant = schools.filter((s) => s.status === 'ACTIVE' && (s.idleDays === null || s.idleDays > 30)).length;
 
   // --- Qui se sert de quoi --------------------------------------------------
-  const moduleUse = await usageParModule(listeEcoles.length);
+  // On ne regarde pas ce qui est activé — tout l'est par défaut — mais ce qui a
+  // produit des données. Un module vendu mais jamais utilisé est un module
+  // qu'on ne saura pas défendre au renouvellement.
+  const moduleUse = MODULES.map((m) => ({
+    module: m.module,
+    schools: ecoles.filter((e) => (e.modules_used ?? []).includes(m.table)).length,
+  })).sort((a, b) => b.schools - a.schools);
 
   return { months: [...cases.values()], schools, dormant, cashedIn, outstanding, currency, moduleUse };
-}
-
-/**
- * Combien d'écoles se servent vraiment de chaque module.
- *
- * On ne regarde pas ce qui est activé — tout l'est par défaut — mais ce qui a
- * produit des données. Un module vendu mais jamais utilisé est un module qu'on
- * ne saura pas défendre au renouvellement.
- */
-async function usageParModule(_total: number): Promise<{ module: string; schools: number }[]> {
-  const supabase = await createClient();
-  const tables: { module: string; table: string }[] = [
-    { module: 'Élèves', table: 'students' },
-    { module: 'Emploi du temps', table: 'schedule_sessions' },
-    { module: 'Présences', table: 'attendance_registers' },
-    { module: 'Notes', table: 'grades' },
-    { module: 'Bulletins', table: 'report_cards' },
-    { module: 'Discipline', table: 'discipline_incidents' },
-    { module: 'Annonces', table: 'announcements' },
-  ];
-
-  const out: { module: string; schools: number }[] = [];
-  for (const t of tables) {
-    // On ne lit que la colonne school_id, et on distingue en mémoire : compter
-    // en base demanderait une vue par table.
-    const { data, error } = await supabase.from(t.table as never).select('school_id').limit(5000);
-    if (error) continue;
-    const ids = new Set((data ?? []).map((r) => (r as { school_id: string }).school_id));
-    out.push({ module: t.module, schools: ids.size });
-  }
-  return out.sort((a, b) => b.schools - a.schools);
-}
-
-function compte<T>(rows: T[], clef: (r: T) => string): Map<string, number> {
-  const m = new Map<string, number>();
-  for (const r of rows) {
-    const k = clef(r);
-    m.set(k, (m.get(k) ?? 0) + 1);
-  }
-  return m;
 }
