@@ -3,6 +3,7 @@ import 'server-only';
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
 import type { ListParams } from '@/lib/query/list';
+import { formatPhoneForDisplay } from '@/lib/auth/identifier';
 
 export type StudentRow = {
   id: string;
@@ -155,4 +156,39 @@ export async function getStudentDetail(ctx: TenantContext, id: string) {
         phone: g.guardians!.phone_display ?? g.guardians!.phone_e164,
       })),
   };
+}
+
+/** Le dossier d'un élève et ses responsables, champ par champ, pour la page de correction. */
+export async function loadStudentForEdit(ctx: TenantContext, id: string) {
+  const supabase = await createClient();
+  const [{ data: student }, { data: links }] = await Promise.all([
+    supabase
+      .from('students')
+      .select('id, matricule, first_name, last_name, gender, birth_date, birth_place, is_state_assigned')
+      .eq('school_id', ctx.school.id)
+      .eq('id', id)
+      .maybeSingle(),
+    supabase
+      .from('student_guardians')
+      .select('relationship, is_primary_contact, guardians(id, first_name, last_name, phone_e164)')
+      .eq('school_id', ctx.school.id)
+      .eq('student_id', id),
+  ]);
+  if (!student) return null;
+  const guardians = ((links ?? []) as unknown as {
+    relationship: string;
+    is_primary_contact: boolean;
+    guardians: { id: string; first_name: string; last_name: string; phone_e164: string } | null;
+  }[])
+    .filter((l) => l.guardians)
+    .map((l) => ({
+      id: l.guardians!.id,
+      firstName: l.guardians!.first_name,
+      lastName: l.guardians!.last_name,
+      phone: formatPhoneForDisplay(l.guardians!.phone_e164, ctx.school.countryCode),
+      relationship: l.relationship,
+      isPrimary: l.is_primary_contact,
+    }))
+    .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
+  return { student, guardians };
 }

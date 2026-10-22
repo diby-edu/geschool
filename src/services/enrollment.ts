@@ -130,66 +130,8 @@ export async function enrollStudent(ctx: TenantContext, input: EnrollInput): Pro
   // 3. Responsables : rechercher-ou-creer sur (school, phone) — additif §4
   const guardians: EnrollResult['guardians'] = [];
   for (const g of input.guardians) {
-    const phone = normalizePhone(g.phone, ctx.school.countryCode);
-    if (!phone) throw new ValidationError(`Téléphone invalide pour ${g.firstName} ${g.lastName}.`);
-
-    const { data: existing } = await admin
-      .from('guardians')
-      .select('id, user_id')
-      .eq('school_id', schoolId)
-      .eq('phone_e164', phone)
-      .maybeSingle();
-
-    let guardianId: string;
-    let accountCreated = false;
-    let deliveryId: string | null = null;
-
-    if (existing) {
-      guardianId = existing.id;
-    } else {
-      // Le numero a peut-etre deja un acces dans l'ecole (un enseignant qui
-      // devient parent) : on lui ajoute le role Parent au lieu de creer un
-      // second compte, que la base refuserait.
-      const access = await findOrCreatePhoneAccess(ctx, {
-        phone,
-        firstName: g.firstName,
-        lastName: g.lastName,
-        role: 'PARENT',
-        subjectKind: 'GUARDIAN',
-      });
-      const { data: newGuardian, error: guardianError } = await admin
-        .from('guardians')
-        .insert({
-          school_id: schoolId,
-          user_id: access.userId,
-          first_name: g.firstName,
-          last_name: g.lastName,
-          phone_e164: phone,
-          status: 'ACTIVE',
-          created_by: ctx.user.id,
-        })
-        .select('id')
-        .single();
-      if (guardianError) throw guardianError;
-      guardianId = newGuardian.id;
-      accountCreated = access.created;
-      deliveryId = access.deliveryId;
-    }
-
-    // Relation eleve <-> responsable (idempotente)
-    await admin.from('student_guardians').upsert(
-      {
-        school_id: schoolId,
-        student_id: studentId,
-        guardian_id: guardianId,
-        relationship: g.relationship,
-        is_primary_contact: g.isPrimaryContact,
-      },
-      { onConflict: 'student_id,guardian_id' },
-    );
-
     // (L'envoi d'identifiants EN ATTENTE d'un compte neuf est cree par le service d'acces.)
-    guardians.push({ guardianId, name: `${g.firstName} ${g.lastName}`, accountCreated, deliveryId });
+    guardians.push(await attachGuardian(ctx, studentId, g));
   }
 
   return {
@@ -197,4 +139,77 @@ export async function enrollStudent(ctx: TenantContext, input: EnrollInput): Pro
     matricule,
     guardians,
   };
+}
+
+/**
+ * Rattache un responsable a un eleve : le retrouve par son telephone dans
+ * l'ecole, ou le cree avec son acces (compte Parent). Le lien est idempotent.
+ * Sert a l'inscription et a l'ajout d'un responsable depuis la fiche de l'eleve.
+ */
+export async function attachGuardian(
+  ctx: TenantContext,
+  studentId: string,
+  g: GuardianInput,
+): Promise<EnrollResult['guardians'][number]> {
+  const admin = createAdminClient('auth.create_user');
+  const schoolId = ctx.school.id;
+  const phone = normalizePhone(g.phone, ctx.school.countryCode);
+  if (!phone) throw new ValidationError(`Téléphone invalide pour ${g.firstName} ${g.lastName}.`);
+
+  const { data: existing } = await admin
+    .from('guardians')
+    .select('id, user_id')
+    .eq('school_id', schoolId)
+    .eq('phone_e164', phone)
+    .maybeSingle();
+
+  let guardianId: string;
+  let accountCreated = false;
+  let deliveryId: string | null = null;
+
+  if (existing) {
+    guardianId = existing.id;
+  } else {
+    // Le numero a peut-etre deja un acces dans l'ecole (un enseignant qui
+    // devient parent) : on lui ajoute le role Parent au lieu de creer un
+    // second compte, que la base refuserait.
+    const access = await findOrCreatePhoneAccess(ctx, {
+      phone,
+      firstName: g.firstName,
+      lastName: g.lastName,
+      role: 'PARENT',
+      subjectKind: 'GUARDIAN',
+    });
+    const { data: newGuardian, error: guardianError } = await admin
+      .from('guardians')
+      .insert({
+        school_id: schoolId,
+        user_id: access.userId,
+        first_name: g.firstName,
+        last_name: g.lastName,
+        phone_e164: phone,
+        status: 'ACTIVE',
+        created_by: ctx.user.id,
+      })
+      .select('id')
+      .single();
+    if (guardianError) throw guardianError;
+    guardianId = newGuardian.id;
+    accountCreated = access.created;
+    deliveryId = access.deliveryId;
+  }
+
+  // Relation eleve <-> responsable (idempotente)
+  const { error: linkError } = await admin.from('student_guardians').upsert(
+    {
+      school_id: schoolId,
+      student_id: studentId,
+      guardian_id: guardianId,
+      relationship: g.relationship,
+      is_primary_contact: g.isPrimaryContact,
+    },
+    { onConflict: 'student_id,guardian_id' },
+  );
+  if (linkError) throw linkError;
+  return { guardianId, name: `${g.firstName} ${g.lastName}`, accountCreated, deliveryId };
 }

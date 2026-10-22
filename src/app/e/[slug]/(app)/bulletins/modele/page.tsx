@@ -23,7 +23,7 @@ export default async function TemplatePage({
   const { slug } = await params;
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
-  requirePageAccess(ctx, 'settings.update');
+  requirePageAccess(ctx, 'reports.manage_template');
   requireFeature(ctx, 'bulletins');
 
   const rendu = await bulletinRender(ctx);

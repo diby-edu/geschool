@@ -41,7 +41,7 @@ export async function readTemplate(ctx: TenantContext): Promise<StoredTemplate> 
 }
 
 export async function writeTemplate(ctx: TenantContext, patch: Partial<BulletinTemplate>): Promise<void> {
-  requireWritable(ctx, 'settings.update');
+  requireWritable(ctx, 'reports.manage_template');
   const supabase = await createClient();
   const current = await readTemplate(ctx);
   const layout: BulletinTemplate = clean({ ...stripMeta(current), ...patch });
@@ -67,7 +67,7 @@ export async function writeTemplate(ctx: TenantContext, patch: Partial<BulletinT
 
 /** Revenir au modèle d'origine, sans détruire l'historique du reste. */
 export async function resetTemplate(ctx: TenantContext): Promise<void> {
-  requireWritable(ctx, 'settings.update');
+  requireWritable(ctx, 'reports.manage_template');
   const supabase = await createClient();
   const current = await readTemplate(ctx);
   if (!current.id) return;

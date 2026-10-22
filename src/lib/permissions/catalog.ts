@@ -66,7 +66,6 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
     id: 'enrollments',
     label: 'Vie scolaire des élèves',
     items: [
-      { code: 'enrollments.view', label: 'Consulter les inscriptions' },
       { code: 'enrollments.create', label: 'Réinscrire une classe à l’année suivante' },
       { code: 'enrollments.transfer', label: 'Changer un élève de classe' },
       { code: 'enrollments.validate', label: 'Valider une inscription', hint: 'Nécessaire pour qu’un changement de classe prenne effet.' },

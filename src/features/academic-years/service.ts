@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
 import { requireWritable } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
-import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
+import { businessDbError, ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import type { AcademicYearInput, CalendarEventInput, PeriodEditInput, PeriodInput } from './schemas';
 import { officialCalendarFor, officialScopes, officialBreakName } from './official-calendar-ci';
 import { schoolTracks } from '@/features/structure/queries';
@@ -232,14 +232,18 @@ export async function setTermDates(
     .eq('school_id', ctx.school.id)
     .eq('id', periodId)
     .maybeSingle();
-  const { data, error } = await supabase
-    .from('academic_periods')
-    .update({ grades_stop_on: stopOn, student_check_ends_on: studentEndsOn, head_check_ends_on: headEndsOn })
-    .eq('school_id', ctx.school.id)
-    .eq('id', periodId)
-    .select('id');
-  if (error) throw error;
-  if (!data || data.length === 0) throw new NotFoundError('Période introuvable.');
+  // Par une fonction qui vérifie CE droit (0133) : l'écriture directe exigeait
+  // « Gérer les années scolaires », et le Censeur était refusé sans le savoir.
+  const { error } = await supabase.rpc('set_term_dates' as never, {
+    p_period: periodId,
+    p_stop: stopOn,
+    p_student_end: studentEndsOn,
+    p_head_end: headEndsOn,
+  } as never);
+  if (error) {
+    if (error.code === 'P0002') throw new NotFoundError('Période introuvable.');
+    throw businessDbError(error) ?? error;
+  }
   await audit(ctx, {
     action: 'academic_periods.term_dates',
     module: 'grades',

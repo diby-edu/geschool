@@ -20,6 +20,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Flash } from '@/components/ui/flash';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = { title: 'Fiche élève' };
 
@@ -80,9 +81,18 @@ export default async function StudentDetailPage({
         title={`${student.last_name.toUpperCase()} ${student.first_name}`}
         description={`Matricule ${student.matricule}`}
         action={
-          <Link href={`/e/${slug}/students`} className="text-sm text-[color:var(--muted-foreground)] hover:underline">
-            Retour
-          </Link>
+          <div className="flex items-center gap-3">
+            {['students.update', 'guardians.update', 'guardians.create', 'guardians.delete'].some((c) => hasPermission(ctx, c)) ? (
+              <Link href={`/e/${slug}/students/${id}/modifier`}>
+                <Button variant="secondary" size="sm">
+                  Modifier
+                </Button>
+              </Link>
+            ) : null}
+            <Link href={`/e/${slug}/students`} className="text-sm text-[color:var(--muted-foreground)] hover:underline">
+              Retour
+            </Link>
+          </div>
         }
       />
 
