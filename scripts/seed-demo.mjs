@@ -121,15 +121,23 @@ async function getOrCreateUser({ email, meta = {}, mustChange = false }) {
   return data.user.id;
 }
 
-async function roleId(code) {
-  const { data, error } = await db.from('roles').select('id').is('school_id', null).eq('code', code).single();
+/** La fonction de l'école (sa copie, créée avec l'école depuis 0132) ; le modèle commun à défaut. */
+async function roleId(schoolId, code) {
+  const { data, error } = await db
+    .from('roles')
+    .select('id, school_id')
+    .eq('code', code)
+    .or(`school_id.eq.${schoolId},school_id.is.null`);
   if (error) throw new Error(`role ${code}: ${error.message}`);
-  return data.id;
+  const own = (data ?? []).find((r) => r.school_id === schoolId) ?? (data ?? []).find((r) => r.school_id === null);
+  if (!own) throw new Error(`role ${code} introuvable`);
+  return own.id;
 }
 const roleIdCache = new Map();
-async function cachedRoleId(code) {
-  if (!roleIdCache.has(code)) roleIdCache.set(code, await roleId(code));
-  return roleIdCache.get(code);
+async function cachedRoleId(schoolId, code) {
+  const key = `${schoolId}:${code}`;
+  if (!roleIdCache.has(key)) roleIdCache.set(key, await roleId(schoolId, code));
+  return roleIdCache.get(key);
 }
 
 async function ensureMembership(schoolId, userId, roleCode) {
@@ -138,7 +146,7 @@ async function ensureMembership(schoolId, userId, roleCode) {
     const ins = await db.from('school_memberships').insert({ school_id: schoolId, user_id: userId, status: 'ACTIVE' }).select('id').single();
     m = ins.data;
   }
-  const rid = await cachedRoleId(roleCode);
+  const rid = await cachedRoleId(schoolId, roleCode);
   await db.from('membership_roles').upsert({ membership_id: m.id, role_id: rid }, { onConflict: 'membership_id,role_id', ignoreDuplicates: true });
   return m.id;
 }

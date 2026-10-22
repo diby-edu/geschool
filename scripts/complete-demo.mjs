@@ -70,18 +70,29 @@ async function getOrCreateUser(email, meta) {
   return data.user.id;
 }
 const roleIds = new Map();
-async function roleId(code) {
-  if (!roleIds.has(code)) {
-    const [r] = await q('select id from roles where school_id is null and code = $1', [code]);
+/** La fonction de l'école (sa copie, 0132) ; le modèle commun seulement si l'école n'en a pas. */
+async function roleId(schoolId, code) {
+  const key = `${schoolId}:${code}`;
+  if (!roleIds.has(key)) {
+    const [r] = await q(
+      'select id from roles where code = $2 and (school_id = $1 or school_id is null) order by school_id nulls last limit 1',
+      [schoolId, code],
+    );
     if (!r) throw new Error(`rôle ${code} introuvable`);
-    roleIds.set(code, r.id);
+    roleIds.set(key, r.id);
   }
-  return roleIds.get(code);
+  return roleIds.get(key);
 }
 async function ensureMembership(schoolId, userId, roleCode) {
   let [m] = await q('select id from school_memberships where school_id = $1 and user_id = $2', [schoolId, userId]);
   if (!m) [m] = await q("insert into school_memberships (school_id, user_id, status) values ($1, $2, 'ACTIVE') returning id", [schoolId, userId]);
-  await q('insert into membership_roles (membership_id, role_id) values ($1, $2) on conflict do nothing', [m.id, await roleId(roleCode)]);
+  const rid = await roleId(schoolId, roleCode);
+  // Déjà titulaire de cette fonction (copie ou modèle) : rien à ajouter.
+  const [has] = await q(
+    'select 1 from membership_roles mr join roles r on r.id = mr.role_id where mr.membership_id = $1 and r.code = $2',
+    [m.id, roleCode],
+  );
+  if (!has) await q('insert into membership_roles (membership_id, role_id) values ($1, $2) on conflict do nothing', [m.id, rid]);
 }
 async function ensureAccess(schoolId, userId, email, subjectKind) {
   await q(
