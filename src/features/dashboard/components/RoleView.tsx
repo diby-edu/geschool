@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { Alert } from '@/components/ui/alert';
 import type { TenantContext } from '@/lib/tenant/context';
 import { hasAnyPermission, hasPermission } from '@/lib/permissions';
+import { featureEnabled, type FeatureCode } from '@/lib/modules/features';
 import { parseDashParams } from '../params';
 import { FOCUS_LAYOUT, focusesFor, planDashboard, type BlockKey, type Focus } from '../profiles';
 import { loadRoleDashboard, type RoleDashboard } from '../role-data';
@@ -46,6 +47,16 @@ const IMPORT = Symbol('import');
 type Action = HeroAction & { perm: string | readonly string[] | typeof IMPORT };
 /** Module Présences : « consulter les appels » ou « toutes les présences ». */
 const ATTENDANCE = ['attendance.view', 'attendance.view_all'] as const;
+
+/** Le module dont dépend la page d'un raccourci : coupé, le raccourci disparaît (sa page serait introuvable). */
+const ACTION_FEATURE: Record<string, FeatureCode> = {
+  evaluations: 'grades',
+  bulletins: 'bulletins',
+  schedule: 'schedule',
+  attendance: 'attendance',
+  annonces: 'announcements',
+  import: 'import_export',
+};
 
 const FOCUS_ACTIONS: Record<Focus, (base: string) => Action[]> = {
   pedagogy: (base) => [
@@ -104,7 +115,8 @@ export async function RoleView({
 }) {
   const params = parseDashParams(sp);
   const focuses = focusesFor(roles);
-  const plan = planDashboard(focuses, (c) => hasPermission(ctx, c));
+  const featureOn = (f: FeatureCode) => featureEnabled(ctx.disabledFeatures, f);
+  const plan = planDashboard(focuses, (c) => hasPermission(ctx, c), featureOn);
   const data = await loadRoleDashboard(ctx, plan, params);
   const base = `/e/${ctx.school.slug}`;
   const dash = `${base}/dashboard`;
@@ -114,7 +126,8 @@ export async function RoleView({
     .flatMap((f) => FOCUS_ACTIONS[f](base))
     .filter((a) => {
       const ok = a.perm === IMPORT ? data.importOpen : typeof a.perm === 'string' ? hasPermission(ctx, a.perm) : hasAnyPermission(ctx, a.perm);
-      if (!ok || seen.has(a.href)) return false;
+      const feature = ACTION_FEATURE[a.href.slice(base.length + 1).split('/')[0] ?? ''];
+      if (!ok || (feature && !featureOn(feature)) || seen.has(a.href)) return false;
       seen.add(a.href);
       return true;
     })

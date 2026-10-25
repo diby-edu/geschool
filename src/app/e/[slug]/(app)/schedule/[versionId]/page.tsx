@@ -204,7 +204,13 @@ export default async function ScheduleEditorPage({
       {workingDays.length === 0 ? (
         <EmptyState title="Grille non configurée" />
       ) : (
-        <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${workingDays.length}, minmax(0, 1fr))` }}>
+        // Sur téléphone, la semaine défile dans sa zone : sans largeur minimale par
+        // jour, les cours et leurs boutons débordaient de la page (vu le 2026-10-25).
+        <div className="overflow-x-auto">
+          <div
+            className="grid gap-3"
+            style={{ gridTemplateColumns: `repeat(${workingDays.length}, minmax(0, 1fr))`, minWidth: `${workingDays.length * 9}rem` }}
+          >
           {workingDays.map((day) => {
             const daySessions = classSessions
               .filter((s) => s.day_of_week === day)
@@ -291,6 +297,7 @@ export default async function ScheduleEditorPage({
               </div>
             );
           })}
+          </div>
         </div>
       )}
 

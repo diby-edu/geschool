@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useEffect } from 'react';
 import { Input, Label } from '@/components/ui/input';
 import { loginWithEmail, type AuthState } from '../actions';
 import { SubmitButton } from './SubmitButton';
@@ -8,6 +8,10 @@ import { FormError } from './FormError';
 
 export function EmailLoginForm({ next }: { next?: string | undefined }) {
   const [state, action] = useActionState<AuthState, FormData>(loginWithEmail, {});
+  // Connexion réussie : la page de destination se charge en entier (voir AuthState).
+  useEffect(() => {
+    if (state.redirectTo) window.location.assign(state.redirectTo);
+  }, [state.redirectTo]);
 
   return (
     <form noValidate action={action} className="space-y-4">

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccessAny, requireFeature } from '@/lib/permissions/guard';
-import { listAbsences } from '@/features/attendance/queries';
+import { ABSENCES_PAGE_SIZE, listAbsences } from '@/features/attendance/queries';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,10 @@ export default async function AbsencesPage({
   const monthAgo = new Date(today.getTime() - 30 * 24 * 3600_000);
   const from = typeof sp.from === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(sp.from) ? sp.from : iso(monthAgo);
   const to = typeof sp.to === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(sp.to) ? sp.to : iso(today);
-  const rows = await listAbsences(ctx, { from, to });
+  const page = Math.max(1, Number(typeof sp.page === 'string' ? sp.page : '1') || 1);
+  const { rows, total } = await listAbsences(ctx, { from, to, page });
+  const pages = Math.max(1, Math.ceil(total / ABSENCES_PAGE_SIZE));
+  const lienPage = (n: number) => `${base}/absences?from=${from}&to=${to}&page=${n}`;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -56,6 +59,13 @@ export default async function AbsencesPage({
           </form>
         </CardContent>
       </Card>
+
+      {total > 0 ? (
+        <p className="text-sm text-[color:var(--muted-foreground)]">
+          <strong className="text-[color:var(--foreground)]">{total.toLocaleString('fr-FR')}</strong> absence(s) et retard(s) du{' '}
+          {from} au {to}, les plus récents d’abord{pages > 1 ? ` — page ${page} sur ${pages}` : ''}.
+        </p>
+      ) : null}
 
       {rows.length === 0 ? (
         <EmptyState title="Aucune absence ni retard" hint="Sur la période choisie." />
@@ -89,6 +99,14 @@ export default async function AbsencesPage({
           </table>
         </div>
       )}
+
+      {pages > 1 ? (
+        <nav className="flex items-center justify-between gap-3 text-sm" aria-label="Pages">
+          {page > 1 ? <Link href={lienPage(page - 1)} className="underline">← Plus récents</Link> : <span />}
+          <span className="text-[color:var(--muted-foreground)]">Page {page} sur {pages}</span>
+          {page < pages ? <Link href={lienPage(page + 1)} className="underline">Plus anciens →</Link> : <span />}
+        </nav>
+      ) : null}
     </div>
   );
 }

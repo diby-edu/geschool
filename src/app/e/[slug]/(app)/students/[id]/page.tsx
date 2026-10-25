@@ -152,6 +152,8 @@ export default async function StudentDetailPage({
             classes={classes}
             currentClassId={enrollment.classId}
             today={schoolToday(ctx.school.timezone)}
+            canTransfer={canTransfer}
+            canWithdraw={canWithdraw}
           />
         )
       ) : null}

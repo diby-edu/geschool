@@ -43,6 +43,14 @@ describe('Chaque fonction a ses propres indicateurs', () => {
     expect(p.blocks[0]).toBe('day');
   });
 
+  it('module Notes coupé : plus aucun indicateur de notes, le reste demeure', () => {
+    const p = planDashboard(focusesFor(['DEPUTY_DIRECTOR']), everything, (f) => f !== 'grades');
+    for (const k of ['toClose', 'lateAssessments', 'schoolAverage', 'classesBelow', 'averagesDone'] as const) expect(p.kpis).not.toContain(k);
+    for (const b of ['grading', 'classAverages', 'assessmentActivity'] as const) expect(p.blocks).not.toContain(b);
+    expect(p.kpis).toContain('bulletinsToValidate');
+    expect(p.kpis).toContain('callsToday');
+  });
+
   it('secrétaire sans droit sur les présences : pas l’appel du jour', () => {
     const p = planDashboard(focusesFor(['SECRETARY']), rights('students.view', 'access_accounts.view'));
     expect(p.kpis).toContain('newEnrollments');

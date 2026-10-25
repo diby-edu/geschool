@@ -154,13 +154,16 @@ export async function loadParents(supabase: Awaited<ReturnType<typeof createClie
       .select('id', { count: 'exact', head: true })
       .eq('school_id', schoolId)
       .eq('subject_kind', 'GUARDIAN');
-  const [total, activated, pending] = await Promise.all([
+  const [families, total, activated, pending] = await Promise.all([
+    // Tous les parents de l'école, avec ou sans compte : « 7 sur 7 » laissait croire
+    // que tous étaient connectés, alors que l'école en compte 4 000.
+    supabase.from('guardians').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).eq('status', 'ACTIVE'),
     guardians(),
     guardians().eq('activation_status', 'ACTIVATED'),
     // Même définition que le filtre « Non activés » de la page Accès : un compte suspendu n'est pas « à activer ».
     guardians().neq('activation_status', 'ACTIVATED').neq('account_status', 'SUSPENDED'),
   ]);
-  return { total: total.count ?? 0, activated: activated.count ?? 0, pending: pending.count ?? 0 };
+  return { families: families.count ?? 0, total: total.count ?? 0, activated: activated.count ?? 0, pending: pending.count ?? 0 };
 }
 
 async function loadTeacherOverview(ctx: TenantContext): Promise<TeacherOverview> {

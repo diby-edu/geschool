@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
-import { fetchAllRows } from '@/lib/supabase/pagination';
 import type { TenantContext } from '@/lib/tenant/context';
 
 export type AbsenceRow = {
@@ -16,72 +15,55 @@ export type AbsenceRow = {
   comment: string | null;
 };
 
+export const ABSENCES_PAGE_SIZE = 100;
+
 /**
- * Absences et retards sur une fenêtre de dates, éventuellement pour une classe.
- * La date de référence est celle de l'occurrence (le cours), pas la saisie.
+ * Absences et retards sur une fenêtre de dates, UNE page à la fois (les plus
+ * récentes d'abord), avec le total. La date de référence est celle du cours.
+ *
+ * Tout se fait en base (list_absences, 0134) : lire toutes les absences du mois
+ * pour les afficher d'un bloc prenait 104 s sur un grand établissement (20 000
+ * absences et retards en un mois), et une lecture simple s'arrêtait sans le
+ * dire à 1 000 lignes.
  */
 export async function listAbsences(
   ctx: TenantContext,
-  opts: { from: string; to: string; classId?: string },
-): Promise<AbsenceRow[]> {
+  opts: { from: string; to: string; page?: number },
+): Promise<{ rows: AbsenceRow[]; total: number }> {
   const supabase = await createClient();
-  // Filtre de dates EN BASE (sur la date du cours), et lecture complète par
-  // pages : avant, toutes les absences de l'école étaient lues puis filtrées
-  // ici — lent (8 s pour 37 000 absences) et tronqué sans le dire à 1 000
-  // lignes par PostgREST, donc des absences manquaient dans la liste.
-  const data = await fetchAllRows((cursor) => {
-    let q = supabase
-      .from('attendance_records')
-      .select(
-        'id, status, minutes_late, comment, ' +
-          'students(matricule, first_name, last_name), ' +
-          'attendance_registers!inner(session_occurrences!inner(occurs_on, ' +
-          'schedule_sessions(subjects(name), schedule_session_targets(class_id, classes(name)))))',
-      )
-      .eq('school_id', ctx.school.id)
-      .in('status', ['ABSENT', 'LATE'])
-      .gte('attendance_registers.session_occurrences.occurs_on', opts.from)
-      .lte('attendance_registers.session_occurrences.occurs_on', opts.to)
-      .order('id')
-      .limit(1000);
-    if (cursor) q = q.gt('id', cursor);
-    return q as unknown as PromiseLike<{ data: { id: string }[] | null; error: { message: string } | null }>;
-  });
-
-  const rows = (data as unknown as {
+  const page = Math.max(1, opts.page ?? 1);
+  const { data, error } = await supabase.rpc('list_absences' as never, {
+    p_school: ctx.school.id,
+    p_from: opts.from,
+    p_to: opts.to,
+    p_limit: ABSENCES_PAGE_SIZE,
+    p_offset: (page - 1) * ABSENCES_PAGE_SIZE,
+  } as never);
+  if (error) throw error;
+  const list = (data ?? []) as {
     id: string;
+    occurs_on: string;
+    student: string;
+    matricule: string;
+    class_name: string | null;
+    subject: string;
     status: string;
     minutes_late: number;
     comment: string | null;
-    students: { matricule: string; first_name: string; last_name: string } | null;
-    attendance_registers: {
-      session_occurrences: {
-        occurs_on: string;
-        schedule_sessions: {
-          subjects: { name: string } | null;
-          schedule_session_targets: { class_id: string | null; classes: { name: string } | null }[];
-        } | null;
-      } | null;
-    } | null;
-  }[])
-    .map((r) => {
-      const occ = r.attendance_registers?.session_occurrences ?? null;
-      const target = occ?.schedule_sessions?.schedule_session_targets?.[0] ?? null;
-      return {
-        id: r.id,
-        date: occ?.occurs_on ?? '',
-        student: r.students ? `${r.students.last_name.toUpperCase()} ${r.students.first_name}` : '—',
-        matricule: r.students?.matricule ?? '',
-        klass: target?.classes?.name ?? '—',
-        classId: target?.class_id ?? null,
-        subject: occ?.schedule_sessions?.subjects?.name ?? 'Cours',
-        status: r.status,
-        minutes_late: r.minutes_late,
-        comment: r.comment,
-      };
-    })
-    .filter((r) => r.date >= opts.from && r.date <= opts.to && (!opts.classId || r.classId === opts.classId))
-    .sort((a, b) => b.date.localeCompare(a.date) || a.student.localeCompare(b.student));
-
-  return rows.map(({ classId: _classId, ...rest }) => rest);
+    total: number | string;
+  }[];
+  return {
+    total: list.length ? Number(list[0]!.total) : 0,
+    rows: list.map((r) => ({
+      id: r.id,
+      date: r.occurs_on,
+      student: r.student,
+      matricule: r.matricule,
+      klass: r.class_name ?? '—',
+      subject: r.subject,
+      status: r.status,
+      minutes_late: r.minutes_late,
+      comment: r.comment,
+    })),
+  };
 }

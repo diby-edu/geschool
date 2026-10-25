@@ -18,14 +18,19 @@ import { attemptKey, clearFailures, isLockedOut, LOCKED_MESSAGE, recordFailure }
 import { resolveAuthEmail, resolveSchoolBySlug, resolveSchoolByCode } from './service';
 
 /**
- * Etat renvoye a un formulaire (useActionState) EN CAS D'ERREUR seulement.
- * En cas de succes, l'action redirige cote serveur (redirect()) : Next vide
- * les cookies de session avant d'emettre la redirection, et le navigateur la
- * suit automatiquement. Une redirection cote client (useEffect + router) s'est
- * averee non fiable — elle ne suivait pas la redirection serveur en cascade
- * de la racine.
+ * Etat renvoye a un formulaire de connexion (useActionState).
+ *
+ * `error` : echec, le message s'affiche.
+ * `redirectTo` : connexion reussie (les cookies de session sont deja poses par
+ * la reponse de l'action) ; le formulaire charge cette page EN ENTIER
+ * (window.location.assign), jamais par le routeur. Avec redirect() cote
+ * serveur, Next calculait le tableau de bord DANS la reponse du formulaire ;
+ * quand il etait lent, l'onglet restait bloque sur « Un instant… » alors que
+ * la personne etait connectee (constate le 2026-10-25). Le routeur (useEffect +
+ * router.push) avait deja ete ecarte : il ne suivait pas les redirections en
+ * cascade de la racine. Un chargement complet les suit, comme un lien.
  */
-export type AuthState = { error?: string };
+export type AuthState = { error?: string; redirectTo?: string };
 
 const GENERIC = 'Identifiant ou mot de passe incorrect.';
 
@@ -89,9 +94,21 @@ export async function loginWithEmail(_prev: AuthState, formData: FormData): Prom
   // de « / » rendu dans la foulée de la connexion lui a déjà servi la vitrine publique.
   if (!parsed.data.next) {
     const { data: isAdmin } = await supabase.rpc('is_platform_admin' as never);
-    if (isAdmin === true) redirect('/admin');
+    if (isAdmin === true) return { redirectTo: '/admin' };
+    // Un seul établissement : on y va tout droit. Passer par « / » ajoutait une
+    // redirection de plus, et l'onglet restait blanc sur la vitrine le temps que
+    // le tableau de bord se calcule (constaté le 2026-10-24).
+    const { data: memberships } = await supabase
+      .from('school_memberships')
+      .select('schools(slug)')
+      .eq('user_id', signedIn.user.id)
+      .eq('status', 'ACTIVE');
+    const slugs = ((memberships ?? []) as unknown as { schools: { slug: string } | null }[])
+      .map((m) => m.schools?.slug)
+      .filter((s): s is string => !!s);
+    if (slugs.length === 1) return { redirectTo: `/e/${slugs[0]}` };
   }
-  redirect(safeNext(parsed.data.next));
+  return { redirectTo: safeNext(parsed.data.next) };
 }
 
 // ---------------------------------------------------------------------------
@@ -134,7 +151,7 @@ export async function loginWithSchoolIdentifier(
   await clearFailures(key);
   await noteLogin(supabase, signedIn.user?.id);
 
-  redirect(`/e/${parsed.data.slug}`);
+  return { redirectTo: `/e/${parsed.data.slug}` };
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +201,7 @@ export async function loginWithSchoolCode(_prev: AuthState, formData: FormData):
   });
 
   const next = safeNext(parsed.data.next);
-  redirect(next.startsWith(`/e/${school.slug}`) ? next : `/e/${school.slug}`);
+  return { redirectTo: next.startsWith(`/e/${school.slug}`) ? next : `/e/${school.slug}` };
 }
 
 // ---------------------------------------------------------------------------

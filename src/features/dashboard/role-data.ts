@@ -120,6 +120,31 @@ async function headCount(q: PromiseLike<{ count: number | null }>): Promise<numb
   return count ?? 0;
 }
 
+function isTimeout(e: unknown): boolean {
+  if (!e || typeof e !== 'object') return false;
+  const { code, message } = e as { code?: unknown; message?: unknown };
+  return code === '57014' || (typeof message === 'string' && message.includes('statement timeout'));
+}
+
+/**
+ * Un indicateur lent ne doit pas faire tomber tout le tableau de bord : une lecture
+ * arrêtée par la base (délai dépassé, 57014) rend « rien » et l'indicateur disparaît,
+ * comme callRpc le fait déjà pour les fonctions SQL. Les lectures de tables levaient
+ * l'erreur et la page entière affichait « Une erreur est survenue » (vu le 2026-10-25,
+ * Directeur adjoint, 8 sessions ouvertes). Toute autre erreur reste levée.
+ */
+function softAll<T extends unknown[]>(ps: [...{ [K in keyof T]: Promise<T[K]> }]): Promise<{ [K in keyof T]: T[K] | null }> {
+  return Promise.all(
+    ps.map((p) =>
+      p.catch((e: unknown) => {
+        if (!isTimeout(e)) throw e;
+        console.error(`tableau de bord : delai depasse (${(e as { message?: string }).message})`);
+        return null;
+      }),
+    ),
+  ) as never;
+}
+
 export async function loadRoleDashboard(ctx: TenantContext, plan: DashboardPlan, params: DashParams): Promise<RoleDashboard> {
   const supabase = await createClient();
   const schoolId = ctx.school.id;
@@ -160,7 +185,7 @@ export async function loadRoleDashboard(ctx: TenantContext, plan: DashboardPlan,
     feed,
     announcements,
     payroll,
-  ] = await Promise.all([
+  ] = await softAll([
     needStaff
       ? loadStaffDashboard(ctx, params, { overview: false, day: needDay, grading: needGrading, watch: b.has('watch') })
       : Promise.resolve(null),
@@ -458,7 +483,10 @@ export async function loadRoleDashboard(ctx: TenantContext, plan: DashboardPlan,
             key,
             label: 'Comptes parents à activer',
             value: fr(parents.pending),
-            sub: `${fr(parents.activated)} ${plural(parents.activated, 'parent connecté', 'parents connectés')} sur ${fr(parents.total)}`,
+            sub:
+              parents.families > parents.total
+                ? `${fr(parents.total)} ${plural(parents.total, 'parent a un compte', 'parents ont un compte')} sur ${fr(parents.families)} · ${fr(parents.activated)} ${plural(parents.activated, 'connecté', 'connectés')}`
+                : `${fr(parents.activated)} ${plural(parents.activated, 'parent connecté', 'parents connectés')} sur ${fr(parents.total)}`,
             module: 'acces',
             href: `${base}/access?kind=GUARDIAN&status=NOT_ACTIVATED`,
           });

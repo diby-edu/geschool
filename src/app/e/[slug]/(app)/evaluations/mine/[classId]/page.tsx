@@ -6,6 +6,7 @@ import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { getMyTaughtClasses, getMySubjectsForClass } from '@/features/teachers/my-scope';
 import { listPeriodsForClass } from '@/features/evaluations/refs';
 import { listAssessments } from '@/features/evaluations/assessments';
+import { schoolToday } from '@/features/dashboard/time';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Flash } from '@/components/ui/flash';
 import { Button } from '@/components/ui/button';
@@ -44,12 +45,14 @@ export default async function MyClassEvaluationsPage({
     );
   }
 
-  // A defaut de choix explicite, la derniere periode (sequence la plus
-  // elevee) : une meilleure approximation de « la periode en cours » que la
-  // premiere, sans dependance a une notion de date ici (refs.ts ne renvoie
-  // que id/nom).
+  // A defaut de choix explicite, la periode en cours : la derniere commencee a
+  // la date de l'ecole. Avant, la derniere de l'annee : en octobre, l'enseignant
+  // arrivait sur le 3e trimestre, et « Nouvelle evaluation » l'y creait (constate
+  // le 2026-10-25).
+  const today = schoolToday(ctx.school.timezone);
+  const current = periods.filter((p) => p.startsOn <= today).at(-1) ?? periods[0];
   const requested = typeof sp.period === 'string' ? sp.period : null;
-  const activeTab = requested === 'annual' ? 'annual' : requested && periods.some((p) => p.id === requested) ? requested : (periods[periods.length - 1]?.id ?? null);
+  const activeTab = requested === 'annual' ? 'annual' : requested && periods.some((p) => p.id === requested) ? requested : (current?.id ?? null);
 
   const assessments =
     activeTab && activeTab !== 'annual'

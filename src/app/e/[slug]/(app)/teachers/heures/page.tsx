@@ -49,6 +49,8 @@ export default async function PayrollPage({
   const doneTotal = rows.reduce((a, r) => a + r.result.doneHours, 0);
   const missingQuota = rows.filter((r) => r.result.missingQuota).length;
 
+  const canSeeTeachers = hasPermission(ctx, 'teachers.view');
+
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <PageHeader
@@ -59,9 +61,12 @@ export default async function PayrollPage({
             <a href={`/e/${slug}/api/paie?mois=${month}`}>
               <Button variant="secondary" size="sm">Télécharger (Excel)</Button>
             </a>
-            <Link href={`/e/${slug}/teachers`}>
-              <Button variant="ghost" size="sm">Enseignants</Button>
-            </Link>
+            {/* Le Comptable a la paie sans la liste des enseignants : pas de lien vers une page refusée. */}
+            {canSeeTeachers ? (
+              <Link href={`/e/${slug}/teachers`}>
+                <Button variant="ghost" size="sm">Enseignants</Button>
+              </Link>
+            ) : null}
           </div>
         }
       />
@@ -78,7 +83,12 @@ export default async function PayrollPage({
           <p className="text-[color:var(--muted-foreground)]">
             <b>Vacataire</b> : toutes ses heures faites sont payées. <b>Permanent</b> : seules les heures au-delà de son quota
             hebdomadaire (le maximum de son service, réglé dans{' '}
-            <Link href={`/e/${slug}/teachers/service`} className="underline">Service des enseignants</Link> ou sur sa fiche) sont
+            {canSeeTeachers ? (
+              <Link href={`/e/${slug}/teachers/service`} className="underline">Service des enseignants</Link>
+            ) : (
+              'Service des enseignants'
+            )}{' '}
+            ou sur sa fiche) sont
             payées, semaine par semaine. Un enseignant peut avoir son propre taux sur sa fiche.
           </p>
           {hasPermission(ctx, 'settings.update') ? (
@@ -107,7 +117,7 @@ export default async function PayrollPage({
       ) : (
         <>
           <p className="text-sm">
-            <b>{doneTotal} h</b> faites ce mois · <b>{formatFcfa(total)}</b> à payer à l’heure.
+            <b>{doneTotal.toLocaleString('fr-FR')} h</b> faites ce mois · <b>{formatFcfa(total)}</b> à payer à l’heure.
           </p>
           <div className="overflow-x-auto rounded-[--radius-card] border" style={{ borderColor: 'var(--border)' }}>
             <table className="w-full text-sm">

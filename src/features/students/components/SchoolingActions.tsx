@@ -25,12 +25,17 @@ export function SchoolingActions({
   classes,
   currentClassId,
   today,
+  canTransfer,
+  canWithdraw,
 }: {
   transferAction: Action;
   withdrawAction: Action;
   classes: Opt[];
   currentClassId: string | null;
   today: string;
+  /** Chaque bouton suit son droit : la Secrétaire enregistre un départ sans changer de classe. */
+  canTransfer: boolean;
+  canWithdraw: boolean;
 }) {
   const [panel, setPanel] = useState<'none' | 'transfer' | 'leave'>('none');
   const [transferState, transferForm] = useActionState<FormState, FormData>(transferAction, {});
@@ -43,22 +48,26 @@ export function SchoolingActions({
     <Card>
       <CardContent className="space-y-3 py-3">
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setPanel(panel === 'transfer' ? 'none' : 'transfer')}
-            className="h-9 rounded-[--radius-card] border px-3 text-sm"
-            style={{ borderColor: 'var(--border)' }}
-          >
-            Changer de classe
-          </button>
-          <button
-            type="button"
-            onClick={() => setPanel(panel === 'leave' ? 'none' : 'leave')}
-            className="h-9 rounded-[--radius-card] border px-3 text-sm"
-            style={{ borderColor: 'var(--border)' }}
-          >
-            Enregistrer un départ
-          </button>
+          {canTransfer ? (
+            <button
+              type="button"
+              onClick={() => setPanel(panel === 'transfer' ? 'none' : 'transfer')}
+              className="h-9 rounded-[--radius-card] border px-3 text-sm"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              Changer de classe
+            </button>
+          ) : null}
+          {canWithdraw ? (
+            <button
+              type="button"
+              onClick={() => setPanel(panel === 'leave' ? 'none' : 'leave')}
+              className="h-9 rounded-[--radius-card] border px-3 text-sm"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              Enregistrer un départ
+            </button>
+          ) : null}
         </div>
 
         {panel === 'transfer' ? (

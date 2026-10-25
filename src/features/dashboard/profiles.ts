@@ -1,5 +1,6 @@
 import type { PermissionCode } from '@/lib/permissions';
 import type { RoleCode } from '@/lib/permissions/roles';
+import type { FeatureCode } from '@/lib/modules/features';
 
 /**
  * Tableau de bord PAR FONCTION (espace Direction).
@@ -69,13 +70,17 @@ export type BlockKey =
   | 'activity'
   | 'announcements';
 
-/** Droits exigés : tous ceux de `all`, et au moins un de `any`. */
-type Need = { all?: readonly PermissionCode[]; any?: readonly PermissionCode[] };
+/**
+ * Droits exigés : tous ceux de `all`, et au moins un de `any`. `feature` : le module
+ * dont l'indicateur dépend ; coupé par la plateforme, l'indicateur disparaît (le
+ * 2026-10-25, les notes restaient au tableau de bord avec le module Notes coupé).
+ */
+type Need = { all?: readonly PermissionCode[]; any?: readonly PermissionCode[]; feature?: FeatureCode };
 
-const ATTENDANCE: Need = { all: ['attendance.view_all'] };
+const ATTENDANCE: Need = { all: ['attendance.view_all'], feature: 'attendance' };
 // Les justificatifs se lisent par l'élève (RLS : can_see_student) : sans « Voir les
 // élèves », le compte serait faux (0) — l'indicateur disparaît plutôt.
-const JUSTIFY: Need = { all: ['students.view'], any: ['attendance.justify', 'attendance.view_all'] };
+const JUSTIFY: Need = { all: ['students.view'], any: ['attendance.justify', 'attendance.view_all'], feature: 'attendance' };
 
 export const KPI_NEEDS: Record<KpiKey, Need> = {
   callsToday: ATTENDANCE,
@@ -85,15 +90,15 @@ export const KPI_NEEDS: Record<KpiKey, Need> = {
   lowClasses: ATTENDANCE,
   pendingJustifications: JUSTIFY,
   absentStudents30d: ATTENDANCE,
-  toClose: { all: ['assessments.view'] },
-  lateAssessments: { all: ['assessments.view'] },
-  assessmentsPeriod: { all: ['assessments.view'] },
-  teachersWithout: { all: ['assessments.view'] },
-  schoolAverage: { all: ['grades.view_all'] },
-  classesBelow: { all: ['grades.view_all'] },
-  averagesDone: { all: ['grades.view_all'] },
-  bulletinsToValidate: { all: ['reports.view'] },
-  scheduleStatus: { all: ['schedule.view'] },
+  toClose: { all: ['assessments.view'], feature: 'grades' },
+  lateAssessments: { all: ['assessments.view'], feature: 'grades' },
+  assessmentsPeriod: { all: ['assessments.view'], feature: 'grades' },
+  teachersWithout: { all: ['assessments.view'], feature: 'grades' },
+  schoolAverage: { all: ['grades.view_all'], feature: 'grades' },
+  classesBelow: { all: ['grades.view_all'], feature: 'grades' },
+  averagesDone: { all: ['grades.view_all'], feature: 'grades' },
+  bulletinsToValidate: { all: ['reports.view'], feature: 'bulletins' },
+  scheduleStatus: { all: ['schedule.view'], feature: 'schedule' },
   programmeCoverage: { all: ['subjects.view'] },
   students: { all: ['students.view'] },
   newEnrollments: { all: ['students.view'] },
@@ -114,13 +119,13 @@ export const BLOCK_NEEDS: Record<BlockKey, Need> = {
   watch: ATTENDANCE,
   topAbsentees: ATTENDANCE,
   justifications: JUSTIFY,
-  grading: { all: ['grades.view_all'] },
-  classAverages: { all: ['grades.view_all'] },
-  assessmentActivity: { all: ['assessments.view'] },
+  grading: { all: ['grades.view_all'], feature: 'grades' },
+  classAverages: { all: ['grades.view_all'], feature: 'grades' },
+  assessmentActivity: { all: ['assessments.view'], feature: 'grades' },
   recentEnrollments: { all: ['students.view'] },
   accessQueue: { all: ['access_accounts.view'] },
   activity: { all: ['audit.view'] },
-  announcements: { all: ['announcements.view'] },
+  announcements: { all: ['announcements.view'], feature: 'announcements' },
 };
 
 export const FOCUS_LAYOUT: Record<Focus, { label: string; kpis: readonly KpiKey[]; blocks: readonly BlockKey[] }> = {
@@ -192,7 +197,8 @@ export function focusesFor(roles: readonly string[]): Focus[] {
   return FOCUS_ORDER.filter((f) => wanted.has(f));
 }
 
-function allowed(need: Need, has: (code: PermissionCode) => boolean): boolean {
+function allowed(need: Need, has: (code: PermissionCode) => boolean, featureOn: (code: FeatureCode) => boolean): boolean {
+  if (need.feature && !featureOn(need.feature)) return false;
   if (need.all && !need.all.every(has)) return false;
   if (need.any && !need.any.some(has)) return false;
   return true;
@@ -214,7 +220,11 @@ export type DashboardPlan = {
  * Plan du tableau : les angles des fonctions d'abord, puis tous les autres
  * angles — chacun ne garde que ce que les droits cochés ouvrent, sans doublon.
  */
-export function planDashboard(focuses: readonly Focus[], has: (code: PermissionCode) => boolean): DashboardPlan {
+export function planDashboard(
+  focuses: readonly Focus[],
+  has: (code: PermissionCode) => boolean,
+  featureOn: (code: FeatureCode) => boolean = () => true,
+): DashboardPlan {
   const primary = new Set(focuses);
   const order: Focus[] = [...FOCUS_ORDER.filter((f) => primary.has(f)), ...FOCUS_ORDER.filter((f) => !primary.has(f))];
   const kpis = new Set<KpiKey>();
@@ -223,14 +233,14 @@ export function planDashboard(focuses: readonly Focus[], has: (code: PermissionC
   for (const f of order) {
     const mine: KpiKey[] = [];
     for (const k of FOCUS_LAYOUT[f].kpis) {
-      if (!kpis.has(k) && allowed(KPI_NEEDS[k], has)) {
+      if (!kpis.has(k) && allowed(KPI_NEEDS[k], has, featureOn)) {
         kpis.add(k);
         mine.push(k);
       }
     }
     const mineBlocks: BlockKey[] = [];
     for (const b of FOCUS_LAYOUT[f].blocks) {
-      if (!blocks.has(b) && allowed(BLOCK_NEEDS[b], has)) {
+      if (!blocks.has(b) && allowed(BLOCK_NEEDS[b], has, featureOn)) {
         blocks.add(b);
         mineBlocks.push(b);
       }

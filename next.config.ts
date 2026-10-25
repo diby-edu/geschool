@@ -41,7 +41,9 @@ const securityHeaders = [
  * changement d'adresse attribuée par la box, et redémarrer `pnpm dev` suffit à
  * la rafraîchir. Sans effet en production.
  */
-const loopbackOrigins = ['localhost', '127.0.0.1', '[::1]'];
+// `*.localhost` (ex. censeur.localhost:3000) : une adresse par profil de test,
+// chacune garde sa propre connexion dans le même navigateur.
+const loopbackOrigins = ['localhost', '*.localhost', '127.0.0.1', '[::1]'];
 
 const lanAddresses = Object.values(os.networkInterfaces())
   .flat()

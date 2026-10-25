@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
@@ -10,6 +11,7 @@ import { SimpleSubmit } from '@/components/ui/simple-submit';
 import { moveOptions } from '@/features/schedule/constraints/moves';
 import { moveSessionAction } from '@/features/schedule/actions';
 import { getVersion } from '@/features/schedule/versions';
+import { NotFoundError } from '@/lib/errors';
 
 export const metadata: Metadata = { title: 'Déplacer une séance' };
 
@@ -55,7 +57,12 @@ export default async function MoveSessionPage({
     );
   }
 
-  const options = await moveOptions(ctx, versionId, sessionId);
+  // Séance qu'on ne peut pas voir (pas la sienne, sans « toute l'école ») : page
+  // introuvable, comme un droit manquant — et non une erreur 500.
+  const options = await moveOptions(ctx, versionId, sessionId).catch((e: unknown) => {
+    if (e instanceof NotFoundError) notFound();
+    throw e;
+  });
   const byDay = new Map<number, typeof options>();
   for (const o of options) {
     const list = byDay.get(o.slot.dayOfWeek) ?? [];

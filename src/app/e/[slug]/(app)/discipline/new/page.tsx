@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccessAny, requireFeature } from '@/lib/permissions/guard';
+import { hasPermission } from '@/lib/permissions';
 import { listIncidentTypes, listStudentOptions } from '@/features/discipline/queries';
 import { reportIncidentAction } from '@/features/discipline/actions';
 import { IncidentForm } from '@/features/discipline/components/IncidentForms';
@@ -35,8 +36,12 @@ export default async function NewIncidentPage({ params }: { params: Promise<{ sl
       {active.length === 0 ? (
         <EmptyState
           title="Aucun motif d’incident"
-          hint="Définissez d’abord les motifs de votre règlement intérieur : retard, insolence, bagarre…"
-          action={{ href: `/e/${slug}/discipline/config`, label: 'Définir les motifs' }}
+          {...(hasPermission(ctx, 'discipline.configure')
+            ? {
+                hint: 'Définissez d’abord les motifs de votre règlement intérieur : retard, insolence, bagarre…',
+                action: { href: `/e/${slug}/discipline/config`, label: 'Définir les motifs' },
+              }
+            : { hint: 'Les motifs du règlement intérieur ne sont pas encore définis. Demandez à la direction de les saisir.' })}
         />
       ) : students.length === 0 ? (
         <EmptyState title="Aucun élève inscrit" hint="Inscrivez des élèves avant de signaler un incident." />

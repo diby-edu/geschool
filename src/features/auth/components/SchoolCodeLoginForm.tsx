@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { Input, Label } from '@/components/ui/input';
 import { loginWithSchoolCode, type AuthState } from '../actions';
 import { SubmitButton } from './SubmitButton';
@@ -14,6 +14,10 @@ import { FormError } from './FormError';
  */
 export function SchoolCodeLoginForm({ initialCode, next }: { initialCode: string; next?: string | undefined }) {
   const [state, action] = useActionState<AuthState, FormData>(loginWithSchoolCode, {});
+  // Connexion réussie : la page de destination se charge en entier (voir AuthState).
+  useEffect(() => {
+    if (state.redirectTo) window.location.assign(state.redirectTo);
+  }, [state.redirectTo]);
   const [code, setCode] = useState(initialCode);
   const [identifier, setIdentifier] = useState('');
 

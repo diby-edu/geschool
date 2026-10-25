@@ -8,8 +8,8 @@ import { periodsForTrack } from '@/features/academic-years/periods-by-track';
 /** Données de référence pour les listes déroulantes des formulaires d'évaluation. */
 
 export type Ref = { id: string; name: string };
-/** Une période porte les ordres d'enseignement qu'elle concerne (null = toute l'école). */
-export type PeriodRef = Ref & { tracks: string[] | null };
+/** Une période porte les ordres d'enseignement qu'elle concerne (null = toute l'école), et sa date de début. */
+export type PeriodRef = Ref & { tracks: string[] | null; startsOn: string };
 /** Une classe porte l'ordre de son niveau : c'est lui qui choisit trimestres ou semestres. */
 export type ClassRef = Ref & { track: EducationTrack };
 
@@ -17,12 +17,12 @@ export async function listPeriods(ctx: TenantContext, yearId: string): Promise<P
   const supabase = await createClient();
   const { data } = await supabase
     .from('academic_periods')
-    .select('id, name, sequence, tracks')
+    .select('id, name, sequence, tracks, starts_on')
     .eq('school_id', ctx.school.id)
     .eq('academic_year_id', yearId)
     .eq('is_grading_period', true)
     .order('sequence');
-  return (data ?? []).map((p) => ({ id: p.id, name: p.name, tracks: p.tracks ?? null }));
+  return (data ?? []).map((p) => ({ id: p.id, name: p.name, tracks: p.tracks ?? null, startsOn: p.starts_on }));
 }
 
 /**

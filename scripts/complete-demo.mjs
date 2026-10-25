@@ -132,6 +132,7 @@ async function main() {
     ['secretaire', 'SECRETARY', 'Adjoua', 'KONAN', 'F'],
     ['comptable', 'ACCOUNTANT', 'Ibrahim', 'SANOGO', 'M'],
     ['informaticien', 'IT_ADMIN', 'Junior', 'ACHI', 'M'],
+    ['inspecteur', 'EDUCATION_INSPECTOR', 'Rose', 'GBANE', 'F'],
   ];
   let n = 1;
   for (const [local, role, first, last, gender] of STAFF) {

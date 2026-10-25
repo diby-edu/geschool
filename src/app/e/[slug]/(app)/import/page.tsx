@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
 import { requireFeature } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
-import { AuthorizationError } from '@/lib/errors';
+import { notFound } from 'next/navigation';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert } from '@/components/ui/alert';
@@ -36,7 +36,8 @@ export default async function ImportExportPage({
   requireFeature(ctx, 'import_export');
 
   const available = IMPORT_KIND_ORDER.filter((k) => canImport(ctx, k) || hasPermission(ctx, EXPORT_PERMISSION[k]));
-  if (available.length === 0) throw new AuthorizationError('Aucune liste à importer ni exporter avec vos droits.');
+  // Aucune liste permise : page introuvable, comme les autres pages sans le droit (et non une erreur 500).
+  if (available.length === 0) notFound();
   const requested = Array.isArray(sp.type) ? sp.type[0] : sp.type;
   const kind: ImportKind = isImportKind(requested) && available.includes(requested) ? requested : available[0]!;
   const def = IMPORT_KINDS[kind];

@@ -37,6 +37,8 @@ const MODULES: NavDef[] = [
   { path: 'teachers', label: 'Enseignants', any: ['teachers.view'], section: COMPTES, icon: 'enseignants' },
   { path: 'students', label: 'Élèves', any: ['students.view'], section: COMPTES, icon: 'eleves' },
   { path: 'access', label: 'Gestion des accès', any: ['access_accounts.view'], section: COMPTES, icon: 'acces' },
+  // Le Comptable n'a que la paie : sans cette entrée, la page n'était joignable que par son tableau de bord.
+  { path: 'teachers/heures', label: 'Heures et paie', any: ['teachers.payroll'], section: COMPTES, icon: 'enseignants' },
 
   { path: 'schedule', label: 'Emploi du temps', any: ['schedule.view'], section: QUOTIDIEN, icon: 'edt', feature: 'schedule' },
   { path: 'evaluations', label: 'Notes & évaluations', any: ['assessments.view'], section: QUOTIDIEN, icon: 'notes', feature: 'grades' },
