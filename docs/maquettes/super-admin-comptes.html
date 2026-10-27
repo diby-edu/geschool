@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Comptes — Super Admin</title>
+<style>
+  :root { --brand:#4a44e0; --ink:#141433; --muted:#6b6b8a; --page:#f4f4fb; --card:#fff; --line:#e4e4f0; --ok:#0a7d55; --warn:#d98a00; --bad:#c8245a; --night:#15152b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--ink); font:15px/1.5 -apple-system,"Segoe UI",Roboto,system-ui,sans-serif; }
+  .wrap { max-width:1200px; margin:0 auto; padding:28px 20px 80px; }
+  h1 { font-size:26px; margin:0 0 6px; } .sub { color:var(--muted); margin:0 0 10px; max-width:80ch; }
+  .note { font-size:13px; color:var(--muted); background:#fff; border:1px dashed var(--line); border-radius:10px; padding:8px 12px; display:inline-block; margin-bottom:22px; }
+  .app { display:grid; grid-template-columns:200px 1fr; border-radius:16px; overflow:hidden; border:1px solid var(--line); box-shadow:0 8px 24px rgba(20,20,51,.06); margin-bottom:36px; }
+  .menu { background:var(--night); color:#d8d8ea; padding:14px 10px; font-size:13px; }
+  .mi { padding:5px 8px; border-radius:9px; } .mi.on { background:rgba(139,133,255,.18); color:#b9b5ff; font-weight:600; }
+  .mg { font-size:10px; text-transform:uppercase; letter-spacing:.08em; opacity:.5; padding:12px 8px 4px; }
+  .main { padding:16px; display:grid; gap:14px; background:var(--page); min-width:0; }
+  .hero { border-radius:14px; padding:16px; color:#fff; background:linear-gradient(115deg,#3730a3,#6d28d9 52%,#c026d3); display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .hero h2 { margin:2px 0; font-size:22px; } .hero .s { font-size:13px; opacity:.9; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; } .chip { background:rgba(255,255,255,.17); border-radius:99px; padding:2px 10px; font-size:12px; }
+  .acts { display:flex; gap:6px; flex-wrap:wrap; align-items:flex-start; } .act { font-size:12px; background:rgba(255,255,255,.17); border-radius:8px; padding:5px 10px; }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; } .tab { font-size:13px; padding:6px 12px; border-radius:10px; border:1px solid var(--line); background:#fff; } .tab.on { background:var(--brand); color:#fff; border-color:var(--brand); font-weight:600; }
+  .bloc { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; min-width:0; }
+  .bl { font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:800; opacity:.65; margin-bottom:10px; }
+  .g2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; } .g4 { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .tile { border-radius:12px; padding:10px 12px; color:#fff; } .tile b { font-size:20px; display:block; } .tile span { font-size:11px; opacity:.9; }
+  .t1{background:linear-gradient(135deg,#4a44e0,#6d66f0)} .t2{background:linear-gradient(135deg,#0a7d55,#16a374)} .t3{background:linear-gradient(135deg,#d98a00,#f0a929)} .t4{background:linear-gradient(135deg,#0e7490,#1596b8)}
+  .row { display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid var(--line); font-size:13px; } .row:first-of-type{border-top:0}
+  .muted { color:var(--muted); font-size:12px; }
+  .pill { font-size:11px; font-weight:700; border-radius:99px; padding:1px 8px; white-space:nowrap; }
+  .p-ok{background:#e3f5ee;color:var(--ok)} .p-warn{background:#fff3dc;color:#9a6200} .p-bad{background:#fde7ee;color:var(--bad)} .p-info{background:#ecebff;color:var(--brand)}
+  .field { margin-bottom:9px; } .field label { font-size:12px; font-weight:600; display:block; margin-bottom:3px; } .field div { border:1px solid var(--line); border-radius:9px; padding:6px 9px; font-size:13px; background:#fafafe; }
+  .btn { display:inline-block; font-size:12px; font-weight:600; border-radius:9px; padding:6px 12px; background:var(--brand); color:#fff; } .btn.g { background:#fff; color:var(--ink); border:1px solid var(--line); } .btn.r { background:#fff; color:var(--bad); border:1px solid #f3c3d2; }
+  table { width:100%; border-collapse:collapse; font-size:13px; } th { text-align:left; font-size:11px; text-transform:uppercase; color:var(--muted); padding:6px; } td { border-top:1px solid var(--line); padding:7px 6px; }
+  h3 { margin:26px 0 6px; font-size:18px; } p.d { color:var(--muted); margin:0 0 12px; font-size:14px; max-width:85ch; }
+  @media (max-width:900px){ .app{grid-template-columns:1fr} .menu{display:none} .g2,.g4{grid-template-columns:1fr 1fr} }
+</style>
+<style>
+  .filters{display:flex;gap:6px;flex-wrap:wrap}.f{font-size:12px;padding:5px 10px;border-radius:99px;border:1px solid var(--line);background:#fff}.f.on{background:var(--brand);color:#fff;border-color:var(--brand);font-weight:600}.f b{margin-left:4px}
+  .search{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff;font-size:13px;color:var(--muted)}
+  .act2{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .box{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fafafe}
+  .pw{font-family:monospace;font-size:22px;letter-spacing:.2em;text-align:center;border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Lot 4 — Les comptes, depuis la plateforme</h1>
+  <p class="sub">Quand quelqu'un écrit « je n'arrive plus à me connecter », le Super Admin le retrouve en 1 recherche et règle le problème sans entrer dans l'école. Chiffres inventés ; menu décoratif.</p>
+  <div class="note">Aujourd'hui la page Comptes montre seulement une liste : on ne peut rien y faire. Le lot 4 ajoute les filtres, une fiche par compte et les actions.</div>
+
+  <h3>Écran 1 — La liste des comptes</h3>
+  <p class="d">Des filtres avec leur nombre, une recherche (nom, e-mail, téléphone, école) et, sur chaque ligne, ce qui ne va pas : jamais connecté, bloqué après 5 essais ratés, suspendu.</p>
+  <div class="app">
+    <nav class="menu"><div class="mi">▣ Tableau de bord</div><div class="mg">Écoles</div><div class="mi">⌂ Établissements</div><div class="mi on">☺ Comptes</div><div class="mg">Argent</div><div class="mi">✓ Paiements</div></nav>
+    <div class="main">
+      <div class="g4"><div class="tile t1"><b>236</b><span>comptes</span></div><div class="tile t2"><b>217</b><span>déjà connectés</span></div><div class="tile t3"><b>16</b><span>jamais connectés</span></div><div class="tile t4"><b>1</b><span>bloqué en ce moment</span></div></div>
+      <div class="search">🔍 Nom, e-mail, téléphone ou école…</div>
+      <div class="filters"><span class="f on">Tous<b>236</b></span><span class="f">Direction et personnel<b>16</b></span><span class="f">Enseignants<b>194</b></span><span class="f">Parents<b>23</b></span><span class="f">Jamais connectés<b>16</b></span><span class="f">Bloqués<b>1</b></span><span class="f">Suspendus<b>0</b></span><span class="f">Sans école<b>2</b></span></div>
+      <div class="bloc">
+        <table><tr><th>Personne</th><th>École et fonction</th><th>Connexion</th><th></th></tr>
+          <tr><td><b>KOFFI Ama</b><div class="muted">07 08 12 34 56</div></td><td>Les Cocotiers — Parent</td><td><span class="pill p-bad">Bloqué 15 min</span><div class="muted">5 essais ratés à 10 h 42</div></td><td class="act2"><span class="btn g">Débloquer</span><span class="btn">Ouvrir</span></td></tr>
+          <tr><td><b>TRAORE Ali</b><div class="muted">05 55 00 11 22</div></td><td>Les Cocotiers — Enseignant</td><td><span class="pill p-warn">Jamais connecté</span></td><td class="act2"><span class="btn g">Nouveaux identifiants</span><span class="btn">Ouvrir</span></td></tr>
+          <tr><td><b>KONE Adama</b><div class="muted">brazil…@gmail.com · 09 09 09 09 09</div></td><td>Lycée de Yopougon — Directeur</td><td>aujourd'hui</td><td class="act2"><span class="btn">Ouvrir</span></td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <h3>Écran 2 — La fiche d'un compte</h3>
+  <p class="d">Tout sur une personne : ses écoles, ses fonctions, son identifiant de connexion, ses dernières connexions et ce qu'elle a fait. Les actions sont à droite.</p>
+  <div class="app">
+    <nav class="menu"><div class="mi on">☺ Comptes</div></nav>
+    <div class="main">
+      <div class="hero"><div><div class="s">Compte créé le 14/09/2026</div><h2>KOFFI Ama</h2><div class="s">Parent · Groupe Scolaire Les Cocotiers</div>
+        <div class="chips"><span class="chip">Bloqué 15 min (5 essais ratés)</span><span class="chip">Dernière connexion : il y a 3 j</span></div></div></div>
+      <div class="g2">
+        <div class="bloc"><div class="bl">Identité et connexion</div>
+          <div class="row"><span>Se connecte avec</span><b>Code école 662684 + 07 08 12 34 56</b></div>
+          <div class="row"><span>E-mail</span><b>—</b></div>
+          <div class="row"><span>Écoles</span><b>Les Cocotiers — Parent de 2 élèves</b></div>
+          <div class="row"><span>Accès</span><span class="pill p-ok">Actif</span></div>
+          <div class="bl" style="margin-top:14px">Dernières activités</div>
+          <div class="row"><span>24/10 · 18 h 02</span><span>Connexion</span></div>
+          <div class="row"><span>26/10 · 10 h 42</span><span>5 essais ratés → bloqué</span></div>
+        </div>
+        <div class="bloc"><div class="bl">Actions</div>
+          <div class="row"><span><b>Débloquer</b><div class="muted">Efface les essais ratés : la personne peut réessayer tout de suite.</div></span><span class="btn g">Débloquer</span></div>
+          <div class="row"><span><b>Nouveaux identifiants</b><div class="muted">Mot de passe temporaire, affiché une fois, à remettre en main propre.</div></span><span class="btn g">Générer</span></div>
+          <div class="row"><span><b>Corriger le numéro / l'e-mail de connexion</b><div class="muted">Pour une faute de frappe ou un changement de numéro.</div></span><span class="btn g">Corriger</span></div>
+          <div class="row"><span><b>Déconnecter partout</b><div class="muted">Ferme toutes ses sessions (téléphone perdu, volé).</div></span><span class="btn g">Déconnecter</span></div>
+          <div class="row"><span><b>Suspendre</b><div class="muted">Dans une école, ou dans toutes.</div></span><span class="btn r">Suspendre</span></div>
+        </div>
+      </div>
+      <div class="box"><div class="bl">Après « Générer »</div><div class="pw">K7P-42Q-M9</div><div class="muted" style="margin-top:6px">Noté au journal de l'école (sans le mot de passe). La personne choisira le sien à la prochaine connexion.</div></div>
+    </div>
+  </div>
+
+  <h3>Écran 3 — Les comptes sans école</h3>
+  <p class="d">Des comptes qui ne sont rattachés à aucune école (inscriptions abandonnées, essais). Ils ne servent à rien et ne peuvent pas se connecter. Aujourd'hui : 2, créés le 11/09/2026.</p>
+  <div class="app"><nav class="menu"><div class="mi on">☺ Comptes</div></nav><div class="main"><div class="bloc">
+    <table><tr><th>Compte</th><th>Créé le</th><th>Dernière connexion</th><th></th></tr>
+      <tr><td><b>(sans nom)</b><div class="muted">compte sans e-mail réel</div></td><td>11/09/2026</td><td>jamais</td><td class="act2"><span class="btn r">Supprimer</span></td></tr>
+      <tr><td><b>(sans nom)</b><div class="muted">compte sans e-mail réel</div></td><td>11/09/2026</td><td>jamais</td><td class="act2"><span class="btn r">Supprimer</span></td></tr>
+    </table>
+    <div class="muted" style="margin-top:8px">La suppression est définitive, mais un compte sans école n'a aucune donnée : rien d'autre n'est effacé.</div>
+  </div></div></div>
+</div>
+</body>
+</html>

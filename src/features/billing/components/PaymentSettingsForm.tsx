@@ -98,6 +98,25 @@ export function PaymentSettingsForm({ action, settings }: { action: Action; sett
         />
       </div>
 
+      <div className="space-y-1">
+        <label className="text-sm font-medium" htmlFor="graceDays">
+          Délai de grâce après expiration (jours)
+        </label>
+        <input
+          id="graceDays"
+          name="graceDays"
+          type="number"
+          min={0}
+          max={90}
+          defaultValue={settings.graceDays}
+          className="w-28 rounded-xl border px-2 py-1.5 text-sm"
+        />
+        <p className="text-xs text-[color:var(--muted-foreground)]">
+          Un abonnement expiré (essai ou année fini sans paiement) laisse ce nombre de jours, avec un message à la direction, avant de couper l’accès de
+          toute l’école jusqu’au paiement.
+        </p>
+      </div>
+
       <SubmitButton>Enregistrer</SubmitButton>
     </form>
   );

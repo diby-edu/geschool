@@ -4,6 +4,9 @@ import { createClient, getAuthenticatedUser } from '@/lib/supabase/server';
 import { auditPlatform } from '@/lib/audit';
 import { activityLabel } from '@/lib/audit/labels';
 import { AuthorizationError, NotFoundError, ValidationError } from '@/lib/errors';
+import { findOrCreateAdminAccount } from '@/services/platform-admin-account';
+import { schoolToday } from '@/features/dashboard/time';
+import { PLATFORM_TIMEZONE } from '@/features/platform-dashboard/cockpit';
 
 /**
  * Espace Super Admin : ce qui se pilote au-dessus des établissements.
@@ -37,48 +40,44 @@ export type SchoolAdminRow = {
   members: number;
   /** Modules coupés pour cette école : une formule réduite, ou un incident. */
   disabledModules: number;
-  subscription: { plan: string; status: string; endsOn: string | null; trialEndsOn: string | null } | null;
+  /**
+   * Situation RÉELLE à la date du jour (0141, la même que le tableau de bord) :
+   * un essai dont la date est passée est « PAST_DUE » (abonnement expiré), même
+   * si personne n'a encore changé l'état à la main. null = sans abonnement.
+   */
+  subscription: { plan: string; status: string; endsOn: string | null; trialEndsOn: string | null; graceEndsOn: string | null } | null;
 };
 
-/** La liste des écoles avec ce qui compte pour la plateforme : taille et abonnement. */
+const SITUATION_STATUS: Record<string, string> = { PAID: 'ACTIVE', TRIAL: 'TRIALING', EXPIRED: 'PAST_DUE', STOPPED: 'SUSPENDED' };
+
+/**
+ * La liste des écoles avec ce qui compte pour la plateforme : taille et abonnement.
+ * Tout est compté en base (platform_school_overview, 0141) : lire les fiches
+ * d'élèves une à une s'arrêtait à 1 000 pour toute la plateforme (Cocotiers
+ * affichait 796 élèves au lieu de 4 000).
+ */
 export async function listSchoolsForAdmin(): Promise<SchoolAdminRow[]> {
   await requireAdmin();
   const supabase = await createClient();
 
-  const [{ data: schools }, { data: students }, { data: teachers }, { data: members }, { data: subs }, { data: off }] =
-    await Promise.all([
-      supabase.from('schools').select('id, slug, name, status, city, created_at').order('name'),
-      supabase.from('students').select('school_id').is('deleted_at', null),
-      supabase.from('teachers').select('school_id').is('deleted_at', null),
-      supabase.from('school_memberships').select('school_id').eq('status', 'ACTIVE'),
-      supabase
-        .from('subscriptions')
-        .select('school_id, status, current_period_end, trial_ends_at, plans(name)')
-        .in('status', ['ACTIVE', 'TRIALING', 'PAST_DUE']),
-      // La base ne garde que les modules COUPÉS (0070) : une ligne = un module en moins.
-      supabase.from('school_features').select('school_id').eq('is_enabled', false),
-    ]);
+  const [{ data: schools }, { data: overview, error }] = await Promise.all([
+    supabase.from('schools').select('id, slug, name, status, city, created_at').order('name'),
+    supabase.rpc('platform_school_overview' as never, { p_today: schoolToday(PLATFORM_TIMEZONE) } as never),
+  ]);
+  if (error) throw error;
 
-  const count = (rows: { school_id: string }[] | null) => {
-    const m = new Map<string, number>();
-    for (const r of rows ?? []) m.set(r.school_id, (m.get(r.school_id) ?? 0) + 1);
-    return m;
-  };
-  const studentsBySchool = count(students as { school_id: string }[] | null);
-  const teachersBySchool = count(teachers as { school_id: string }[] | null);
-  const membersBySchool = count(members as { school_id: string }[] | null);
-  const offBySchool = count(off as { school_id: string }[] | null);
-  const subBySchool = new Map(
-    ((subs ?? []) as unknown as {
+  const bySchool = new Map(
+    ((overview ?? []) as {
       school_id: string;
-      status: string;
-      current_period_end: string | null;
-      trial_ends_at: string | null;
-      plans: { name: string } | null;
-    }[]).map((s) => [
-      s.school_id,
-      { plan: s.plans?.name ?? '—', status: s.status, endsOn: s.current_period_end, trialEndsOn: s.trial_ends_at },
-    ]),
+      students: number;
+      teachers: number;
+      members: number;
+      disabled_modules: number;
+      situation: string;
+      ends_on: string | null;
+      grace_ends_on: string | null;
+      plan_name: string | null;
+    }[]).map((o) => [o.school_id, o]),
   );
 
   return ((schools ?? []) as {
@@ -88,19 +87,32 @@ export async function listSchoolsForAdmin(): Promise<SchoolAdminRow[]> {
     status: string;
     city: string | null;
     created_at: string;
-  }[]).map((s) => ({
-    id: s.id,
-    slug: s.slug,
-    name: s.name,
-    status: s.status,
-    city: s.city,
-    createdAt: s.created_at,
-    students: studentsBySchool.get(s.id) ?? 0,
-    teachers: teachersBySchool.get(s.id) ?? 0,
-    members: membersBySchool.get(s.id) ?? 0,
-    disabledModules: offBySchool.get(s.id) ?? 0,
-    subscription: subBySchool.get(s.id) ?? null,
-  }));
+  }[]).map((s) => {
+    const o = bySchool.get(s.id);
+    const status = o ? SITUATION_STATUS[o.situation] : undefined;
+    return {
+      id: s.id,
+      slug: s.slug,
+      name: s.name,
+      status: s.status,
+      city: s.city,
+      createdAt: s.created_at,
+      students: o?.students ?? 0,
+      teachers: o?.teachers ?? 0,
+      members: o?.members ?? 0,
+      disabledModules: o?.disabled_modules ?? 0,
+      subscription:
+        o && status
+          ? {
+              plan: o.plan_name ?? '—',
+              status,
+              endsOn: o.ends_on,
+              trialEndsOn: o.situation === 'TRIAL' ? o.ends_on : null,
+              graceEndsOn: o.grace_ends_on,
+            }
+          : null,
+    };
+  });
 }
 
 export type SchoolStatus = 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
@@ -270,6 +282,43 @@ export async function grantPlatformAdmin(email: string, note: string): Promise<v
     entityId: target.id,
     after: { email: clean, note: note || null },
   });
+}
+
+/**
+ * Crée le compte d'un nouvel administrateur de la plateforme et lui donne les
+ * droits (ou les donne seulement, si l'e-mail a déjà un compte). Le mot de passe
+ * temporaire n'est jamais écrit au journal : il est rendu à l'écran, une fois.
+ */
+export async function createPlatformAdmin(input: {
+  email: string;
+  firstName: string;
+  lastName: string;
+  note: string;
+}): Promise<{ email: string; tempPassword: string | null }> {
+  const { userId } = await requireAdmin();
+  const email = input.email.trim().toLowerCase();
+  const firstName = input.firstName.trim();
+  const lastName = input.lastName.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ValidationError('Adresse e-mail invalide.');
+  if (!firstName || !lastName) throw new ValidationError('Prénom et nom requis.');
+
+  const account = await findOrCreateAdminAccount({ email, firstName, lastName });
+
+  const supabase = await createClient();
+  const { error } = await supabase.from('platform_admins').upsert(
+    { user_id: account.userId, is_active: true, revoked_at: null, granted_by: userId, note: input.note.trim() || null },
+    { onConflict: 'user_id' },
+  );
+  if (error) throw error;
+
+  await auditPlatform(userId, {
+    action: account.tempPassword ? 'platform.admin_create' : 'platform.admin_grant',
+    module: 'platform',
+    entityType: 'user',
+    entityId: account.userId,
+    after: { email, note: input.note.trim() || null, newAccount: account.tempPassword !== null },
+  });
+  return { email, tempPassword: account.tempPassword };
 }
 
 /** Retire les droits plateforme. On garde la ligne : l'historique compte. */

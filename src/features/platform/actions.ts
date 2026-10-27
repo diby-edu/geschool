@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { runFormAction, type FormState } from '@/lib/forms';
-import { grantPlatformAdmin, revokePlatformAdmin, setSchoolStatus, type SchoolStatus } from './admin';
+import { createPlatformAdmin, grantPlatformAdmin, revokePlatformAdmin, setSchoolStatus, type SchoolStatus } from './admin';
 
 /** Suspendre, réactiver ou archiver un établissement. */
 export async function setSchoolStatusAction(
@@ -13,7 +13,7 @@ export async function setSchoolStatusAction(
 ): Promise<FormState> {
   return runFormAction(async () => {
     await setSchoolStatus(schoolId, status, String(fd.get('reason') ?? '').trim());
-    redirect(`/admin/etablissements/${schoolId}?statut=1`);
+    redirect(`/admin/etablissements/${schoolId}?onglet=donnees&statut=1`);
   });
 }
 
@@ -29,4 +29,20 @@ export async function revokePlatformAdminAction(userId: string, _p: FormState, _
     await revokePlatformAdmin(userId);
     redirect('/admin/administrateurs?retire=1');
   });
+}
+
+/** Résultat de la création : le mot de passe temporaire, montré une seule fois. */
+export type CreateAdminState = FormState & { done?: { email: string; tempPassword: string | null } };
+
+export async function createPlatformAdminAction(_p: CreateAdminState, fd: FormData): Promise<CreateAdminState> {
+  let done: CreateAdminState['done'];
+  const state = await runFormAction(async () => {
+    done = await createPlatformAdmin({
+      email: String(fd.get('email') ?? ''),
+      firstName: String(fd.get('firstName') ?? ''),
+      lastName: String(fd.get('lastName') ?? ''),
+      note: String(fd.get('note') ?? ''),
+    });
+  });
+  return done ? { done } : state;
 }

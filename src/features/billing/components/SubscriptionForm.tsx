@@ -10,7 +10,7 @@ import { SUBSCRIPTION_STATUSES } from '@/features/billing/schemas';
 import type { FormState } from '@/lib/forms';
 
 const STATUS_LABEL: Record<string, string> = {
-  TRIALING: 'Essai', ACTIVE: 'Actif', PAST_DUE: 'Impayé', SUSPENDED: 'Suspendu', CANCELLED: 'Annulé',
+  TRIALING: 'En essai', ACTIVE: 'Abonnée (année payée)', PAST_DUE: 'Abonnement expiré', SUSPENDED: 'Suspendue', CANCELLED: 'Résiliée',
 };
 
 export function SubscriptionForm({

@@ -84,9 +84,11 @@ async function main(): Promise<void> {
 async function enregistrerTaches(boss: PgBoss): Promise<void> {
   const ALERTES = 'attendance-alerts';
   const ACCUSES = 'sms-delivery-reports';
+  const ABONNEMENTS = 'billing-expire-due';
 
   await boss.createQueue(ALERTES);
   await boss.createQueue(ACCUSES);
+  await boss.createQueue(ABONNEMENTS);
 
   await boss.work(ALERTES, async () => {
     const { runAttendanceAlerts } = await import('@/services/attendance-alerts');
@@ -105,7 +107,16 @@ async function enregistrerTaches(boss: PgBoss): Promise<void> {
     console.warn(`[worker] accuses de reception : ${r.checked} verifie(s), ${r.delivered} arrive(s), ${r.failed} echec(s)`);
   });
 
+  // Abonnements : un essai ou une année finis sans paiement passent en « expiré »
+  // (0143). La coupure, elle, se lit à chaque page : elle ne dépend pas de cette tâche.
+  await boss.work(ABONNEMENTS, async () => {
+    const { expireDueSubscriptions } = await import('@/services/billing-nightly');
+    const n = await expireDueSubscriptions();
+    console.warn(`[worker] abonnements : ${n} passe(s) en expire`);
+  });
+
   // 6 h 00 et 6 h 15, heure du serveur.
+  await boss.schedule(ABONNEMENTS, '5 0 * * *');
   await boss.schedule(ALERTES, '0 6 * * *');
   await boss.schedule(ACCUSES, '15 6 * * *');
   console.warn(

@@ -46,6 +46,7 @@ export function StaffForm({
   phoneDisplay,
   functionsLocked = false,
   functionsNote,
+  extraFunctions = [],
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   mode: 'create' | 'edit';
@@ -56,6 +57,8 @@ export function StaffForm({
   /** Fondateur, soi-même, ou droit manquant : les fonctions s'affichent sans pouvoir changer. */
   functionsLocked?: boolean;
   functionsNote?: string;
+  /** Fonctions créées par la plateforme (« F_… », lot 6), proposées après les fonctions prévues. */
+  extraFunctions?: { code: string; label: string }[];
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const v = { ...defaultValues, ...(state.values ?? {}) };
@@ -111,7 +114,7 @@ export function StaffForm({
             {mode === 'edit' && !functionsLocked ? <input type="hidden" name="functionsEditable" value="1" /> : null}
             {functionsNote ? <p className="text-xs text-[color:var(--muted-foreground)]">{functionsNote}</p> : null}
             <ul className="grid gap-2 sm:grid-cols-2">
-              {STAFF_FUNCTIONS.map((code) => (
+              {[...STAFF_FUNCTIONS.map((code) => ({ code, label: roleLabel(code), hint: FUNCTION_HINTS[code] })), ...extraFunctions.map((f) => ({ ...f, hint: '' }))].map(({ code, label, hint }) => (
                 <li key={code}>
                   <label
                     className={`flex items-start gap-2.5 rounded-[--radius-card] border px-3 py-2 ${
@@ -127,8 +130,8 @@ export function StaffForm({
                       className="mt-0.5 h-4 w-4 shrink-0 accent-[color:var(--color-brand)]"
                     />
                     <span className="text-sm leading-snug">
-                      <span className="font-medium">{roleLabel(code)}</span>
-                      <span className="mt-0.5 block text-xs text-[color:var(--muted-foreground)]">{FUNCTION_HINTS[code]}</span>
+                      <span className="font-medium">{label}</span>
+                      {hint ? <span className="mt-0.5 block text-xs text-[color:var(--muted-foreground)]">{hint}</span> : null}
                     </span>
                   </label>
                 </li>

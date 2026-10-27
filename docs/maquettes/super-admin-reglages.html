@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Réglages — Super Admin</title>
+<style>
+  :root { --brand:#4a44e0; --ink:#141433; --muted:#6b6b8a; --page:#f4f4fb; --card:#fff; --line:#e4e4f0; --ok:#0a7d55; --warn:#d98a00; --bad:#c8245a; --night:#15152b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--ink); font:15px/1.5 -apple-system,"Segoe UI",Roboto,system-ui,sans-serif; }
+  .wrap { max-width:1200px; margin:0 auto; padding:28px 20px 80px; }
+  h1 { font-size:26px; margin:0 0 6px; } .sub { color:var(--muted); margin:0 0 10px; max-width:80ch; }
+  .note { font-size:13px; color:var(--muted); background:#fff; border:1px dashed var(--line); border-radius:10px; padding:8px 12px; display:inline-block; margin-bottom:22px; }
+  .app { display:grid; grid-template-columns:200px 1fr; border-radius:16px; overflow:hidden; border:1px solid var(--line); box-shadow:0 8px 24px rgba(20,20,51,.06); margin-bottom:36px; }
+  .menu { background:var(--night); color:#d8d8ea; padding:14px 10px; font-size:13px; }
+  .mi { padding:5px 8px; border-radius:9px; } .mi.on { background:rgba(139,133,255,.18); color:#b9b5ff; font-weight:600; }
+  .mg { font-size:10px; text-transform:uppercase; letter-spacing:.08em; opacity:.5; padding:12px 8px 4px; }
+  .main { padding:16px; display:grid; gap:14px; background:var(--page); min-width:0; }
+  .hero { border-radius:14px; padding:16px; color:#fff; background:linear-gradient(115deg,#3730a3,#6d28d9 52%,#c026d3); display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .hero h2 { margin:2px 0; font-size:22px; } .hero .s { font-size:13px; opacity:.9; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; } .chip { background:rgba(255,255,255,.17); border-radius:99px; padding:2px 10px; font-size:12px; }
+  .acts { display:flex; gap:6px; flex-wrap:wrap; align-items:flex-start; } .act { font-size:12px; background:rgba(255,255,255,.17); border-radius:8px; padding:5px 10px; }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; } .tab { font-size:13px; padding:6px 12px; border-radius:10px; border:1px solid var(--line); background:#fff; } .tab.on { background:var(--brand); color:#fff; border-color:var(--brand); font-weight:600; }
+  .bloc { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; min-width:0; }
+  .bl { font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:800; opacity:.65; margin-bottom:10px; }
+  .g2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; } .g4 { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .tile { border-radius:12px; padding:10px 12px; color:#fff; } .tile b { font-size:20px; display:block; } .tile span { font-size:11px; opacity:.9; }
+  .t1{background:linear-gradient(135deg,#4a44e0,#6d66f0)} .t2{background:linear-gradient(135deg,#0a7d55,#16a374)} .t3{background:linear-gradient(135deg,#d98a00,#f0a929)} .t4{background:linear-gradient(135deg,#0e7490,#1596b8)}
+  .row { display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid var(--line); font-size:13px; } .row:first-of-type{border-top:0}
+  .muted { color:var(--muted); font-size:12px; }
+  .pill { font-size:11px; font-weight:700; border-radius:99px; padding:1px 8px; white-space:nowrap; }
+  .p-ok{background:#e3f5ee;color:var(--ok)} .p-warn{background:#fff3dc;color:#9a6200} .p-bad{background:#fde7ee;color:var(--bad)} .p-info{background:#ecebff;color:var(--brand)}
+  .field { margin-bottom:9px; } .field label { font-size:12px; font-weight:600; display:block; margin-bottom:3px; } .field div { border:1px solid var(--line); border-radius:9px; padding:6px 9px; font-size:13px; background:#fafafe; }
+  .btn { display:inline-block; font-size:12px; font-weight:600; border-radius:9px; padding:6px 12px; background:var(--brand); color:#fff; } .btn.g { background:#fff; color:var(--ink); border:1px solid var(--line); } .btn.r { background:#fff; color:var(--bad); border:1px solid #f3c3d2; }
+  table { width:100%; border-collapse:collapse; font-size:13px; } th { text-align:left; font-size:11px; text-transform:uppercase; color:var(--muted); padding:6px; } td { border-top:1px solid var(--line); padding:7px 6px; }
+  h3 { margin:26px 0 6px; font-size:18px; } p.d { color:var(--muted); margin:0 0 12px; font-size:14px; max-width:85ch; }
+  @media (max-width:900px){ .app{grid-template-columns:1fr} .menu{display:none} .g2,.g4{grid-template-columns:1fr 1fr} }
+</style>
+<style>
+  .filters{display:flex;gap:6px;flex-wrap:wrap}.f{font-size:12px;padding:5px 10px;border-radius:99px;border:1px solid var(--line);background:#fff}.f.on{background:var(--brand);color:#fff;border-color:var(--brand);font-weight:600}.f b{margin-left:4px}
+  .search{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff;font-size:13px;color:var(--muted)}
+  .act2{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .box{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fafafe}
+  .pw{font-family:monospace;font-size:22px;letter-spacing:.2em;text-align:center;border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff}
+</style>
+<style>
+ .grid{display:grid;grid-template-columns:200px repeat(5,1fr);font-size:12px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+ .grid div{padding:6px 8px;border-top:1px solid var(--line)}.grid .h{background:#f0f0fa;font-weight:700;border-top:0}
+ .ok{color:var(--ok);font-weight:800}.no{color:#bbb}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Lot 6 — Réglages de la plateforme et modèles des fonctions</h1>
+  <p class="sub">Deux pages : ce que la plateforme règle pour tout le monde, et les fonctions (Directeur, Censeur, Informaticien…) avec leurs droits de départ, données à chaque nouvelle école. Chiffres inventés ; menu décoratif.</p>
+  <div class="note">Aujourd'hui : la durée de l'essai (30 jours), le seuil « à risque » (2 jours) et les droits de départ sont écrits dans le code. Il faut un développeur pour les changer.</div>
+
+  <h3>Écran 1 — Réglages de la plateforme</h3>
+  <p class="d">Tout ce qui vaut pour toutes les écoles, sur une seule page. Les paiements et les SMS gardent leur page, avec un lien.</p>
+  <div class="app"><nav class="menu"><div class="mg">Plateforme</div><div class="mi on">⚙ Réglages</div><div class="mi">☷ Modèles des fonctions</div></nav><div class="main"><div class="g2">
+    <div class="bloc"><div class="bl">La plateforme</div>
+      <div class="field"><label>Nom affiché</label><div>Gestion Scolaire</div></div>
+      <div class="field"><label>Téléphone / WhatsApp du support</label><div>07 07 00 00 00</div></div>
+      <div class="field"><label>E-mail du support</label><div>support@geschool.ci</div></div>
+      <div class="muted">Affichés aux écoles : page « Contacter la plateforme », page « Abonnement expiré ».</div></div>
+    <div class="bloc"><div class="bl">Inscription et abonnement</div>
+      <div class="field"><label>Durée de l'essai gratuit</label><div>30 jours</div></div>
+      <div class="field"><label>Délai de grâce après expiration</label><div>15 jours</div></div>
+      <div class="field"><label>École « à risque » après</label><div>2 jours de cours sans activité</div></div>
+      <div class="row"><span>Mobile Money, instructions de paiement</span><span class="btn g">Page Paiements →</span></div>
+      <div class="row"><span>Nom d'expéditeur, prix du SMS</span><span class="btn g">Page SMS →</span></div>
+      <span class="btn">Enregistrer</span></div>
+  </div></div></div>
+
+  <h3>Écran 2 — Modèles des fonctions</h3>
+  <p class="d">Les fonctions données à chaque nouvelle école, avec leurs droits de départ. Chaque école peut ensuite les ajuster chez elle (page Rôles). On choisit une fonction, on coche ses droits.</p>
+  <div class="app"><nav class="menu"><div class="mi">⚙ Réglages</div><div class="mi on">☷ Modèles des fonctions</div></nav><div class="main">
+    <div class="tabs"><span class="tab">Fondateur</span><span class="tab">Directeur</span><span class="tab">Directeur adjoint</span><span class="tab">Censeur</span><span class="tab on">Informaticien</span><span class="tab">Secrétaire</span><span class="tab">Surveillant général</span><span class="tab">Éducateur</span><span class="tab">Inspecteur</span><span class="tab">Comptable</span><span class="tab">Enseignant</span></div>
+    <div class="bloc"><div class="bl">Informaticien · 35 droits sur 150</div>
+      <div class="row"><span>☑ Consulter les comptes d'accès</span><span class="muted">Comptes d'accès</span></div>
+      <div class="row"><span>☑ Débloquer un compte</span><span class="muted">Comptes d'accès</span></div>
+      <div class="row"><span>☑ Corriger le numéro ou l'e-mail de connexion</span><span class="muted">Comptes d'accès</span></div>
+      <div class="row"><span>☐ Réinitialiser un mot de passe</span><span class="muted">Comptes d'accès</span></div>
+      <div class="row"><span>☐ Saisir les notes</span><span class="muted">Notes</span></div>
+      <div class="muted" style="margin-top:6px">… tous les droits, rangés par module, comme dans la page Rôles d'une école.</div>
+    </div>
+    <div class="bloc"><div class="bl">Quand j'enregistre</div>
+      <div class="row"><span>◉ Seulement pour les nouvelles écoles</span><span class="muted">les écoles existantes gardent leurs réglages</span></div>
+      <div class="row"><span>○ Aussi pour les écoles existantes</span><span class="muted">les droits ajoutés sont donnés à cette fonction dans toutes les écoles</span></div>
+      <span class="btn">Enregistrer le modèle</span></div>
+  </div></div>
+</div>
+</body>
+</html>

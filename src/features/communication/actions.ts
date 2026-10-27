@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import { getTenantContext } from '@/lib/tenant/context';
 import { runFormAction, formValues, type FormState } from '@/lib/forms';
 import { announcementSchema } from './schemas';
@@ -64,5 +65,14 @@ export async function markAllReadAction(slug: string, _p: FormState, _fd: FormDa
     const ctx = await getTenantContext(slug);
     await markAllRead(ctx);
     redirect(`/e/${slug}/notifications?read=all`);
+  });
+}
+
+/** « J'ai compris » sur un bandeau de la plateforme : lu, et on reste sur la page. */
+export async function acknowledgeAction(slug: string, id: string, _p: FormState, _fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    await markRead(ctx, id);
+    revalidatePath(`/e/${slug}`, 'layout');
   });
 }

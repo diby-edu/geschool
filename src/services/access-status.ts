@@ -18,6 +18,13 @@ import { assertCanManagePerson } from './person-guard';
  * Comme un acces = une personne, la suspension vaut pour tous ses roles dans
  * l'etablissement (une personne enseignante ET parent perd les deux espaces).
  *
+ * Une personne peut avoir PLUSIEURS écoles (un enseignant dans deux lycées) :
+ * la suspension ne vaut que pour CETTE école (corrigé le 2026-10-26). La base
+ * n'ouvre une école qu'à une appartenance ACTIVE (app.is_member et suivantes) :
+ * suspendre passe l'appartenance à SUSPENDED dans cette école. Le compte
+ * d'authentification n'est banni (sessions coupées) que si la personne n'a
+ * plus aucune école active.
+ *
  * Personnel administratif : suspendable depuis la page Personnel. On ne suspend
  * ni le fondateur, ni soi-meme, ni une personne dont la fonction contient des
  * droits qu'on ne possede pas (services/person-guard.ts) : sans cela, un
@@ -43,6 +50,16 @@ async function loadAccess(ctx: TenantContext, userId: string) {
   return { admin, access };
 }
 
+/** La personne a-t-elle encore une école où elle n'est pas suspendue ? */
+async function hasOtherActiveSchool(admin: ReturnType<typeof createAdminClient>, userId: string): Promise<boolean> {
+  const { count } = await admin
+    .from('school_memberships')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('status', 'ACTIVE');
+  return (count ?? 0) > 0;
+}
+
 export async function suspendAccess(ctx: TenantContext, userId: string): Promise<void> {
   requireWritable(ctx, 'access_accounts.disable');
   if (userId === ctx.user.id) throw new ValidationError('Vous ne pouvez pas suspendre votre propre accès.');
@@ -52,8 +69,11 @@ export async function suspendAccess(ctx: TenantContext, userId: string): Promise
   if (access.account_status === 'SUSPENDED') return;
 
   await admin.from('account_access').update({ account_status: 'SUSPENDED' }).eq('id', access.id);
-  await admin.auth.admin.updateUserById(userId, { ban_duration: BAN_PERMANENT });
-  await admin.rpc('revoke_user_sessions' as never, { p_user: userId } as never);
+  await admin.from('school_memberships').update({ status: 'SUSPENDED' }).eq('school_id', ctx.school.id).eq('user_id', userId).eq('status', 'ACTIVE');
+  if (!(await hasOtherActiveSchool(admin, userId))) {
+    await admin.auth.admin.updateUserById(userId, { ban_duration: BAN_PERMANENT });
+    await admin.rpc('revoke_user_sessions' as never, { p_user: userId } as never);
+  }
   await admin.from('access_events').insert({
     school_id: ctx.school.id,
     user_id: userId,
@@ -74,6 +94,7 @@ export async function reactivateAccess(ctx: TenantContext, userId: string): Prom
   // son etat d'avant : « cree », pas « actif ».
   const restored = access.activation_status === 'ACTIVATED' ? 'ACTIVE' : 'CREATED';
   await admin.from('account_access').update({ account_status: restored }).eq('id', access.id);
+  await admin.from('school_memberships').update({ status: 'ACTIVE' }).eq('school_id', ctx.school.id).eq('user_id', userId).eq('status', 'SUSPENDED');
   await admin.auth.admin.updateUserById(userId, { ban_duration: 'none' });
   await admin.from('access_events').insert({
     school_id: ctx.school.id,

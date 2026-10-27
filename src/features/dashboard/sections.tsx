@@ -17,7 +17,7 @@ const pct = (part: number, whole: number) => (whole > 0 ? Math.round((part / who
 /** Fonctions administratives de la personne (les espaces enseignant/parent ont leur propre libellé). */
 export function staffRoleText(ctx: TenantContext): string {
   const roles = (ctx.membership?.roles ?? []).filter((r) => r !== 'TEACHER' && r !== 'PARENT' && r !== 'STUDENT');
-  if (roles.length > 0) return roles.map(roleLabel).join(' · ');
+  if (roles.length > 0) return roles.map((r) => roleLabel(r)).join(' · ');
   return ctx.isPlatformAdmin ? 'Administrateur de la plateforme' : 'Équipe de direction';
 }
 

@@ -58,7 +58,9 @@ export type AdminOperation =
   | 'access.person_guard'
   // Une ecole doit connaitre le nom d'expediteur qu'elle emprunte a la
   // plateforme, sans pouvoir lire le reste des reglages de l'editeur.
-  | 'sms.platform_sender';
+  | 'sms.platform_sender'
+  // Journal des erreurs de l'application (page Technique, 0151).
+  | 'errors.log';
 
 let cached: SupabaseClient<Database> | null = null;
 

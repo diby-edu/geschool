@@ -17,7 +17,7 @@ type Mesure = 'students' | 'schools' | 'revenue';
 const MESURES: Record<Mesure, { label: string; couleur: string; cumule: boolean }> = {
   students: { label: 'Élèves inscrits', couleur: 'var(--color-brand)', cumule: true },
   schools: { label: 'Établissements', couleur: 'var(--color-success)', cumule: true },
-  revenue: { label: 'Encaissé', couleur: 'var(--color-warning)', cumule: false },
+  revenue: { label: 'Argent reçu', couleur: 'var(--color-warning)', cumule: false },
 };
 
 /**

@@ -365,5 +365,8 @@ export async function cleanupFixture(db: Db): Promise<void> {
   // Les cascades depuis schools emportent tout le contenu tenant ;
   // les comptes auth sont supprimes a part.
   await db.query(`delete from schools where slug like $1`, [`${PREFIX}-%`]);
+  // Les droits plateforme du faux Super Admin : sans cela, chaque passage des
+  // tests laissait une ligne « administrateur » sans compte (38 au 2026-10-25).
+  await db.query(`delete from platform_admins where user_id in (select id from auth.users where email like $1)`, [`${PREFIX}-%`]);
   await db.query(`delete from auth.users where email like $1`, [`${PREFIX}-%`]);
 }

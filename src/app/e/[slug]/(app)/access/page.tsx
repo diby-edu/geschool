@@ -14,7 +14,10 @@ import {
   type KindFilter,
   type StatusFilter,
 } from '@/features/access/queries';
-import { sendAction, resetAction, bulkSendAction, suspendAction, reactivateAction, resendAction } from '@/features/access/actions';
+import { sendAction, resetAction, bulkSendAction, suspendAction, reactivateAction, resendAction, unlockAction, changeLoginAction, signOutEverywhereAction } from '@/features/access/actions';
+import { ChangeLoginForm } from '@/features/access/components/ChangeLoginForm';
+import { formatPhoneForDisplay } from '@/lib/auth/identifier';
+import { lockedUserIds } from '@/services/account-unlock';
 import { FilterPill, FilterTile } from '@/components/ui/filters';
 import { DataTable, type Column } from '@/components/data-table/DataTable';
 import { SearchBar } from '@/components/data-table/SearchBar';
@@ -38,7 +41,7 @@ const STATUS_LABEL: Record<'ALL' | StatusFilter, string> = {
 /** Les accès de la direction ne se suspendent pas d'ici (cf. services/access-status.ts). */
 const SUSPENDABLE = new Set(['TEACHER', 'GUARDIAN', 'STUDENT']);
 /** Confirmations affichées une fois : elles ne doivent pas suivre la pagination. */
-const FLASH_KEYS = ['sent', 'reset', 'bulk', 'suspended', 'reactivated', 'resent'];
+const FLASH_KEYS = ['sent', 'reset', 'bulk', 'suspended', 'reactivated', 'resent', 'unlocked', 'login_changed', 'signed_out'];
 const PAGE_SIZE = 25;
 
 function pick(v: string | string[] | undefined): string | undefined {
@@ -82,7 +85,12 @@ export default async function AccessPage({
   const canResend = hasPermission(ctx, 'access_accounts.resend');
   const canDisable = hasPermission(ctx, 'access_accounts.disable');
   const canReactivate = hasPermission(ctx, 'access_accounts.reactivate');
-  const hasActions = canSend || canReset || canResend || canDisable || canReactivate;
+  const canUnlock = hasPermission(ctx, 'access_accounts.unlock');
+  const canChangeLogin = hasPermission(ctx, 'access_accounts.change_login');
+  const canSignOut = hasPermission(ctx, 'access_accounts.sign_out');
+  const hasActions = canSend || canReset || canResend || canDisable || canReactivate || canUnlock || canChangeLogin || canSignOut;
+  // Bloqués après 5 essais ratés : lu pour la page affichée seulement (25 lignes).
+  const locked = await lockedUserIds(ctx.school.id, rows);
 
   const flash =
     sp.sent === '1'
@@ -97,7 +105,13 @@ export default async function AccessPage({
               ? 'Accès réactivé.'
               : sp.resent === '1'
                 ? 'Identifiants renvoyés : un nouveau mot de passe temporaire a été envoyé.'
-                : null;
+                : sp.unlocked === '1'
+                  ? 'Compte débloqué : la personne peut réessayer tout de suite.'
+                  : sp.login_changed === '1'
+                    ? 'Identifiant corrigé : la personne se connecte maintenant avec le nouveau, avec le même mot de passe.'
+                    : sp.signed_out === '1'
+                      ? 'Déconnecté de tous ses appareils : la personne devra se reconnecter avec son mot de passe.'
+                      : null;
 
   const statusHref = (s: StatusFilter | undefined) => `${base}${mergeQuery(nav, { status: s ?? null, page: null })}`;
   const kindHref = (k: KindFilter | undefined) => `${base}${mergeQuery(nav, { kind: k ?? null, page: null })}`;
@@ -111,7 +125,9 @@ export default async function AccessPage({
       key: 'activation',
       header: 'Activation',
       render: (a) =>
-        a.account_status === 'SUSPENDED' ? (
+        locked.has(a.user_id) && a.account_status !== 'SUSPENDED' ? (
+          <span className="font-medium text-[color:var(--color-danger,#c0392b)]">Bloqué (essais ratés)</span>
+        ) : a.account_status === 'SUSPENDED' ? (
           <span className="font-medium text-[color:var(--color-danger,#c0392b)]">Suspendu</span>
         ) : a.activation_status === 'ACTIVATED' ? (
           <span className="text-[color:var(--color-success)]">Activé</span>
@@ -127,6 +143,25 @@ export default async function AccessPage({
             align: 'right' as const,
             render: (a: AccessRow) => (
               <div className="flex justify-end gap-2">
+                {canUnlock && locked.has(a.user_id) ? (
+                  <SimpleSubmit action={unlockAction.bind(null, slug, a.user_id)} label="Débloquer" small />
+                ) : null}
+                {canChangeLogin && a.user_id !== ctx.user.id && !a.login_identifier.match(/^[A-Z0-9]+$/) ? (
+                  <ChangeLoginForm
+                    action={changeLoginAction.bind(null, slug, a.user_id)}
+                    current={a.login_identifier.startsWith('+') ? formatPhoneForDisplay(a.login_identifier, ctx.school.countryCode) : a.login_identifier}
+                    byPhone={a.login_identifier.startsWith('+')}
+                    small
+                  />
+                ) : null}
+                {canSignOut && a.user_id !== ctx.user.id && a.activation_status === 'ACTIVATED' ? (
+                  <ConfirmSubmit
+                    action={signOutEverywhereAction.bind(null, slug, a.user_id)}
+                    label="Déconnecter partout"
+                    variant="secondary"
+                    confirmMessage={`Déconnecter ${a.name} de tous ses appareils ? Il devra se reconnecter avec son mot de passe.`}
+                  />
+                ) : null}
                 {canSend && a.has_pending && a.account_status !== 'SUSPENDED' ? (
                   <SimpleSubmit action={sendAction.bind(null, slug, a.user_id)} label="Envoyer" small />
                 ) : null}

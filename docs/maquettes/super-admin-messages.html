@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Messages — Super Admin</title>
+<style>
+  :root { --brand:#4a44e0; --ink:#141433; --muted:#6b6b8a; --page:#f4f4fb; --card:#fff; --line:#e4e4f0; --ok:#0a7d55; --warn:#d98a00; --bad:#c8245a; --night:#15152b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--ink); font:15px/1.5 -apple-system,"Segoe UI",Roboto,system-ui,sans-serif; }
+  .wrap { max-width:1200px; margin:0 auto; padding:28px 20px 80px; }
+  h1 { font-size:26px; margin:0 0 6px; } .sub { color:var(--muted); margin:0 0 10px; max-width:80ch; }
+  .note { font-size:13px; color:var(--muted); background:#fff; border:1px dashed var(--line); border-radius:10px; padding:8px 12px; display:inline-block; margin-bottom:22px; }
+  .app { display:grid; grid-template-columns:200px 1fr; border-radius:16px; overflow:hidden; border:1px solid var(--line); box-shadow:0 8px 24px rgba(20,20,51,.06); margin-bottom:36px; }
+  .menu { background:var(--night); color:#d8d8ea; padding:14px 10px; font-size:13px; }
+  .mi { padding:5px 8px; border-radius:9px; } .mi.on { background:rgba(139,133,255,.18); color:#b9b5ff; font-weight:600; }
+  .mg { font-size:10px; text-transform:uppercase; letter-spacing:.08em; opacity:.5; padding:12px 8px 4px; }
+  .main { padding:16px; display:grid; gap:14px; background:var(--page); min-width:0; }
+  .hero { border-radius:14px; padding:16px; color:#fff; background:linear-gradient(115deg,#3730a3,#6d28d9 52%,#c026d3); display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .hero h2 { margin:2px 0; font-size:22px; } .hero .s { font-size:13px; opacity:.9; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; } .chip { background:rgba(255,255,255,.17); border-radius:99px; padding:2px 10px; font-size:12px; }
+  .acts { display:flex; gap:6px; flex-wrap:wrap; align-items:flex-start; } .act { font-size:12px; background:rgba(255,255,255,.17); border-radius:8px; padding:5px 10px; }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; } .tab { font-size:13px; padding:6px 12px; border-radius:10px; border:1px solid var(--line); background:#fff; } .tab.on { background:var(--brand); color:#fff; border-color:var(--brand); font-weight:600; }
+  .bloc { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; min-width:0; }
+  .bl { font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:800; opacity:.65; margin-bottom:10px; }
+  .g2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; } .g4 { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .tile { border-radius:12px; padding:10px 12px; color:#fff; } .tile b { font-size:20px; display:block; } .tile span { font-size:11px; opacity:.9; }
+  .t1{background:linear-gradient(135deg,#4a44e0,#6d66f0)} .t2{background:linear-gradient(135deg,#0a7d55,#16a374)} .t3{background:linear-gradient(135deg,#d98a00,#f0a929)} .t4{background:linear-gradient(135deg,#0e7490,#1596b8)}
+  .row { display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid var(--line); font-size:13px; } .row:first-of-type{border-top:0}
+  .muted { color:var(--muted); font-size:12px; }
+  .pill { font-size:11px; font-weight:700; border-radius:99px; padding:1px 8px; white-space:nowrap; }
+  .p-ok{background:#e3f5ee;color:var(--ok)} .p-warn{background:#fff3dc;color:#9a6200} .p-bad{background:#fde7ee;color:var(--bad)} .p-info{background:#ecebff;color:var(--brand)}
+  .field { margin-bottom:9px; } .field label { font-size:12px; font-weight:600; display:block; margin-bottom:3px; } .field div { border:1px solid var(--line); border-radius:9px; padding:6px 9px; font-size:13px; background:#fafafe; }
+  .btn { display:inline-block; font-size:12px; font-weight:600; border-radius:9px; padding:6px 12px; background:var(--brand); color:#fff; } .btn.g { background:#fff; color:var(--ink); border:1px solid var(--line); } .btn.r { background:#fff; color:var(--bad); border:1px solid #f3c3d2; }
+  table { width:100%; border-collapse:collapse; font-size:13px; } th { text-align:left; font-size:11px; text-transform:uppercase; color:var(--muted); padding:6px; } td { border-top:1px solid var(--line); padding:7px 6px; }
+  h3 { margin:26px 0 6px; font-size:18px; } p.d { color:var(--muted); margin:0 0 12px; font-size:14px; max-width:85ch; }
+  @media (max-width:900px){ .app{grid-template-columns:1fr} .menu{display:none} .g2,.g4{grid-template-columns:1fr 1fr} }
+</style>
+<style>
+  .filters{display:flex;gap:6px;flex-wrap:wrap}.f{font-size:12px;padding:5px 10px;border-radius:99px;border:1px solid var(--line);background:#fff}.f.on{background:var(--brand);color:#fff;border-color:var(--brand);font-weight:600}.f b{margin-left:4px}
+  .search{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff;font-size:13px;color:var(--muted)}
+  .act2{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .box{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fafafe}
+  .pw{font-family:monospace;font-size:22px;letter-spacing:.2em;text-align:center;border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff}
+</style>
+<style>
+  .banner{border-radius:12px;padding:10px 14px;display:flex;gap:10px;align-items:flex-start;font-size:13px}
+  .b-info{background:#ecebff;color:#2e2a8f}.b-imp{background:#fff3dc;color:#7a4a00;border:1px solid #f3d08a}
+  .bell{position:relative;display:inline-block;font-size:18px}.bell i{position:absolute;top:-4px;right:-8px;background:var(--bad);color:#fff;font-style:normal;font-size:10px;border-radius:99px;padding:0 5px}
+  .chk{font-size:13px;margin:3px 0}
+  textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px;font:inherit;font-size:13px;min-height:70px;background:#fafafe}
+  .bar{height:8px;border-radius:99px;background:#eee;overflow:hidden}.bar span{display:block;height:100%;background:var(--ok)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Lot 5 — Communiquer avec les écoles</h1>
+  <p class="sub">Le Super Admin écrit un message une fois, choisit à quelles écoles et à qui il l'envoie, et voit qui l'a lu. Chiffres inventés ; menu décoratif.</p>
+  <div class="note">Aujourd'hui, la plateforme n'a aucun moyen d'écrire aux écoles depuis l'application : il faut appeler ou envoyer un WhatsApp, école par école.</div>
+
+  <h3>Écran 1 — Écrire un message</h3>
+  <p class="d">Un titre, un texte, son importance, et à qui il va. Le nombre de personnes touchées s'affiche avant d'envoyer.</p>
+  <div class="app">
+    <nav class="menu"><div class="mi">▣ Tableau de bord</div><div class="mg">Écoles</div><div class="mi">⌂ Établissements</div><div class="mi on">✉ Messages</div><div class="mg">Argent</div><div class="mi">✓ Paiements</div></nav>
+    <div class="main"><div class="g2">
+      <div class="bloc"><div class="bl">Le message</div>
+        <div class="field"><label>Titre</label><div>Maintenance samedi 2 novembre, de 22 h à minuit</div></div>
+        <div class="field"><label>Texte</label><textarea>L'application sera indisponible samedi soir pendant 2 heures. Pensez à saisir vos notes avant.</textarea></div>
+        <div class="field"><label>Importance</label><div>◉ Information &nbsp; ○ Important (bandeau orange, reste affiché jusqu'à « J'ai compris »)</div></div>
+        <div class="field"><label>Afficher jusqu'au</label><div>03/11/2026</div></div>
+      </div>
+      <div class="bloc"><div class="bl">À qui</div>
+        <div class="chk"><b>Quelles écoles</b></div>
+        <div class="chk">◉ Toutes les écoles (5)</div><div class="chk">○ Les écoles en essai (2)</div><div class="chk">○ Les écoles abonnées (1)</div><div class="chk">○ Les écoles à l'abonnement expiré (2)</div><div class="chk">○ Une ou plusieurs écoles au choix</div>
+        <div class="chk" style="margin-top:10px"><b>Qui dans l'école</b></div>
+        <div class="chk">☑ La direction (fondateur, directeur, censeur…)</div><div class="chk">☐ Tout le personnel</div><div class="chk">☐ Les enseignants</div><div class="chk">☐ Les parents</div>
+        <div class="chk" style="margin-top:10px"><b>Comment</b></div>
+        <div class="chk">☑ Dans l'application (cloche + bandeau)</div><div class="chk">☐ Aussi par SMS au fondateur <span class="muted">(5 SMS, environ 75 F)</span></div>
+        <div class="row" style="margin-top:10px"><span><b>38 personnes</b> dans 5 écoles</span><span class="btn">Envoyer</span></div>
+      </div>
+    </div></div>
+  </div>
+
+  <h3>Écran 2 — Les messages envoyés</h3>
+  <p class="d">Pour chaque message : à qui il est parti, et combien l'ont lu. On peut ouvrir un message pour voir école par école qui ne l'a pas lu.</p>
+  <div class="app"><nav class="menu"><div class="mi on">✉ Messages</div></nav><div class="main"><div class="bloc">
+    <table><tr><th>Message</th><th>Envoyé à</th><th>Lu</th><th></th></tr>
+      <tr><td><b>Maintenance samedi 2 novembre</b><div class="muted">Important · 26/10/2026</div></td><td>Toutes les écoles · direction</td><td style="min-width:140px"><div class="bar"><span style="width:63%"></span></div><div class="muted">24 / 38 personnes</div></td><td><span class="btn g">Ouvrir</span></td></tr>
+      <tr><td><b>Votre abonnement a expiré</b><div class="muted">Important · 21/10/2026</div></td><td>Lycée de Yopougon · direction</td><td><div class="bar"><span style="width:50%"></span></div><div class="muted">1 / 2 personnes</div></td><td><span class="btn g">Ouvrir</span></td></tr>
+      <tr><td><b>Nouveau : l'export des bulletins en PDF</b><div class="muted">Information · 15/10/2026</div></td><td>Toutes les écoles · tout le personnel</td><td><div class="bar"><span style="width:81%"></span></div><div class="muted">170 / 210 personnes</div></td><td><span class="btn g">Ouvrir</span></td></tr>
+    </table></div></div></div>
+
+  <h3>Écran 3 — Ce que voit l'école</h3>
+  <p class="d">Le message arrive dans la cloche. S'il est « important », un bandeau orange reste en haut du tableau de bord jusqu'à ce que la personne clique « J'ai compris ».</p>
+  <div class="app"><nav class="menu"><div class="mi on">▣ Tableau de bord</div><div class="mi">Élèves</div><div class="mi">Notes</div></nav><div class="main">
+    <div style="display:flex;justify-content:space-between;align-items:center"><b>Groupe Scolaire Les Cocotiers</b><span class="bell">🔔<i>1</i></span></div>
+    <div class="banner b-imp"><span>⚠️</span><div><b>De la plateforme · Maintenance samedi 2 novembre, de 22 h à minuit</b><div>L'application sera indisponible samedi soir pendant 2 heures. Pensez à saisir vos notes avant.</div></div><span class="btn g" style="margin-left:auto">J'ai compris</span></div>
+    <div class="g4"><div class="tile t1"><b>4 000</b><span>élèves</span></div><div class="tile t2"><b>92 %</b><span>appels faits</span></div><div class="tile t4"><b>412</b><span>notes cette semaine</span></div><div class="tile t3"><b>7</b><span>parents connectés</span></div></div>
+  </div></div>
+
+  <h3>Écran 4 (à décider) — Les écoles écrivent à la plateforme</h3>
+  <p class="d">Un bouton « Contacter la plateforme » dans chaque école. Les demandes arrivent ici ; le Super Admin répond, et la réponse revient dans la cloche de l'école.</p>
+  <div class="app"><nav class="menu"><div class="mi on">✉ Messages</div></nav><div class="main"><div class="bloc">
+    <table><tr><th>Demande</th><th>École</th><th>État</th><th></th></tr>
+      <tr><td><b>Comment ajouter une 2ᵉ langue vivante ?</b><div class="muted">KONE Adama, Directeur · il y a 2 h</div></td><td>Lycée de Yopougon</td><td><span class="pill p-warn">Sans réponse</span></td><td><span class="btn">Répondre</span></td></tr>
+      <tr><td><b>Paiement Mobile Money envoyé</b><div class="muted">Administration, Fondateur · hier</div></td><td>Les Cocotiers</td><td><span class="pill p-ok">Répondu</span></td><td><span class="btn g">Ouvrir</span></td></tr>
+    </table></div></div></div>
+</div>
+</body>
+</html>

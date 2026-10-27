@@ -331,6 +331,21 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
       { code: 'access_accounts.reset', label: 'Réinitialiser un mot de passe' },
       { code: 'access_accounts.disable', label: 'Suspendre un accès' },
       { code: 'access_accounts.reactivate', label: 'Réactiver un accès suspendu' },
+      {
+        code: 'access_accounts.unlock',
+        label: 'Débloquer un compte',
+        hint: 'Après 5 mots de passe ratés, le compte est bloqué 15 minutes. Débloquer permet de réessayer tout de suite.',
+      },
+      {
+        code: 'access_accounts.change_login',
+        label: 'Corriger le numéro ou l’e-mail de connexion',
+        hint: 'Faute de frappe à l’inscription, ou la personne a changé de numéro.',
+      },
+      {
+        code: 'access_accounts.sign_out',
+        label: 'Déconnecter une personne de tous ses appareils',
+        hint: 'Téléphone perdu ou volé : toutes ses connexions ouvertes sont fermées.',
+      },
       { code: 'access_accounts.view_history', label: 'Consulter l’historique des accès (connexions, envois, suspensions)' },
     ],
   },
@@ -340,6 +355,11 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
     items: [
       { code: 'settings.update', label: 'Modifier l’identité et les coordonnées de l’établissement' },
       { code: 'audit.view', label: 'Consulter le journal d’audit' },
+      {
+        code: 'support.contact',
+        label: 'Contacter la plateforme',
+        hint: 'Écrire à la plateforme et lire ses réponses. Marche aussi quand l’abonnement est coupé.',
+      },
       { code: 'users.view', label: 'Consulter la liste du personnel administratif' },
       {
         code: 'users.create',

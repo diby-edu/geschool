@@ -25,6 +25,11 @@ export type PaymentSettings = {
   mobileMoneyName: string;
   /** Precision libre : horaires, interlocuteur, delai de confirmation. */
   instructions: string;
+  /**
+   * Jours de grâce après l'expiration d'un abonnement, avant la coupure (0143).
+   * Lu par la base (app.school_situations, clé `graceDays`) ; 15 par défaut.
+   */
+  graceDays: number;
 };
 
 export const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
@@ -32,7 +37,14 @@ export const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   mobileMoneyNumber: '',
   mobileMoneyName: '',
   instructions: '',
+  graceDays: 15,
 };
+
+/** 0 à 90 jours ; toute autre valeur revient aux 15 jours décidés. */
+export function graceDaysOf(v: unknown): number {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) && n >= 0 && n <= 90 && v !== '' && v !== null && v !== undefined ? n : DEFAULT_PAYMENT_SETTINGS.graceDays;
+}
 
 /** Lisible par une ecole : elle doit savoir ou verser. */
 export async function readPaymentSettings(): Promise<PaymentSettings> {
@@ -49,6 +61,8 @@ export async function readPaymentSettings(): Promise<PaymentSettings> {
     mobileMoneyNumber: ligne?.mobile_money_number ?? '',
     mobileMoneyName: ligne?.mobile_money_name ?? '',
     instructions: ligne?.instructions ?? '',
+    // Côté école : sans intérêt (la base l'applique) ; valeur par défaut.
+    graceDays: DEFAULT_PAYMENT_SETTINGS.graceDays,
   };
 }
 
@@ -73,6 +87,7 @@ export async function readPaymentSettingsForAdmin(): Promise<PaymentSettings> {
     mobileMoneyNumber: texte(o.mobileMoneyNumber, 40),
     mobileMoneyName: texte(o.mobileMoneyName, 80),
     instructions: texte(o.instructions, 600),
+    graceDays: graceDaysOf(o.graceDays),
   };
 }
 

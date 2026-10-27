@@ -53,9 +53,9 @@ export default async function PlatformStatsPage() {
       <div className="grid gap-3 sm:grid-cols-4">
         <Chiffre label="Établissements actifs" valeur={nombre(actives)} detail={`${stats.schools.length} au total`} />
         <Chiffre label="Élèves" valeur={nombre(totalEleves)} />
-        <Chiffre label="Encaissé" valeur={argent(stats.cashedIn)} />
+        <Chiffre label="Argent reçu" valeur={argent(stats.cashedIn)} />
         <Chiffre
-          label="Reste dû"
+          label="Paiements à confirmer"
           valeur={argent(stats.outstanding)}
           alerte={stats.outstanding > 0}
         />

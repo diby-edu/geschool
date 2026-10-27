@@ -41,9 +41,10 @@ const ETAT_COLOR: Record<string, string> = {
 };
 
 const SUB_LABEL: Record<string, string> = {
-  ACTIVE: 'Abonné',
+  ACTIVE: 'Abonnée',
   TRIALING: 'En essai',
-  PAST_DUE: 'Paiement en retard',
+  PAST_DUE: 'Abonnement expiré',
+  SUSPENDED: 'Suspendue',
 };
 
 const jour = (iso: string | null) => (iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : null);
@@ -193,12 +194,14 @@ export default async function PlatformSchoolsPage({
                       </p>
                       <p className="truncate text-xs text-[color:var(--muted-foreground)]">
                         {s.subscription
-                          ? `${s.subscription.plan} · ${SUB_LABEL[s.subscription.status] ?? s.subscription.status}${
+                          ? `${s.subscription.plan === '—' ? '' : `${s.subscription.plan} · `}${SUB_LABEL[s.subscription.status] ?? s.subscription.status}${
                               s.subscription.status === 'TRIALING' && s.subscription.trialEndsOn
                                 ? ` jusqu’au ${jour(s.subscription.trialEndsOn)}`
-                                : s.subscription.endsOn
-                                  ? ` · échéance ${jour(s.subscription.endsOn)}`
-                                  : ''
+                                : s.subscription.status === 'PAST_DUE' && s.subscription.endsOn
+                                  ? ` depuis le ${jour(s.subscription.endsOn)}${s.subscription.graceEndsOn ? ` · coupure le ${jour(s.subscription.graceEndsOn)}` : ''}`
+                                  : s.subscription.endsOn
+                                    ? ` jusqu’au ${jour(s.subscription.endsOn)}`
+                                    : ''
                             }`
                           : 'Aucun abonnement'}
                       </p>

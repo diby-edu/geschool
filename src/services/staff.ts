@@ -6,7 +6,7 @@ import { hasPermission, requireWritable } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
 import { AuthorizationError, ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import { normalizePhone } from '@/lib/auth/identifier';
-import { STAFF_FUNCTIONS } from '@/lib/permissions/roles';
+import { isStaffFunction } from '@/lib/permissions/roles';
 import type { TenantContext } from '@/lib/tenant/context';
 import type { StaffInput, StaffUpdateInput } from '@/features/staff/schemas';
 import { findOrCreatePhoneAccess } from './access-provisioning';
@@ -100,13 +100,13 @@ export async function setStaffFunctions(ctx: TenantContext, userId: string, func
   requireWritable(ctx, 'users.assign_roles');
   if (userId === ctx.user.id) throw new ValidationError('Vous ne pouvez pas modifier vos propres fonctions.');
   await assertCanManagePerson(ctx, userId);
-  const wanted = functions.filter((f) => (STAFF_FUNCTIONS as readonly string[]).includes(f));
+  const wanted = functions.filter(isStaffFunction);
   if (wanted.length === 0) throw new ValidationError('Choisissez au moins une fonction.');
 
   const supabase = await createClient();
   const membership = await membershipId(supabase, ctx.school.id, userId);
   const current = await currentFunctionCodes(supabase, membership);
-  const currentStaff = current.filter((c) => (STAFF_FUNCTIONS as readonly string[]).includes(c));
+  const currentStaff = current.filter(isStaffFunction);
   const toAdd = wanted.filter((c) => !currentStaff.includes(c));
   const toRemove = currentStaff.filter((c) => !wanted.includes(c));
   if (toAdd.length === 0 && toRemove.length === 0) return;

@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Super Admin — maquettes du poste de pilotage</title>
+<style>
+  :root {
+    --brand: #4a44e0; --ink: #141433; --muted: #6b6b8a; --page: #f4f4fb; --card: #fff; --line: #e4e4f0;
+    --ok: #0a7d55; --warn: #d98a00; --bad: #c8245a; --night: #15152b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Roboto, system-ui, sans-serif; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 28px 20px 80px; }
+  h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 0 0 10px; max-width: 80ch; }
+  .note { font-size: 13px; color: var(--muted); background: #fff; border: 1px dashed var(--line); border-radius: 10px; padding: 8px 12px; display: inline-block; margin-bottom: 26px; }
+  .variante { margin-bottom: 52px; }
+  .vtitle { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .vtitle h2 { font-size: 20px; margin: 0; }
+  .tag { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; color: var(--muted); background: #fff; }
+  .vdesc { color: var(--muted); margin: 0 0 14px; max-width: 82ch; font-size: 14px; }
+
+  .app { display: grid; grid-template-columns: 200px 1fr; border-radius: 16px; overflow: hidden; border: 1px solid var(--line);
+         box-shadow: 0 1px 2px rgba(20,20,51,.05), 0 8px 24px rgba(20,20,51,.06); }
+  .menu { background: var(--night); color: #d8d8ea; padding: 14px 10px; font-size: 13px; }
+  .brandline { font-weight: 800; font-size: 13px; padding: 2px 8px 2px; }
+  .brandsub { font-size: 11px; opacity: .55; padding: 0 8px 10px; }
+  .mgroup { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; opacity: .5; padding: 12px 8px 4px; }
+  .mitem { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 9px; cursor: default; }
+  .mitem.on { background: rgba(139,133,255,.18); color: #b9b5ff; font-weight: 600; }
+  .mitem .new { margin-left: auto; font-size: 9px; font-weight: 800; background: #b9b5ff; color: var(--night); border-radius: 6px; padding: 0 5px; }
+  .main { padding: 16px; display: grid; gap: 14px; background: var(--page); min-width: 0; }
+
+  .hero { border-radius: 14px; padding: 14px 16px; color: #fff; background: linear-gradient(135deg, #3730a3 0%, #5b50e6 100%);
+          display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .hero .hi { font-size: 13px; opacity: .9; }
+  .hero .nom { font-size: 19px; font-weight: 800; }
+  .hero .acts { display: flex; gap: 7px; flex-wrap: wrap; }
+  .act { font-size: 11.5px; background: rgba(255,255,255,.17); border-radius: 8px; padding: 4px 9px; }
+
+  .bloc { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 13px 14px; min-width: 0; }
+  .bloc.sombre { background: var(--night); color: #e6e6f2; border-color: #23233f; }
+  .blabel { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; font-weight: 800; opacity: .65; margin-bottom: 9px; display: flex; justify-content: space-between; gap: 8px; }
+  .blabel a { text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--brand); opacity: 1; text-decoration: none; }
+  .bloc.sombre .blabel a { color: #b9b5ff; }
+
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+  .tile { border-radius: 13px; padding: 11px 12px; color: #fff; min-height: 86px; display: flex; flex-direction: column; justify-content: space-between; }
+  .tile .k { font-size: 10.5px; font-weight: 800; opacity: .92; text-transform: uppercase; letter-spacing: .04em; }
+  .tile .v { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+  .tile .d { font-size: 11px; opacity: .88; }
+  .t1 { background: linear-gradient(135deg,#4a44e0,#6d66f0); } .t2 { background: linear-gradient(135deg,#0a7d55,#16a374); }
+  .t3 { background: linear-gradient(135deg,#d98a00,#f0a929); } .t4 { background: linear-gradient(135deg,#c8245a,#e0487a); }
+  .t5 { background: linear-gradient(135deg,#0e7490,#1596b8); } .t6 { background: linear-gradient(135deg,#6b21a8,#8b3fd0); }
+
+  .grid2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .row { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 13px; }
+  .bloc.sombre .row { border-color: #2a2a4a; }
+  .row:first-of-type { border-top: 0; }
+  .row b { font-weight: 700; }
+  .pill { font-size: 11px; font-weight: 700; border-radius: 99px; padding: 1px 8px; white-space: nowrap; }
+  .p-bad { background: #fde7ee; color: var(--bad); } .p-warn { background: #fff3dc; color: #9a6200; } .p-ok { background: #e3f5ee; color: var(--ok); }
+  .p-info { background: #ecebff; color: var(--brand); }
+  .muted { color: var(--muted); font-size: 12px; }
+  .bloc.sombre .muted { color: #a5a5c4; }
+  .bar { height: 7px; border-radius: 99px; background: #ecebff; overflow: hidden; margin-top: 4px; }
+  .bar i { display: block; height: 100%; background: var(--brand); border-radius: 99px; }
+  .bar.warn i { background: var(--warn); } .bar.bad i { background: var(--bad); }
+  svg { display: block; width: 100%; height: auto; }
+
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tab { font-size: 13px; padding: 6px 12px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
+  .tab.on { background: var(--brand); color: #fff; border-color: var(--brand); font-weight: 600; }
+
+  /* Plan de l'espace */
+  .plan { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .pcard { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .pcard h3 { margin: 0 0 8px; font-size: 15px; }
+  .pcard li { font-size: 13px; margin: 4px 0; }
+  .pcard ul { padding-left: 18px; margin: 0; }
+  .ok::marker { color: var(--ok); } .nv::marker { color: var(--brand); }
+  .legend { display: flex; gap: 16px; font-size: 13px; color: var(--muted); margin: 0 0 12px; flex-wrap: wrap; }
+  .legend b { color: var(--ink); }
+  @media (max-width: 900px) { .app { grid-template-columns: 1fr; } .menu { display: none; } .tiles { grid-template-columns: repeat(2,1fr); }
+    .grid2, .grid3, .plan { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Super Admin — le poste de pilotage</h1>
+  <p class="sub">Trois façons d'organiser le tableau de bord, dans le style « Mosaïque » des autres espaces (menu sombre, mosaïque claire).
+    Les écoles paient <b>une fois par an</b> (au début de l'année, ou à la fin de l'essai). Chaque école est dans une de 3 situations : <b>en essai</b>, <b>abonnée</b> ou <b>abonnement expiré</b>. Les blocs sont les mêmes partout : <b>argent</b>, <b>croissance</b>, <b>santé des écoles</b> (à risque après 2 jours de cours sans activité), <b>SMS</b>, et <b>à traiter</b>.
+    En bas : le plan complet de l'espace pour tout gérer.</p>
+  <div class="note">Chiffres inventés pour la maquette. Le menu est décoratif (non cliquable).</div>
+
+  <!-- ===================== Variante A ===================== -->
+  <section class="variante">
+    <div class="vtitle"><h2>A — L'argent d'abord</h2><span class="tag">Pilotage financier</span></div>
+    <p class="vdesc">On ouvre sur les revenus : 6 tuiles de chiffres clés, la courbe des 12 derniers mois et le revenu par module.
+      La santé des écoles et les SMS viennent ensuite. Pour suivre le chiffre d'affaires d'un coup d'œil.</p>
+    <div class="app">
+      <nav class="menu">
+        <div class="brandline">Gestion Scolaire</div><div class="brandsub">Plateforme</div>
+        <div class="mgroup">Pilotage</div>
+        <div class="mitem on">▣ Tableau de bord</div><div class="mitem">◔ Statistiques</div><div class="mitem">♥ Santé des écoles <span class="new">NOUVEAU</span></div>
+        <div class="mgroup">Écoles</div>
+        <div class="mitem">⌂ Établissements</div><div class="mitem">☺ Comptes</div><div class="mitem">✉ Communication <span class="new">NOUVEAU</span></div>
+        <div class="mgroup">Argent</div>
+        <div class="mitem">₣ Abonnements <span class="new">NOUVEAU</span></div><div class="mitem">✓ Paiements</div><div class="mitem">▦ Plans et modules</div>
+        <div class="mgroup">Service</div>
+        <div class="mitem">✆ SMS</div><div class="mitem">⚙ Réglages <span class="new">NOUVEAU</span></div><div class="mitem">⚡ Technique <span class="new">NOUVEAU</span></div>
+        <div class="mgroup">Sécurité</div>
+        <div class="mitem">⚿ Administrateurs</div><div class="mitem">☰ Journal</div>
+      </nav>
+      <div class="main">
+        <div class="hero">
+          <div><div class="hi">Bonjour, KONO</div><div class="nom">Plateforme · 42 établissements</div><div class="hi">dimanche 25 octobre 2026</div></div>
+          <div class="acts"><span class="act">+ Nouvel établissement</span><span class="act">Confirmer les paiements (3)</span><span class="act">Envoyer un message aux écoles</span></div>
+        </div>
+        <div class="tiles">
+          <div class="tile t1"><span class="k">Argent reçu cette année</span><span class="v">14 600 000 F</span><span class="d">dont 1 900 000 F ce mois</span></div>
+          <div class="tile t2"><span class="k">Écoles abonnées</span><span class="v">32</span><span class="d">année payée</span></div>
+          <div class="tile t3"><span class="k">En essai</span><span class="v">7</span><span class="d">3 finissent sous 30 j</span></div>
+          <div class="tile t4"><span class="k">Abonnement expiré</span><span class="v">3</span><span class="d">2 en délai de grâce · 1 coupée</span></div>
+          <div class="tile t5"><span class="k">Élèves</span><span class="v">61 420</span><span class="d">▲ +2 310 ce mois</span></div>
+          <div class="tile t6"><span class="k">Parents connectés</span><span class="v">18 904</span><span class="d">41 % des familles</span></div>
+          <div class="tile t2"><span class="k">Écoles actives</span><span class="v">38 / 42</span><span class="d">utilisées cette semaine</span></div>
+          <div class="tile t4"><span class="k">À risque</span><span class="v">4</span><span class="d">2 jours de cours sans activité</span></div>
+        </div>
+        <div class="grid2">
+          <div class="bloc">
+            <div class="blabel">Argent reçu · mois par mois <a href="#">Statistiques →</a></div>
+            <svg viewBox="0 0 520 170" aria-label="courbe des revenus">
+              <g stroke="#e4e4f0"><line x1="30" y1="20" x2="510" y2="20"/><line x1="30" y1="65" x2="510" y2="65"/><line x1="30" y1="110" x2="510" y2="110"/><line x1="30" y1="150" x2="510" y2="150"/></g>
+              <g fill="#ecebff"><rect x="40" y="110" width="26" height="40" rx="4"/><rect x="80" y="102" width="26" height="48" rx="4"/><rect x="120" y="96" width="26" height="54" rx="4"/><rect x="160" y="92" width="26" height="58" rx="4"/><rect x="200" y="84" width="26" height="66" rx="4"/><rect x="240" y="80" width="26" height="70" rx="4"/><rect x="280" y="70" width="26" height="80" rx="4"/><rect x="320" y="62" width="26" height="88" rx="4"/><rect x="360" y="55" width="26" height="95" rx="4"/><rect x="400" y="44" width="26" height="106" rx="4"/><rect x="440" y="38" width="26" height="112" rx="4"/></g>
+              <rect x="480" y="30" width="26" height="120" rx="4" fill="#4a44e0"/>
+              <polyline fill="none" stroke="#0a7d55" stroke-width="2.5" points="53,118 93,112 133,104 173,100 213,94 253,88 293,80 333,74 373,64 413,56 453,52 493,46"/>
+              <g font-size="10" fill="#6b6b8a"><text x="40" y="164">nov.</text><text x="240" y="164">avr.</text><text x="470" y="164">oct.</text><text x="0" y="24">5 M</text><text x="0" y="114">2 M</text></g>
+            </svg>
+            <div class="muted">L'argent arrive surtout à la rentrée (septembre, octobre), puis au fil des fins d'essai.</div>
+          </div>
+          <div class="bloc">
+            <div class="blabel">Argent reçu par module · cette année</div>
+            <div class="row"><span>Notes et bulletins</span><b>1 640 000 F</b></div><div class="bar"><i style="width:84%"></i></div>
+            <div class="row"><span>Présences</span><b>1 120 000 F</b></div><div class="bar"><i style="width:58%"></i></div>
+            <div class="row"><span>Emploi du temps</span><b>980 000 F</b></div><div class="bar"><i style="width:50%"></i></div>
+            <div class="row"><span>Espace Parent</span><b>720 000 F</b></div><div class="bar"><i style="width:37%"></i></div>
+            <div class="row"><span>SMS (compléments)</span><b>400 000 F</b></div><div class="bar"><i style="width:20%"></i></div>
+          </div>
+        </div>
+        <div class="grid3">
+          <div class="bloc">
+            <div class="blabel">À traiter <a href="#">Tout →</a></div>
+            <div class="row"><span>3 paiements à confirmer</span><span class="pill p-warn">Confirmer</span></div>
+            <div class="row"><span>2 écoles en attente d'activation</span><span class="pill p-info">Activer</span></div>
+            <div class="row"><span>3 abonnements expirés</span><span class="pill p-bad">Relancer</span></div>
+            <div class="row"><span>3 essais finissent sous 30 j</span><span class="pill p-info">Voir</span></div>
+            <div class="row"><span>12 SMS en échec hier</span><span class="pill p-bad">Voir</span></div>
+          </div>
+          <div class="bloc">
+            <div class="blabel">Écoles à risque <a href="#">Santé →</a></div>
+            <div class="row"><span><b>Lycée Moderne Kono</b><br><span class="muted">aucun appel depuis 4 jours de cours</span></span><span class="pill p-bad">4 j</span></div>
+            <div class="row"><span><b>GS Renaissance</b><br><span class="muted">plus de connexion de la direction</span></span><span class="pill p-bad">3 j</span></div>
+            <div class="row"><span><b>Collège Saint-Viateur</b><br><span class="muted">appels : 12 % des cours</span></span><span class="pill p-warn">2 j</span></div>
+          </div>
+          <div class="bloc">
+            <div class="blabel">SMS · octobre <a href="#">SMS →</a></div>
+            <div class="row"><span>Envoyés</span><b>48 210</b></div>
+            <div class="row"><span>Délivrés</span><b>97,4 %</b></div>
+            <div class="row"><span>Écoles proches du quota</span><span class="pill p-warn">6</span></div>
+            <div class="row"><span>Solde chez Letexto</span><b>212 000 F</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== Variante B ===================== -->
+  <section class="variante">
+    <div class="vtitle"><h2>B — Les alertes d'abord</h2><span class="tag">Poste de veille</span></div>
+    <p class="vdesc">On ouvre sur ce qui demande une action : une bande sombre « à traiter / à risque » en haut, classée par urgence,
+      puis l'argent, la croissance et les SMS en tuiles. Pour quelqu'un qui passe chaque matin régler les problèmes.</p>
+    <div class="app">
+      <nav class="menu">
+        <div class="brandline">Gestion Scolaire</div><div class="brandsub">Plateforme</div>
+        <div class="mgroup">Pilotage</div><div class="mitem on">▣ Tableau de bord</div><div class="mitem">◔ Statistiques</div><div class="mitem">♥ Santé des écoles</div>
+        <div class="mgroup">Écoles</div><div class="mitem">⌂ Établissements</div><div class="mitem">☺ Comptes</div>
+        <div class="mgroup">Argent</div><div class="mitem">₣ Abonnements</div><div class="mitem">✓ Paiements</div>
+        <div class="mgroup">Service</div><div class="mitem">✆ SMS</div><div class="mitem">⚙ Réglages</div>
+      </nav>
+      <div class="main">
+        <div class="bloc sombre">
+          <div class="blabel">Aujourd'hui · 9 choses à traiter <a href="#">Tout voir →</a></div>
+          <div class="grid3">
+            <div>
+              <div class="row"><span><span class="pill p-bad">Urgent</span> Lycée Moderne Kono : aucun appel depuis 4 jours</span></div>
+              <div class="row"><span><span class="pill p-bad">Urgent</span> 3 abonnements expirés (1 accès coupé)</span></div>
+              <div class="row"><span><span class="pill p-bad">Urgent</span> 12 SMS en échec (identifiants)</span></div>
+            </div>
+            <div>
+              <div class="row"><span><span class="pill p-warn">Aujourd'hui</span> 3 paiements déclarés à confirmer</span></div>
+              <div class="row"><span><span class="pill p-warn">Aujourd'hui</span> 2 écoles en attente d'activation</span></div>
+              <div class="row"><span><span class="pill p-warn">Aujourd'hui</span> GS Renaissance : direction absente 3 jours</span></div>
+            </div>
+            <div>
+              <div class="row"><span><span class="pill p-info">Bientôt</span> 3 essais finissent sous 30 jours</span></div>
+              <div class="row"><span><span class="pill p-info">Bientôt</span> 6 écoles à plus de 80 % de leur quota SMS</span></div>
+              <div class="row"><span><span class="pill p-info">Bientôt</span> 1 nom d'expéditeur SMS en validation</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="tiles">
+          <div class="tile t1"><span class="k">Argent reçu cette année</span><span class="v">14 600 000 F</span><span class="d">32 écoles abonnées</span></div>
+          <div class="tile t3"><span class="k">En essai · expirées</span><span class="v">7 · 3</span><span class="d">3 essais finissent sous 30 j</span></div>
+          <div class="tile t5"><span class="k">Nouvelles écoles</span><span class="v">+4</span><span class="d">ce mois · 2 essais convertis</span></div>
+          <div class="tile t2"><span class="k">Écoles actives</span><span class="v">38 / 42</span><span class="d">cette semaine</span></div>
+        </div>
+        <div class="grid2">
+          <div class="bloc">
+            <div class="blabel">Santé des écoles · activité des 5 derniers jours de cours</div>
+            <div class="row"><span><b>GS Les Cocotiers</b> <span class="muted">4 000 élèves</span></span><span>appels 96 % · notes ✓ · direction ✓</span></div>
+            <div class="row"><span><b>Lycée d'Excellence Yopougon</b> <span class="muted">1 250</span></span><span>appels 88 % · notes ✓ · direction ✓</span></div>
+            <div class="row"><span><b>Collège Saint-Viateur</b> <span class="muted">900</span></span><span><span class="pill p-warn">appels 12 %</span></span></div>
+            <div class="row"><span><b>GS Renaissance</b> <span class="muted">620</span></span><span><span class="pill p-bad">direction absente 3 j</span></span></div>
+            <div class="row"><span><b>Lycée Moderne Kono</b> <span class="muted">540</span></span><span><span class="pill p-bad">aucun appel 4 j</span></span></div>
+          </div>
+          <div class="bloc">
+            <div class="blabel">Croissance · 12 mois</div>
+            <svg viewBox="0 0 360 150"><g stroke="#e4e4f0"><line x1="10" y1="20" x2="350" y2="20"/><line x1="10" y1="80" x2="350" y2="80"/><line x1="10" y1="135" x2="350" y2="135"/></g>
+              <polyline fill="none" stroke="#4a44e0" stroke-width="3" points="15,128 45,124 75,118 105,112 135,104 165,98 195,86 225,76 255,66 285,52 315,40 345,30"/>
+              <polyline fill="none" stroke="#d98a00" stroke-width="2" stroke-dasharray="5 4" points="15,132 45,131 75,130 105,128 135,127 165,127 195,125 225,124 255,122 285,121 315,120 345,119"/></svg>
+            <div class="muted"><span style="color:var(--brand)">━</span> écoles abonnées · <span style="color:var(--warn)">┅</span> écoles perdues (cumul)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== Variante C ===================== -->
+  <section class="variante">
+    <div class="vtitle"><h2>C — Par onglets</h2><span class="tag">Une chose à la fois</span></div>
+    <p class="vdesc">En haut, 4 tuiles toujours visibles et la liste « à traiter ». Dessous, 4 onglets : <b>Argent</b>, <b>Croissance</b>,
+      <b>Santé</b>, <b>SMS</b>. Chaque onglet montre son détail en grand. Plus aéré, idéal sur un petit écran ou un téléphone.</p>
+    <div class="app">
+      <nav class="menu">
+        <div class="brandline">Gestion Scolaire</div><div class="brandsub">Plateforme</div>
+        <div class="mgroup">Pilotage</div><div class="mitem on">▣ Tableau de bord</div><div class="mitem">◔ Statistiques</div>
+        <div class="mgroup">Écoles</div><div class="mitem">⌂ Établissements</div><div class="mitem">☺ Comptes</div>
+        <div class="mgroup">Argent</div><div class="mitem">₣ Abonnements</div><div class="mitem">✓ Paiements</div>
+      </nav>
+      <div class="main">
+        <div class="tiles">
+          <div class="tile t1"><span class="k">Argent reçu cette année</span><span class="v">14 600 000 F</span><span class="d">32 abonnées · 7 en essai · 3 expirées</span></div>
+          <div class="tile t2"><span class="k">Écoles actives</span><span class="v">38 / 42</span><span class="d">cette semaine</span></div>
+          <div class="tile t4"><span class="k">À risque</span><span class="v">4</span><span class="d">2 jours sans activité</span></div>
+          <div class="tile t3"><span class="k">À traiter</span><span class="v">9</span><span class="d">dont 3 urgents</span></div>
+        </div>
+        <div class="tabs"><span class="tab">Argent</span><span class="tab">Croissance</span><span class="tab on">Santé des écoles</span><span class="tab">SMS</span></div>
+        <div class="bloc">
+          <div class="blabel">Santé des écoles · 5 derniers jours de cours <a href="#">Exporter →</a></div>
+          <div class="row"><b>École</b><span class="muted">Appels faits · Notes saisies · Direction connectée · Dernière activité</span></div>
+          <div class="row"><span><b>GS Les Cocotiers</b></span><span>96 % · 412 · oui · aujourd'hui <span class="pill p-ok">Bien</span></span></div>
+          <div class="row"><span><b>Lycée d'Excellence Yopougon</b></span><span>88 % · 120 · oui · hier <span class="pill p-ok">Bien</span></span></div>
+          <div class="row"><span><b>Collège Saint-Viateur</b></span><span>12 % · 3 · oui · hier <span class="pill p-warn">Faible</span></span></div>
+          <div class="row"><span><b>GS Renaissance</b></span><span>40 % · 0 · non · il y a 3 j <span class="pill p-bad">À risque</span></span></div>
+          <div class="row"><span><b>Lycée Moderne Kono</b></span><span>0 % · 0 · non · il y a 4 j <span class="pill p-bad">À risque</span></span></div>
+          <div class="muted" style="margin-top:8px">Les jours de congé de chaque école ne comptent pas. Un clic sur une école ouvre sa fiche complète.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== Plan complet ===================== -->
+  <section class="variante">
+    <div class="vtitle"><h2>Le plan complet : tout gérer depuis le Super Admin</h2></div>
+    <p class="vdesc">Ce que la plateforme doit permettre pour gérer l'application à 100 %. Ce qui existe déjà est en vert ; ce que je construirai est en violet.</p>
+    <div class="legend"><span><b style="color:var(--ok)">●</b> existe déjà</span><span><b style="color:var(--brand)">●</b> à construire</span></div>
+    <div class="plan">
+      <div class="pcard"><h3>Pilotage</h3><ul>
+        <li class="nv">Tableau de bord : argent, croissance, santé, SMS, à traiter</li>
+        <li class="ok">Statistiques (élèves, encaissé, reste dû par école)</li>
+        <li class="nv">Santé des écoles : activité jour par jour, alerte après 2 jours</li>
+        <li class="ok">Usage (relevé du nombre d'élèves, enseignants…)</li></ul></div>
+      <div class="pcard"><h3>Écoles</h3><ul>
+        <li class="ok">Liste, filtres, création, activer / suspendre / archiver</li>
+        <li class="ok">Ouvrir l'espace d'une école (avec motif, tracé)</li>
+        <li class="ok">Couper ou rallumer un module par école</li>
+        <li class="nv">Modifier l'identité d'une école (nom, ville, contacts, logo, code)</li>
+        <li class="nv">Voir et gérer sa direction et son personnel depuis sa fiche</li>
+        <li class="nv">Changer le fondateur / directeur responsable</li>
+        <li class="nv">Exporter toutes les données d'une école ; fermeture définitive</li></ul></div>
+      <div class="pcard"><h3>Comptes</h3><ul>
+        <li class="ok">Rechercher une personne dans toutes les écoles</li>
+        <li class="nv">Suspendre, réactiver, réinitialiser le mot de passe</li>
+        <li class="nv">Renvoyer les identifiants par SMS</li>
+        <li class="nv">Voir ses connexions et ses fonctions</li></ul></div>
+      <div class="pcard"><h3>Argent</h3><ul>
+        <li class="ok">Plans et modules (prix), abonnement par école</li>
+        <li class="ok">Paiements : confirmer / refuser, reçus numérotés</li>
+        <li class="nv">Les 3 situations de chaque école : en essai, abonnée, expirée ; relance par SMS</li>
+        <li class="nv">Chaque nuit : essai ou année fini sans paiement → expirée, message à la direction ; après le délai de grâce (15 j, réglable) → accès coupé jusqu'au paiement</li>
+        <li class="nv">Argent reçu par mois et par module, export pour la comptabilité</li>
+        <li class="nv">Paiement Mobile Money en ligne (quand le fournisseur est choisi)</li></ul></div>
+      <div class="pcard"><h3>Communication et SMS</h3><ul>
+        <li class="ok">SMS : expéditeur, quotas, compléments, accusés de réception</li>
+        <li class="nv">Message de la plateforme aux écoles (bandeau, notification)</li>
+        <li class="nv">SMS ou annonce aux directeurs de toutes les écoles</li>
+        <li class="nv">Suivi des SMS en échec, solde chez le fournisseur</li></ul></div>
+      <div class="pcard"><h3>Réglages et technique</h3><ul>
+        <li class="nv">Réglages plateforme : durée d'essai, délai de grâce, devise, textes légaux</li>
+        <li class="nv">Modèles des fonctions et droits par défaut (pour les nouvelles écoles)</li>
+        <li class="nv">Technique : état de la base, tâches en attente, erreurs récentes</li>
+        <li class="ok">Administrateurs de la plateforme, journal de la plateforme</li></ul></div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

@@ -73,7 +73,7 @@ export default async function UsagePage({
                     </td>
                   ))}
                   <td className="px-3 py-2 whitespace-nowrap text-[color:var(--muted-foreground)]">
-                    {r.recordedFor ?? 'jamais'}
+                    {r.recordedFor ? String(r.recordedFor).slice(0, 10).split('-').reverse().join('/') : 'jamais'}
                   </td>
                 </tr>
               ))}

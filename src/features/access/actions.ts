@@ -7,6 +7,8 @@ import { createClient } from '@/lib/supabase/server';
 import { runFormAction, type FormState } from '@/lib/forms';
 import { processDelivery, resendCredentials, resetAndSend } from '@/services/credentials';
 import { suspendAccess, reactivateAccess } from '@/services/access-status';
+import { unlockAccount } from '@/services/account-unlock';
+import { changeLoginIdentifier, signOutEverywhere } from '@/services/account-login';
 import { audit } from '@/lib/audit';
 import { ValidationError } from '@/lib/errors';
 import { readSenderForSchool, readConfirmThreshold } from '@/features/sms/platform';
@@ -125,5 +127,32 @@ export async function resendAction(slug: string, userId: string, _p: FormState, 
     await resendCredentials(ctx, userId);
     await audit(ctx, { action: 'access.resend', module: 'access', entityType: 'user', entityId: userId });
     redirect(`/e/${slug}/access?resent=1`);
+  });
+}
+
+/** Débloque un compte après des essais ratés (droit access_accounts.unlock). */
+export async function unlockAction(slug: string, userId: string, _p: FormState, _fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    await unlockAccount(ctx, userId);
+    redirect(`/e/${slug}/access?unlocked=1`);
+  });
+}
+
+/** Corrige le numéro ou l'e-mail de connexion (droit access_accounts.change_login). */
+export async function changeLoginAction(slug: string, userId: string, _p: FormState, fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    await changeLoginIdentifier(ctx, userId, String(fd.get('identifier') ?? ''));
+    redirect(`/e/${slug}/access?login_changed=1`);
+  });
+}
+
+/** Ferme toutes les connexions d'une personne (droit access_accounts.sign_out). */
+export async function signOutEverywhereAction(slug: string, userId: string, _p: FormState, _fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    await signOutEverywhere(ctx, userId);
+    redirect(`/e/${slug}/access?signed_out=1`);
   });
 }

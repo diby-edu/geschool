@@ -36,6 +36,7 @@ type AppContextRow = {
   roles?: string[];
   permissions?: string[];
   disabled_features?: string[];
+  billing?: { situation: string; endsOn: string | null; graceEndsOn: string | null; blocked: boolean } | null;
 };
 
 /** Nom affichable : NOM Prénoms comme dans les listes (lib/person-name.ts), sinon l'email. */
@@ -88,6 +89,12 @@ export type TenantContext = {
    * toujours : un module absent de cette liste est actif.
    */
   disabledFeatures: ReadonlySet<string>;
+  /**
+   * Abonnement de l'école à la date du jour (0143) : « expiré » ouvre le délai de
+   * grâce (message à la direction), « blocked » la coupure (page « abonnement
+   * expiré » pour tout le monde). null = base pas encore à jour.
+   */
+  billing: { situation: string; endsOn: string | null; graceEndsOn: string | null; blocked: boolean } | null;
 };
 
 /**
@@ -151,6 +158,7 @@ export const getTenantContext = cache(async (slug: string): Promise<TenantContex
     membership: row.membership_id ? { id: row.membership_id, roles } : null,
     permissions: new Set(row.permissions ?? []),
     disabledFeatures: new Set(row.disabled_features ?? []),
+    billing: row.billing ?? null,
   };
 });
 

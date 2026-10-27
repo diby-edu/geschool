@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import { normalizePlatformSettings } from '@/features/platform/settings';
 import { normalizePhone } from '@/lib/auth/identifier';
 import { ConflictError, RateLimitError, ValidationError } from '@/lib/errors';
 import { grantRole } from '@/services/access-provisioning';
@@ -170,14 +171,17 @@ export async function registerSchool(input: RegisterSchoolInput): Promise<Regist
       school_id: schoolId, user_id: userId, event_type: 'ACCOUNT_CREATED', actor_id: userId,
     });
 
-    // 7. Essai gratuit 30 jours + modules choisis (a la carte : plan_id null).
+    // 7. Essai gratuit (durée réglée par la plateforme, 30 jours par défaut, lot 6)
+    //    + modules choisis (a la carte : plan_id null).
+    const { data: platform } = await admin.from('platform_settings').select('settings').eq('namespace', 'platform').maybeSingle();
+    const trialDays = normalizePlatformSettings((platform?.settings ?? {}) as Record<string, unknown>).trialDays;
     const { data: subscription, error: subError } = await admin
       .from('subscriptions')
       .insert({
         school_id: schoolId,
         plan_id: null,
         status: 'TRIALING',
-        trial_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        trial_ends_at: new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString(),
       })
       .select('id')
       .single();

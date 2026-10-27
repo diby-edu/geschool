@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
 import { listNotifications } from '@/features/communication/inbox';
 import { markReadAction, markAllReadAction } from '@/features/communication/actions';
@@ -37,6 +38,11 @@ export default async function NotificationsPage({ params }: { params: Promise<{ 
                       <span className="font-medium">{n.title}</span>
                     </div>
                     <p className="mt-1 text-sm text-[color:var(--muted-foreground)]">{n.body}</p>
+                    {n.requestId ? (
+                      <Link href={`/e/${slug}/plateforme/${n.requestId}`} className="mt-1 inline-block text-sm font-semibold text-[color:var(--color-brand)] hover:underline">
+                        Voir la demande
+                      </Link>
+                    ) : null}
                     <p className="mt-1 text-xs text-[color:var(--muted-foreground)]">{new Date(n.created_at).toLocaleString('fr-FR')}</p>
                   </div>
                   {!n.read ? <SimpleSubmit action={markReadAction.bind(null, slug, n.id)} label="Lu" small /> : null}

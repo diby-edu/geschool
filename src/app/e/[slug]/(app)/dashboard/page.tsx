@@ -9,7 +9,7 @@ import { FamilyView } from '@/features/dashboard/components/FamilyView';
 import { usesFullDashboard } from '@/features/dashboard/profiles';
 import { getFunctionPermissionCodes } from '@/features/roles/queries';
 import { hasPermission } from '@/lib/permissions';
-import { roleLabel, STAFF_FUNCTIONS, type RoleCode, type StaffFunction } from '@/lib/permissions/roles';
+import { isStaffFunction, roleLabel, type RoleCode } from '@/lib/permissions/roles';
 import type { TenantContext } from '@/lib/tenant/context';
 
 export const metadata: Metadata = { title: 'Tableau de bord' };
@@ -33,7 +33,7 @@ export default async function DashboardPage({
     // SEULS droits cochés pour elle. Réservé à qui règle les droits ; il ne montre
     // jamais plus que ce que cette personne voit déjà.
     const apercu = typeof sp.apercu === 'string' ? sp.apercu : null;
-    if (apercu && (STAFF_FUNCTIONS as readonly string[]).includes(apercu) && hasPermission(ctx, 'users.assign_roles')) {
+    if (apercu && isStaffFunction(apercu) && hasPermission(ctx, 'users.assign_roles')) {
       const codes = await getFunctionPermissionCodes(ctx, apercu);
       const previewCtx: TenantContext = {
         ...ctx,
@@ -46,7 +46,7 @@ export default async function DashboardPage({
           ctx={previewCtx}
           sp={sp}
           roles={[apercu]}
-          preview={{ label: roleLabel(apercu as StaffFunction), backHref: `/e/${slug}/roles?role=${apercu}` }}
+          preview={{ label: roleLabel(apercu), backHref: `/e/${slug}/roles?role=${apercu}` }}
         />
       );
     }

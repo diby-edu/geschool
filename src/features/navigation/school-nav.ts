@@ -48,6 +48,8 @@ const MODULES: NavDef[] = [
   { path: 'discipline', label: 'Discipline', any: ['discipline.view', 'discipline.create'], section: QUOTIDIEN, icon: 'presences', feature: 'discipline' },
   // Configuration : accessible depuis Paramètres pour la direction ; l'enseignant garde le Programme.
   { path: 'programme', label: 'Programme', any: ['subjects.view'], section: QUOTIDIEN, icon: 'edt', inHub: true },
+  // Lot 5 (0148) : écrire à la plateforme, même pendant une coupure d'abonnement.
+  { path: 'plateforme', label: 'Contacter la plateforme', any: ['support.contact'], section: COMPTES, icon: 'annonces' },
 ];
 
 /** Modules qu'ouvre l'espace Enseignant (son menu ne montre pas ceux de la Direction). */

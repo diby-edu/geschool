@@ -5,6 +5,7 @@ import { requirePageAccess } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { createStaffAction } from '@/features/staff/actions';
 import { StaffForm } from '@/features/staff/components/StaffForm';
+import { listCustomFunctions } from '@/features/staff/queries';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Alert } from '@/components/ui/alert';
 
@@ -27,7 +28,7 @@ export default async function NewStaffPage({ params }: { params: Promise<{ slug:
         }
       />
       {hasPermission(ctx, 'users.assign_roles') ? (
-        <StaffForm action={createStaffAction.bind(null, slug)} mode="create" submitLabel="Enregistrer" />
+        <StaffForm action={createStaffAction.bind(null, slug)} mode="create" submitLabel="Enregistrer" extraFunctions={await listCustomFunctions(ctx)} />
       ) : (
         <Alert tone="error">
           Ajouter une personne suppose de lui attribuer une fonction : il vous faut aussi le droit « Régler les droits des

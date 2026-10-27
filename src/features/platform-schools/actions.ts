@@ -79,7 +79,7 @@ export async function setSchoolFeatureAction(
   return runFormAction(async () => {
     const enabled = String(formData.get('enabled') ?? 'true') === 'true';
     await setSchoolFeature(schoolId, code, enabled, String(formData.get('reason') ?? '').trim());
-    redirect(`/admin/etablissements/${schoolId}?module=1`);
+    redirect(`/admin/etablissements/${schoolId}?onglet=modules&module=1`);
   });
 }
 

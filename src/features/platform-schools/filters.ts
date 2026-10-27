@@ -30,10 +30,10 @@ export const STATUS_LABEL: Record<SchoolStatusFilter, string> = {
 };
 
 export const ABONNEMENT_LABEL: Record<AbonnementFilter, string> = {
-  actif: 'Abonnement actif',
+  actif: 'Abonnées',
   essai: 'En essai',
   'essai-bientot': 'Essai qui se termine',
-  retard: 'Paiement en retard',
+  retard: 'Abonnement expiré',
   aucun: 'Sans abonnement',
 };
 

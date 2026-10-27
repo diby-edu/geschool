@@ -1,6 +1,6 @@
 'use server';
 
-import { writePaymentSettings } from './payment-settings';
+import { graceDaysOf, writePaymentSettings } from './payment-settings';
 import { requireAdmin } from '@/features/platform/admin';
 
 import { redirect } from 'next/navigation';
@@ -145,6 +145,7 @@ export async function savePaymentSettingsAction(_p: FormState, fd: FormData): Pr
       mobileMoneyNumber: String(fd.get('mobileMoneyNumber') ?? '').trim().slice(0, 40),
       mobileMoneyName: String(fd.get('mobileMoneyName') ?? '').trim().slice(0, 80),
       instructions: String(fd.get('instructions') ?? '').trim().slice(0, 600),
+      graceDays: graceDaysOf(fd.get('graceDays')),
     });
     redirect('/admin/paiements?enregistre=1');
   });

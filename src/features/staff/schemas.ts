@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { STAFF_FUNCTIONS } from '@/lib/permissions/roles';
+import { isStaffFunction } from '@/lib/permissions/roles';
+
+/** Une fonction prévue, ou une fonction créée par la plateforme (« F_… », lot 6). */
+const staffFunction = z.string().refine(isStaffFunction, 'Fonction inconnue.');
 import { DIPLOMA_CODES } from '@/lib/hr';
 
 /**
@@ -23,7 +26,7 @@ export const staffSchema = z.object({
   }),
   birthDate: date,
   birthPlace: text(120),
-  functions: z.array(z.enum(STAFF_FUNCTIONS)).min(1, 'Choisissez au moins une fonction.'),
+  functions: z.array(staffFunction).min(1, 'Choisissez au moins une fonction.'),
   phone: z.string().trim().min(6, 'Téléphone requis.').max(30),
   phone2: text(30),
   email: z.union([z.email('E-mail invalide.'), z.literal('')]).optional(),
@@ -35,7 +38,7 @@ export const staffSchema = z.object({
 
 /** À la modification, le téléphone de connexion ne change pas (il porte l'accès). */
 export const staffUpdateSchema = staffSchema.omit({ phone: true }).extend({
-  functions: z.array(z.enum(STAFF_FUNCTIONS)).optional(),
+  functions: z.array(staffFunction).optional(),
 });
 
 export type StaffInput = z.infer<typeof staffSchema>;

@@ -14,6 +14,12 @@ import { SupportBanner } from '@/components/layout/SupportBanner';
 import { AttendanceSyncButton } from '@/features/attendance/components/AttendanceSyncButton';
 import { hasPermission } from '@/lib/permissions';
 import { myHeadClasses } from '@/features/reporting/matrix';
+import { BillingBlockedPage, BillingGraceBanner } from '@/features/billing/components/BillingGate';
+import { readPaymentSettings } from '@/features/billing/payment-settings';
+import { getRequestThread, listSchoolRequests } from '@/features/support/requests';
+import { platformBanners } from '@/features/communication/inbox';
+import { readPlatformContact } from '@/features/platform/settings';
+import { PlatformBanner } from '@/features/communication/components/PlatformBanner';
 
 /**
  * Garde de l'espace etablissement. getTenantContext resout le tenant depuis le
@@ -50,6 +56,27 @@ export default async function SchoolAppLayout({
   // adresse tapee ou un favori entrent par la meme porte (support-trace.ts).
   const support = ctx.isPlatformAdmin && !ctx.membership;
   if (support) await traceSupportEntry(ctx.user.id, ctx.school.id);
+
+  // Abonnement expiré et délai de grâce passé (0143) : l'accès est coupé pour
+  // TOUT le monde jusqu'au paiement ; la direction voit comment payer. Le Super
+  // Admin, lui, entre toujours (support, confirmation du paiement).
+  const roleCodes = ctx.membership?.roles ?? [];
+  const isDirection = hasPermission(ctx, 'billing.view') || roleCodes.includes('SCHOOL_ADMIN') || roleCodes.includes('DIRECTOR');
+  if (ctx.billing?.blocked && !ctx.isPlatformAdmin) {
+    return (
+      <BillingBlockedPage
+        schoolName={ctx.school.name}
+        endsOn={ctx.billing.endsOn}
+        isDirection={isDirection}
+        payment={isDirection ? await readPaymentSettings().catch(() => null) : null}
+        contact={hasPermission(ctx, 'support.contact') ? { slug, threads: await blockedThreads(ctx) } : null}
+        support={isDirection ? await readPlatformContact().catch(() => null) : null}
+      />
+    );
+  }
+  // Messages « importants » de la plateforme, jusqu'à « J'ai compris » (lot 5).
+  const banners = await platformBanners(ctx).catch(() => []);
+  const inGrace = ctx.billing?.situation === 'EXPIRED' && !ctx.billing.blocked && isDirection && !ctx.isPlatformAdmin;
 
   const spaces = availableSpaces(ctx);
   const space = await getActiveSpace(ctx);
@@ -97,7 +124,18 @@ export default async function SchoolAppLayout({
       {/* Administrateur de la plateforme chez un client : il a tous les droits
           sans etre membre, et rien a l'ecran ne le lui rappelait. */}
       {support ? <SupportBanner schoolName={ctx.school.name} /> : null}
+      {inGrace ? <BillingGraceBanner slug={slug} endsOn={ctx.billing?.endsOn ?? null} graceEndsOn={ctx.billing?.graceEndsOn ?? null} /> : null}
+      {banners.map((b) => (
+        <PlatformBanner key={b.id} slug={slug} banner={b} />
+      ))}
       {children}
     </AppShell>
   );
+}
+
+/** Pendant la coupure : les 3 dernières demandes à la plateforme, avec leur fil. */
+async function blockedThreads(ctx: Parameters<typeof listSchoolRequests>[0]) {
+  const recent = (await listSchoolRequests(ctx).catch(() => [])).slice(0, 3);
+  const threads = await Promise.all(recent.map((r) => getRequestThread(r.id, ctx.school.id).catch(() => null)));
+  return threads.filter((t): t is NonNullable<typeof t> => t !== null);
 }

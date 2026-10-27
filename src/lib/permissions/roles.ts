@@ -90,9 +90,35 @@ const ROLE_SHORT: Record<RoleCode, string> = {
 };
 
 export function roleShort(code: RoleCode): string {
-  return ROLE_SHORT[code] ?? code;
+  return ROLE_SHORT[code] ?? (isCustomFunction(code) ? customFallback(code).slice(0, 6) + '.' : code);
 }
 
-export function roleLabel(code: RoleCode): string {
-  return ROLE_LABELS[code] ?? code;
+/**
+ * Libellé d'une fonction. Une fonction créée par la plateforme (« F_… ») a son
+ * nom en base : les écrans qui lisent les rôles le passent en `name` ; sans
+ * lui, on dérive un libellé lisible du code (sans les accents).
+ */
+export function roleLabel(code: RoleCode | string, name?: string | null): string {
+  return ROLE_LABELS[code as RoleCode] ?? (name || (isCustomFunction(code) ? customFallback(code) : code));
+}
+
+/**
+ * Fonctions créées par la plateforme (lot 6, migration 0150, 2026-10-26) :
+ * code « F_… », nom libre en base. Elles comptent comme des fonctions du
+ * personnel (espace Direction, page Personnel, droits réglables).
+ */
+export const CUSTOM_FUNCTION_PREFIX = 'F_';
+
+export function isCustomFunction(code: string): boolean {
+  return code.startsWith(CUSTOM_FUNCTION_PREFIX);
+}
+
+/** Fonction du personnel : une des fonctions prévues, ou une fonction créée par la plateforme. */
+export function isStaffFunction(code: string): boolean {
+  return (STAFF_FUNCTIONS as readonly string[]).includes(code) || isCustomFunction(code);
+}
+
+function customFallback(code: string): string {
+  const words = code.slice(CUSTOM_FUNCTION_PREFIX.length).toLowerCase().replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }

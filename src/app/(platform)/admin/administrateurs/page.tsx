@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 import { listPlatformAdmins } from '@/features/platform/admin';
 import { grantPlatformAdminAction, revokePlatformAdminAction } from '@/features/platform/actions';
 import { AdminGrantForm } from '@/features/platform/components/AdminGrantForm';
@@ -29,6 +31,11 @@ export default async function PlatformAdminsPage({
       <PageHeader
         title="Administrateurs de la plateforme"
         description={`${active.length} actif${active.length > 1 ? 's' : ''}. Ils voient et modifient tous les établissements.`}
+        action={
+          <Link href="/admin/administrateurs/nouveau">
+            <Button>Créer un compte Super Admin</Button>
+          </Link>
+        }
       />
 
       {typeof sp.ajoute === 'string' ? <Alert tone="success">Droits accordés.</Alert> : null}

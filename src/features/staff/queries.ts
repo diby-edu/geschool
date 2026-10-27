@@ -2,7 +2,7 @@ import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
 import { formatPhoneForDisplay } from '@/lib/auth/identifier';
-import { roleLabel, STAFF_FUNCTIONS, type RoleCode } from '@/lib/permissions/roles';
+import { isStaffFunction, roleLabel, STAFF_FUNCTIONS } from '@/lib/permissions/roles';
 import type { TenantContext } from '@/lib/tenant/context';
 
 export type StaffState = 'ACTIVE' | 'TO_ACTIVATE' | 'SUSPENDED';
@@ -39,6 +39,8 @@ export type StaffRow = {
 };
 
 const STAFF_CODES: readonly string[] = ['SCHOOL_ADMIN', ...STAFF_FUNCTIONS];
+/** Ordre d'affichage : les fonctions prévues, puis celles créées par la plateforme. */
+const rank = (c: string) => (STAFF_CODES.includes(c) ? STAFF_CODES.indexOf(c) : STAFF_CODES.length);
 const CHUNK = 80;
 
 function chunk<T>(items: T[], size = CHUNK): T[][] {
@@ -93,11 +95,13 @@ export async function listStaff(ctx: TenantContext): Promise<StaffRow[]> {
   // 1. Fonctions concernées : la copie de l'établissement, sinon le modèle.
   const { data: roles, error: rolesError } = await supabase
     .from('roles')
-    .select('id, code')
-    .in('code', [...STAFF_CODES])
+    .select('id, code, name')
     .or(`school_id.eq.${ctx.school.id},school_id.is.null`);
   if (rolesError) throw rolesError;
-  const codeByRole = new Map((roles ?? []).map((r) => [r.id, r.code]));
+  // Fonctions prévues, et celles créées par la plateforme (« F_… », lot 6).
+  const staffRoles = (roles ?? []).filter((r) => r.code === 'SCHOOL_ADMIN' || isStaffFunction(r.code));
+  const codeByRole = new Map(staffRoles.map((r) => [r.id, r.code]));
+  const nameByCode = new Map(staffRoles.map((r) => [r.code, r.name]));
   if (codeByRole.size === 0) return [];
 
   // 2. Personnes qui les exercent (uniquement dans CET établissement).
@@ -178,9 +182,9 @@ export async function listStaff(ctx: TenantContext): Promise<StaffRow[]> {
         birthDate: profile?.birth_date ?? null,
         birthPlace: profile?.birth_place ?? null,
         functions: codes
-          .filter((c) => STAFF_CODES.includes(c))
-          .sort((a, b) => STAFF_CODES.indexOf(a) - STAFF_CODES.indexOf(b))
-          .map((c) => ({ code: c, label: roleLabel(c as RoleCode) })),
+          .filter((c) => c === 'SCHOOL_ADMIN' || isStaffFunction(c))
+          .sort((a, b) => rank(a) - rank(b))
+          .map((c) => ({ code: c, label: roleLabel(c, nameByCode.get(c)) })),
         isFounder,
         identifier,
         identifierDisplay:
@@ -204,4 +208,22 @@ export async function listStaff(ctx: TenantContext): Promise<StaffRow[]> {
 /** Une personne du personnel, ou null si elle n'en fait pas partie. */
 export async function getStaffMember(ctx: TenantContext, userId: string): Promise<StaffRow | null> {
   return (await listStaff(ctx)).find((s) => s.userId === userId) ?? null;
+}
+
+/**
+ * Les fonctions créées par la plateforme (« F_… », lot 6), telles que l'école
+ * les a : sa copie, sinon le modèle. Pour les proposer à côté des fonctions prévues.
+ */
+export async function listCustomFunctions(ctx: TenantContext): Promise<{ code: string; label: string }[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('roles')
+    .select('code, name, school_id')
+    .like('code', 'F\_%')
+    .or(`school_id.eq.${ctx.school.id},school_id.is.null`);
+  const byCode = new Map<string, string>();
+  for (const r of (data ?? []) as { code: string; name: string; school_id: string | null }[]) {
+    if (r.school_id || !byCode.has(r.code)) byCode.set(r.code, r.name);
+  }
+  return [...byCode].map(([code, label]) => ({ code, label })).sort((a, b) => a.label.localeCompare(b.label, 'fr'));
 }

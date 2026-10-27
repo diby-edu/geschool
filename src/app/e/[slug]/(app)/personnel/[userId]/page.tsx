@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
-import { getStaffMember } from '@/features/staff/queries';
+import { getStaffMember, listCustomFunctions } from '@/features/staff/queries';
 import { STATE_LABEL } from '@/features/staff/labels';
 import {
   reactivateStaffAction,
@@ -136,6 +136,7 @@ export default async function StaffMemberPage({
           submitLabel="Enregistrer"
           phoneDisplay={person.loginKind === 'PHONE' ? person.identifierDisplay : (person.identifierDisplay ?? null)}
           functionsLocked={functionsLocked}
+          extraFunctions={await listCustomFunctions(ctx)}
           {...(functionsNote ? { functionsNote } : {})}
           defaultValues={{
             lastName: person.lastName,

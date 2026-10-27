@@ -22,7 +22,10 @@ describe('Libellés du journal', () => {
     const root = join(__dirname, '..', '..');
     const actions = new Set<string>();
     for (const file of sources(root)) {
-      for (const m of readFileSync(file, 'utf8').matchAll(/action: ['`]([a-z_]+\.[a-z_.]+)['`]/g)) actions.add(m[1]!);
+      // Toute la ligne de « action: » : un nom choisi par une condition (« enabled ? 'x.on' : 'x.off' ») compte aussi.
+      for (const line of readFileSync(file, 'utf8').matchAll(/action: ([^\n]+)/g)) {
+        for (const m of line[1]!.matchAll(/['`]([a-z_]+\.[a-z_.]+)['`]/g)) actions.add(m[1]!);
+      }
     }
     expect(actions.size).toBeGreaterThan(100);
     const missing = [...actions].filter((a) => !(a in ACTION_LABELS) && !(a in ACTIVITY_LABELS)).sort();

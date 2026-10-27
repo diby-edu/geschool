@@ -5,7 +5,7 @@ import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { mergeQuery, pageCount, parseListParams } from '@/lib/query/list';
-import { roleLabel, STAFF_FUNCTIONS, type RoleCode } from '@/lib/permissions/roles';
+import { roleLabel, STAFF_FUNCTIONS } from '@/lib/permissions/roles';
 import { listStaff, type StaffRow, type StaffState } from '@/features/staff/queries';
 import { STATE_LABEL } from '@/features/staff/labels';
 import { reactivateStaffAction, suspendStaffAction } from '@/features/staff/actions';
@@ -87,7 +87,9 @@ export default async function StaffPage({
 
   const stateHref = (s: StaffState | undefined) => `${base}${mergeQuery(nav, { etat: s ?? null, page: null })}`;
   const fnHref = (code: string | undefined) => `${base}${mergeQuery(nav, { fn: code ?? null, page: null })}`;
-  const present = STAFF_FUNCTIONS.filter((code) => all.some((r) => r.functions.some((f) => f.code === code)));
+  // Fonctions exercées, dans l'ordre des listes (fonctions créées par la plateforme comprises).
+  const labels = new Map(all.flatMap((r) => r.functions.map((f) => [f.code, f.label] as const)));
+  const present = [...STAFF_FUNCTIONS.filter((code) => labels.has(code)), ...[...labels.keys()].filter((c) => !(STAFF_FUNCTIONS as readonly string[]).includes(c) && c !== 'SCHOOL_ADMIN')];
 
   const columns: Column<StaffRow>[] = [
     {
@@ -195,7 +197,7 @@ export default async function StaffPage({
         <div className="flex flex-wrap items-center gap-2">
           <FilterPill href={fnHref(undefined)} label="Toutes les fonctions" value={all.filter((r) => matchesQ(r) && matchesState(r)).length} active={!fn} />
           {present.map((code) => (
-            <FilterPill key={code} href={fnHref(code)} label={roleLabel(code as RoleCode)} value={byFunction(code)} active={fn === code} />
+            <FilterPill key={code} href={fnHref(code)} label={labels.get(code) ?? roleLabel(code)} value={byFunction(code)} active={fn === code} />
           ))}
         </div>
       ) : null}

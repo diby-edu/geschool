@@ -2,7 +2,7 @@ import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
 import { hasPermission } from '@/lib/permissions';
-import { roleLabel, STAFF_FUNCTIONS, type RoleCode } from '@/lib/permissions/roles';
+import { isStaffFunction, roleLabel, STAFF_FUNCTIONS } from '@/lib/permissions/roles';
 import type { TenantContext } from '@/lib/tenant/context';
 
 export type RoleSummary = {
@@ -18,6 +18,7 @@ export type RoleSummary = {
 
 /** Ordre d'affichage : le Fondateur d'abord, puis les fonctions du personnel. */
 const ORDER: readonly string[] = ['SCHOOL_ADMIN', ...STAFF_FUNCTIONS];
+const rank = (c: string) => (ORDER.includes(c) ? ORDER.indexOf(c) : ORDER.length);
 
 /**
  * Fonctions PROPRES à l'établissement (copies des modèles, voir migration 0050).
@@ -32,7 +33,8 @@ export async function listSchoolRoles(ctx: TenantContext): Promise<RoleSummary[]
     .eq('school_id', ctx.school.id);
   if (error) throw error;
 
-  const roles = (data ?? []).filter((r) => ORDER.includes(r.code));
+  // Fonctions prévues, puis celles créées par la plateforme (« F_… », lot 6).
+  const roles = (data ?? []).filter((r) => r.code === 'SCHOOL_ADMIN' || isStaffFunction(r.code));
   if (roles.length === 0) return [];
 
   // Comptage : la RLS ne laisse voir que ses propres lignes sans `users.view`.
@@ -51,12 +53,12 @@ export async function listSchoolRoles(ctx: TenantContext): Promise<RoleSummary[]
       id: r.id,
       code: r.code,
       // Le libelle du code fait foi (accents, vocabulaire) plutot que le nom copie en base.
-      name: roleLabel(r.code as RoleCode),
+      name: roleLabel(r.code, r.name),
       description: r.description,
       members: counts ? (counts.get(r.id) ?? 0) : null,
       locked: r.code === 'SCHOOL_ADMIN',
     }))
-    .sort((a, b) => ORDER.indexOf(a.code) - ORDER.indexOf(b.code));
+    .sort((a, b) => rank(a.code) - rank(b.code) || a.name.localeCompare(b.name, 'fr'));
 }
 
 /** Codes des droits accordés à un rôle de l'établissement. */
