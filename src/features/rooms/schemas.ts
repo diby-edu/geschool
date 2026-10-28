@@ -14,6 +14,8 @@ export const roomSchema = z.object({
   building: z.string().trim().max(60).optional().or(z.literal('')),
   floor: z.string().trim().max(30).optional().or(z.literal('')),
   isActive: z.coerce.boolean().default(true),
+  /** Plusieurs classes en même temps (terrain, cour) : jamais « occupée ». */
+  allowsMultipleClasses: z.coerce.boolean().default(false),
   /** Ordres d'enseignement servis. Vide = tous ceux de l'établissement. */
   tracks: z.array(z.enum(['GENERAL', 'TECHNIQUE', 'PROFESSIONNEL'])).default([]),
   /** Équipements présents dans la salle (paillasses, postes, machines…). */

@@ -202,6 +202,17 @@ export function RoomCreateForm({
             </div>
           )}
 
+          {/* Un terrain reçoit plusieurs classes à la fois : coché d'avance pour ces types. */}
+          <label key={sansCapacite ? 'multi' : 'une'} className="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="allowsMultipleClasses" defaultChecked={sansCapacite} className="mt-0.5 size-4" />
+            <span>
+              Plusieurs classes en même temps
+              <span className="block text-xs text-[color:var(--muted-foreground)]">
+                Pour un terrain, une cour : la salle n’est jamais « occupée », plusieurs classes peuvent y avoir cours au même moment.
+              </span>
+            </span>
+          </label>
+
           {/* Un établissement mono-ordre n'a rien à choisir : la question ne se pose pas. */}
           {schoolTracks.length > 1 ? (
             <fieldset>

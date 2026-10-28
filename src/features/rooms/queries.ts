@@ -58,7 +58,7 @@ export async function getRoom(ctx: TenantContext, id: string) {
   const supabase = await createClient();
   const { data } = await supabase
     .from('rooms')
-    .select('id, code, name, capacity, building, floor, is_active, room_type_id, tracks')
+    .select('id, code, name, capacity, building, floor, is_active, room_type_id, tracks, allows_multiple_classes')
     .eq('school_id', ctx.school.id)
     .eq('id', id)
     .maybeSingle();

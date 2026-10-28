@@ -194,7 +194,9 @@ async function applyToFutureSessions(
   );
 
   // Occupation de la salle visée, mise à jour au fur et à mesure des déplacements.
-  const busy = sessions.filter((s) => s.roomIds.includes(roomId) && !mine.some((m) => m.id === s.id));
+  // Un terrain reçoit plusieurs classes à la fois : il n'est jamais occupé.
+  const { data: target } = await supabase.from('rooms').select('allows_multiple_classes').eq('school_id', ctx.school.id).eq('id', roomId).maybeSingle();
+  const busy = target?.allows_multiple_classes ? [] : sessions.filter((s) => s.roomIds.includes(roomId) && !mine.some((m) => m.id === s.id));
   let moved = 0;
   let skipped = 0;
 

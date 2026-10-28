@@ -24,6 +24,7 @@ export function RoomForm({
   defaultValues = {},
   submitLabel,
   defaultActive = true,
+  defaultMultiple = false,
   features = [],
   selectedFeatures = [],
   schoolTracks = [],
@@ -34,6 +35,8 @@ export function RoomForm({
   defaultValues?: Values;
   submitLabel: string;
   defaultActive?: boolean;
+  /** La salle reçoit plusieurs classes en même temps (terrain). */
+  defaultMultiple?: boolean;
   /** Ordres de l'établissement : rien d'autre n'est proposé. */
   schoolTracks?: EducationTrack[];
   /** Ordres actuellement servis par la salle. */
@@ -46,6 +49,7 @@ export function RoomForm({
   const v = { ...defaultValues, ...(state.values ?? {}) };
   const err = state.fieldErrors ?? {};
   const active = state.values ? state.values.isActive != null : defaultActive;
+  const multiple = state.values ? state.values.allowsMultipleClasses != null : defaultMultiple;
   const [tracks, setTracks] = useState<EducationTrack[]>(
     defaultTracks.length > 0 ? defaultTracks : schoolTracks,
   );
@@ -117,6 +121,15 @@ export function RoomForm({
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" name="isActive" defaultChecked={active} className="size-4" />
               Salle active
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" name="allowsMultipleClasses" defaultChecked={multiple} className="mt-0.5 size-4" />
+              <span>
+                Plusieurs classes en même temps
+                <span className="block text-xs text-[color:var(--muted-foreground)]">
+                  Pour un terrain, une cour : la salle n’est jamais « occupée », plusieurs classes peuvent y avoir cours au même moment.
+                </span>
+              </span>
             </label>
           </div>
 

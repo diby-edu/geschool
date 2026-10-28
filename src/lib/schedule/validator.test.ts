@@ -48,6 +48,14 @@ describe('detectConflicts', () => {
     expect(c.some((x) => x.kind === 'ROOM')).toBe(true);
   });
 
+  it('terrain qui recoit plusieurs classes, deux cours simultanes -> autorise (0152)', () => {
+    const c = detectConflicts([
+      s({ id: 'a', classIds: ['C1'], roomIds: ['TERRAIN'], sharedRoomIds: ['TERRAIN'] }),
+      s({ id: 'b', classIds: ['C2'], roomIds: ['TERRAIN'], sharedRoomIds: ['TERRAIN'] }),
+    ]);
+    expect(c).toHaveLength(0);
+  });
+
   it('deux groupes de langues d une meme classe, meme creneau -> autorise', () => {
     // Groupes differents, enseignants et salles differents : simultaneite OK
     const map = new Map([['G_ESP', 'C1'], ['G_ALL', 'C1']]);

@@ -194,7 +194,7 @@ export async function freeRoomsForOccurrence(
   if (!occ) throw new NotFoundError('Séance introuvable.');
 
   const [{ data: rooms }, { data: sameDay }, { data: closed }] = await Promise.all([
-    supabase.from('rooms').select('id, name, capacity').eq('school_id', ctx.school.id).eq('is_active', true).order('code'),
+    supabase.from('rooms').select('id, name, capacity, allows_multiple_classes').eq('school_id', ctx.school.id).eq('is_active', true).order('code'),
     supabase
       .from('session_occurrences')
       .select('id, starts_at, ends_at, override_room_id, schedule_sessions(schedule_session_rooms(room_id))')
@@ -223,6 +223,8 @@ export async function freeRoomsForOccurrence(
     if (o.override_room_id) busy.add(o.override_room_id);
     else for (const r of o.schedule_sessions?.schedule_session_rooms ?? []) busy.add(r.room_id);
   }
+  // Un terrain reçoit plusieurs classes à la fois : seule une fermeture l'occupe.
+  for (const r of (rooms ?? []) as { id: string; allows_multiple_classes: boolean }[]) if (r.allows_multiple_classes) busy.delete(r.id);
   for (const c of closed ?? []) busy.add(c.room_id);
 
   // Indisponibilités hebdomadaires : le jour de la semaine de cette date.
@@ -235,7 +237,7 @@ export async function freeRoomsForOccurrence(
     busy.add(rule.roomId);
   }
 
-  return ((rooms ?? []) as { id: string; name: string; capacity: number }[]).filter((r) => !busy.has(r.id));
+  return ((rooms ?? []) as { id: string; name: string; capacity: number }[]).filter((r) => !busy.has(r.id)).map((r) => ({ id: r.id, name: r.name, capacity: r.capacity }));
 }
 
 /** Change la salle d'UNE séance datée, sans toucher aux autres semaines. */

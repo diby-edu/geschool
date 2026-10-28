@@ -46,7 +46,7 @@ type ValidatorSessionRaw = {
   subjects: { name: string } | null;
   schedule_session_teachers: { teacher_id: string }[];
   schedule_session_targets: { class_id: string | null; group_id: string | null }[];
-  schedule_session_rooms: { room_id: string }[];
+  schedule_session_rooms: { room_id: string; rooms: { allows_multiple_classes: boolean } | null }[];
 };
 
 /**
@@ -68,14 +68,14 @@ type FullSessionRaw = {
   subjects: { name: string } | null;
   schedule_session_teachers: { teacher_id: string; teachers: { first_name: string; last_name: string } | null }[];
   schedule_session_targets: { class_id: string | null; group_id: string | null; classes: { name: string } | null }[];
-  schedule_session_rooms: { room_id: string; rooms: { code: string } | null }[];
+  schedule_session_rooms: { room_id: string; rooms: { code: string; allows_multiple_classes: boolean } | null }[];
 };
 
 const FULL_SESSION_SELECT =
   'id, day_of_week, starts_at, ends_at, duration_minutes, is_locked, subjects(name), ' +
   'schedule_session_teachers(teacher_id, teachers(first_name, last_name)), ' +
   'schedule_session_targets(class_id, group_id, classes(name)), ' +
-  'schedule_session_rooms(room_id, rooms(code))';
+  'schedule_session_rooms(room_id, rooms(code, allows_multiple_classes))';
 
 /** La grille a afficher et la liste que verifie le validateur, d'une seule lecture. */
 export async function listSessionsWithValidator(
@@ -108,6 +108,7 @@ export async function listSessionsWithValidator(
     classIds: s.schedule_session_targets.map((t) => t.class_id).filter((x): x is string => !!x),
     groupIds: s.schedule_session_targets.map((t) => t.group_id).filter((x): x is string => !!x),
     roomIds: s.schedule_session_rooms.map((r) => r.room_id),
+    sharedRoomIds: s.schedule_session_rooms.filter((r) => r.rooms?.allows_multiple_classes).map((r) => r.room_id),
   }));
 
   return { rows, validator };
@@ -150,7 +151,7 @@ export async function loadValidatorSessions(ctx: TenantContext, versionId: strin
       .from('schedule_sessions')
       .select(
         'id, day_of_week, starts_at, ends_at, subjects(name), ' +
-          'schedule_session_teachers(teacher_id), schedule_session_targets(class_id, group_id), schedule_session_rooms(room_id)',
+          'schedule_session_teachers(teacher_id), schedule_session_targets(class_id, group_id), schedule_session_rooms(room_id, rooms(allows_multiple_classes))',
       )
       .eq('school_id', ctx.school.id)
       .eq('schedule_version_id', versionId)
@@ -170,6 +171,7 @@ export async function loadValidatorSessions(ctx: TenantContext, versionId: strin
     classIds: s.schedule_session_targets.map((t) => t.class_id).filter((x): x is string => !!x),
     groupIds: s.schedule_session_targets.map((t) => t.group_id).filter((x): x is string => !!x),
     roomIds: s.schedule_session_rooms.map((r) => r.room_id),
+    sharedRoomIds: s.schedule_session_rooms.filter((r) => r.rooms?.allows_multiple_classes).map((r) => r.room_id),
   }));
 }
 

@@ -92,7 +92,7 @@ export async function roomsAt(ctx: TenantContext, dayOfWeek: number, hm: string)
   const [{ data: rooms }, sessions, rules] = await Promise.all([
     supabase
       .from('rooms')
-      .select('id, code, name, capacity')
+      .select('id, code, name, capacity, allows_multiple_classes')
       .eq('school_id', ctx.school.id)
       .eq('is_active', true)
       .order('code'),
@@ -105,12 +105,15 @@ export async function roomsAt(ctx: TenantContext, dayOfWeek: number, hm: string)
     return (h ?? 0) * 60 + (m ?? 0);
   };
   const at = minutes(hm);
+  // Un terrain reçoit plusieurs classes à la fois : un cours ne l'occupe pas.
+  const shared = new Set(((rooms ?? []) as { id: string; allows_multiple_classes: boolean }[]).filter((r) => r.allows_multiple_classes).map((r) => r.id));
   const busy = new Map<string, string>();
   for (const s of sessions) {
     if (s.day_of_week !== dayOfWeek) continue;
     if (minutes(s.starts_at) > at || at >= minutes(s.ends_at)) continue;
     const slot = toSlot(s);
     for (const r of s.schedule_session_rooms) {
+      if (shared.has(r.room_id)) continue;
       busy.set(r.room_id, `${slot.subject}${slot.classes.length > 0 ? ` · ${slot.classes.join(', ')}` : ''}`);
     }
   }
@@ -124,7 +127,10 @@ export async function roomsAt(ctx: TenantContext, dayOfWeek: number, hm: string)
   }
 
   return ((rooms ?? []) as { id: string; code: string; name: string; capacity: number }[]).map((r) => ({
-    ...r,
+    id: r.id,
+    code: r.code,
+    name: r.name,
+    capacity: r.capacity,
     busyWith: busy.get(r.id) ?? null,
   }));
 }

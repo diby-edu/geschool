@@ -20,6 +20,7 @@ function toRow(input: RoomInput) {
     building: input.building || null,
     floor: input.floor || null,
     is_active: input.isActive,
+    allows_multiple_classes: input.allowsMultipleClasses,
   };
 }
 
@@ -214,6 +215,7 @@ export type RoomBatchInput = {
   building: string;
   floor: string;
   features: string[];
+  allowsMultipleClasses: boolean;
 };
 
 /**
@@ -295,6 +297,7 @@ export async function createRooms(ctx: TenantContext, input: RoomBatchInput): Pr
         floor: input.floor || null,
         tracks,
         is_active: true,
+        allows_multiple_classes: input.allowsMultipleClasses,
       })),
     )
     .select('id');

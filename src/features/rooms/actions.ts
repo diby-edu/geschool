@@ -37,6 +37,7 @@ function parse(formData: FormData) {
     building: formData.get('building') ?? '',
     floor: formData.get('floor') ?? '',
     isActive: formData.get('isActive') != null,
+    allowsMultipleClasses: formData.get('allowsMultipleClasses') != null,
     features: formData.getAll('features').map(String),
   });
 }
@@ -147,6 +148,7 @@ export async function createRoomsAction(slug: string, _p: FormState, formData: F
       building: String(formData.get('building') ?? '').trim(),
       floor: String(formData.get('floor') ?? '').trim(),
       features: formData.getAll('features').map(String),
+      allowsMultipleClasses: formData.get('allowsMultipleClasses') != null,
     });
     redirect(`/e/${slug}/rooms?creees=${n}`);
   }).then(withValues(formData));

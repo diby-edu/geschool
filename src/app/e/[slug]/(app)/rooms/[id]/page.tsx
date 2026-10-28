@@ -184,6 +184,7 @@ export default async function EditRoomPage({
         features={features}
         selectedFeatures={selectedFeatures}
         defaultActive={room.is_active}
+        defaultMultiple={room.allows_multiple_classes}
         schoolTracks={tracks}
         defaultTracks={room.tracks}
         defaultValues={{

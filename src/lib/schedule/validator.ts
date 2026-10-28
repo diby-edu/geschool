@@ -48,6 +48,8 @@ export type ValidatorSession = {
   classIds: string[];
   groupIds: string[];
   roomIds: string[];
+  /** Salles qui reçoivent plusieurs classes à la fois (terrain) : jamais en conflit. */
+  sharedRoomIds?: string[];
 };
 
 export type ConflictKind = 'TEACHER' | 'CLASS' | 'GROUP' | 'ROOM';
@@ -93,6 +95,11 @@ function sharedStudentGroups(a: ValidatorSession, b: ValidatorSession, groups: G
   return null;
 }
 
+/** Les salles qu'une seule classe peut occuper à la fois. */
+function exclusiveRooms(s: ValidatorSession): string[] {
+  return s.sharedRoomIds?.length ? s.roomIds.filter((r) => !s.sharedRoomIds!.includes(r)) : s.roomIds;
+}
+
 function shared<T>(a: Iterable<T>, b: Set<T>): T | null {
   for (const x of a) if (b.has(x)) return x;
   return null;
@@ -125,7 +132,7 @@ export function detectConflicts(
       }
 
       // Salle
-      const r = shared(a.roomIds, new Set(b.roomIds));
+      const r = shared(exclusiveRooms(a), new Set(exclusiveRooms(b)));
       if (r) {
         conflicts.push(conflict('ROOM', a, b, r, `Salle occupee : « ${a.label} » et « ${b.label} » utilisent la même salle au même moment.`));
       }

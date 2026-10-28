@@ -187,7 +187,7 @@ export async function generateSchedule(
   // --- salles actives (pour resoudre les candidats par mode) ---
   const { data: roomRows } = await supabase
     .from('rooms')
-    .select('id, room_type_id, capacity, is_active, room_room_features(feature_id)')
+    .select('id, room_type_id, capacity, is_active, allows_multiple_classes, room_room_features(feature_id)')
     .eq('school_id', ctx.school.id)
     .eq('is_active', true);
   const rooms = ((roomRows ?? []) as unknown as {
@@ -195,6 +195,7 @@ export async function generateSchedule(
     room_type_id: string | null;
     capacity: number;
     is_active: boolean;
+    allows_multiple_classes: boolean;
     room_room_features: { feature_id: string }[];
   }[]).map((r) => ({
     id: r.id,
@@ -202,6 +203,12 @@ export async function generateSchedule(
     capacity: r.capacity,
     features: (r.room_room_features ?? []).map((f) => f.feature_id),
   }));
+  // Salles qui reçoivent plusieurs classes à la fois (terrain, 0152) : jamais
+  // occupées, donc jamais confiées au solveur. Un cours qui n'a qu'elles pour
+  // salle se place sans contrainte de salle, puis la reçoit après coup.
+  const sharedRoomIds = new Set(
+    ((roomRows ?? []) as { id: string; allows_multiple_classes: boolean }[]).filter((r) => r.allows_multiple_classes).map((r) => r.id),
+  );
 
   // --- appartenance groupe -> classes (§16) ---
   const { data: gcRows } = await supabase
@@ -387,7 +394,9 @@ export async function generateSchedule(
     const teacherIndexes = teacherIds.map((id) => teacherIx.get(id));
     const classIndexes = classIds.map((id) => classIx.get(id));
     const groupIndexes = groupIds.map((id) => groupIx.get(id));
-    const candidateRooms = roomResult.roomIds.map((id) => roomIx.get(id));
+    const exclusiveRoomIds = roomResult.roomIds.filter((id) => !sharedRoomIds.has(id));
+    const sharedRoomId = exclusiveRoomIds.length === 0 ? (roomResult.roomIds.find((id) => sharedRoomIds.has(id)) ?? null) : null;
+    const candidateRooms = exclusiveRoomIds.map((id) => roomIx.get(id));
 
     const myLocks = locksByRequirement.get(r.id) ?? [];
 
@@ -428,7 +437,7 @@ export async function generateSchedule(
           lostLocks.push(`« ${lock.label} » : son créneau verrouillé n'existe plus dans la grille horaire.`);
         } else {
           fixedStartSlot = slotIndex;
-          const roomIndex = lock.roomId ? roomIx.get(lock.roomId) : undefined;
+          const roomIndex = lock.roomId && !sharedRoomIds.has(lock.roomId) ? roomIx.get(lock.roomId) : undefined;
           fixedRoom = roomIndex === undefined ? null : roomIndex;
         }
       }
@@ -472,6 +481,7 @@ export async function generateSchedule(
         teacherIds,
         candidateRoomIds: roomResult.roomIds,
         preferredRoomIds: roomResult.preferredIds ?? [],
+        sharedRoomId: lock?.roomId && sharedRoomIds.has(lock.roomId) ? lock.roomId : sharedRoomId,
       });
     }
   }
@@ -529,7 +539,7 @@ export async function generateSchedule(
     const existingSessions = await loadValidatorSessions(ctx, targetVersionId);
     for (const s of existingSessions) {
       const relevantTeachers = s.teacherIds.filter((tid) => teacherIx.has(tid)).map((tid) => teacherIx.get(tid));
-      const relevantRooms = s.roomIds.filter((rid) => roomIx.has(rid)).map((rid) => roomIx.get(rid));
+      const relevantRooms = s.roomIds.filter((rid) => roomIx.has(rid) && !sharedRoomIds.has(rid)).map((rid) => roomIx.get(rid));
       if (relevantTeachers.length === 0 && relevantRooms.length === 0) continue;
       for (const idx of dayToIndexes.get(s.dayOfWeek) ?? []) {
         const slot = slots[idx]!;
@@ -550,6 +560,7 @@ export async function generateSchedule(
   // Une regle hebdomadaire ferme la salle au meme creneau toutes les semaines :
   // on l'exprime comme une occupation fixe de cette salle, exactement comme un
   // cours deja pose. Le solveur n'a donc rien de nouveau a apprendre.
+  const sharedClosedSlots = new Map<string, Set<number>>();
   const { data: roomRules } = await supabase
     .from('room_availability')
     .select('room_id, day_of_week, starts_at, ends_at')
@@ -564,8 +575,27 @@ export async function generateSchedule(
     for (const idx of dayToIndexes.get(rule.day_of_week) ?? []) {
       const slot = slots[idx]!;
       if (hmToMin(slot.starts_at) >= to || from >= hmToMin(slot.ends_at)) continue;
-      fixedOccupations.push({ startSlot: idx, durationSlots: 1, teacherIndexes: [], classIndexes: [], groupIndexes: [], roomIndex: r });
+      if (sharedRoomIds.has(rule.room_id)) {
+        const set = sharedClosedSlots.get(rule.room_id) ?? new Set<number>();
+        set.add(idx);
+        sharedClosedSlots.set(rule.room_id, set);
+      } else {
+        fixedOccupations.push({ startSlot: idx, durationSlots: 1, teacherIndexes: [], classIndexes: [], groupIndexes: [], roomIndex: r });
+      }
     }
+  }
+  // Une salle partagée fermée chaque semaine (terrain prêté le mercredi) : le
+  // solveur ne la connaît pas, on retire donc ces créneaux des cours qui n'ont
+  // qu'elle pour salle.
+  for (const t of tasks) {
+    const closed = sharedClosedSlots.get(taskMeta[t.index]?.sharedRoomId ?? '');
+    if (!closed || t.locked) continue;
+    t.candidateStartSlots = t.candidateStartSlots.filter((start) => {
+      const dayList = dayToIndexes.get(slots[start]!.day_of_week) ?? [];
+      const at = dayList.indexOf(start);
+      return dayList.slice(at, at + t.durationSlots).every((idx) => !closed.has(idx));
+    });
+    if (t.candidateStartSlots.length === 0) problems.push(`« ${t.label} » : sa salle est fermée à tous les créneaux possibles.`);
   }
 
   // --- verification arithmetique (rapide, avant tout appel solveur) ---
@@ -670,7 +700,7 @@ export async function generateSchedule(
   let written: { versionId: string; sessionIds: string[] } | null = null;
   try {
     const { versionId, sessionIds, preferenceMisses } = await materializeDraft(
-      ctx, yearId, jobId, solution, taskMeta, slots, slotMinutes, roomIdByIndex, targetVersionId, fixedOccupations,
+      ctx, yearId, jobId, solution, taskMeta, slots, slotMinutes, roomIdByIndex, targetVersionId, fixedOccupations, sharedRoomIds,
     );
     written = { versionId, sessionIds };
 
@@ -866,6 +896,7 @@ async function materializeDraft(
   roomIdByIndex: Map<number, string>,
   targetVersionId: string | undefined,
   fixedOccupations: FixedOccupation[],
+  sharedRoomIds: ReadonlySet<string>,
 ): Promise<{ versionId: string; sessionIds: string[]; preferenceMisses: number }> {
   const supabase = await createClient();
 
@@ -939,7 +970,7 @@ async function materializeDraft(
     if (i >= 0) list.splice(i, 1);
   };
   const isFree = (roomId: string, start: number, end: number) =>
-    !(busyByRoom.get(roomId) ?? []).some((w) => w.start < end && start < w.end);
+    sharedRoomIds.has(roomId) || !(busyByRoom.get(roomId) ?? []).some((w) => w.start < end && start < w.end);
 
   for (const occ of fixedOccupations) {
     if (occ.roomIndex === null || occ.roomIndex === undefined) continue;
@@ -947,7 +978,7 @@ async function materializeDraft(
     if (rid) occupy(rid, occ.startSlot, occ.startSlot + Math.max(1, occ.durationSlots));
   }
   for (const a of solution.assignments) {
-    const rid = a.room >= 0 ? roomIdByIndex.get(a.room) : undefined;
+    const rid = (a.room >= 0 ? roomIdByIndex.get(a.room) : undefined) ?? taskMeta[a.taskIndex]?.sharedRoomId ?? undefined;
     chosenRoom.set(a.taskIndex, rid);
     if (rid) occupy(rid, a.startSlot, a.endSlot);
   }
@@ -1282,6 +1313,8 @@ type TaskMeta = {
   candidateRoomIds: string[];
   /** Salles souhaitées (mode « de préférence ») : essayées après résolution. */
   preferredRoomIds: string[];
+  /** Seule salle possible, partagée entre classes (terrain) : posée après le solveur. */
+  sharedRoomId: string | null;
 };
 
 /** Attribue des indices compacts stables (0..N-1) a des uuid. */
