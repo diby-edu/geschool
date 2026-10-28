@@ -5,6 +5,7 @@ import { publicEnv, serverEnv } from '@/lib/env';
 import { smsBalance } from '@/features/sms/balance';
 import { requireAdmin } from './admin';
 import { readPlatformSettings } from './settings';
+import type { MetricSnapshot } from '@/services/platform-metrics';
 
 /**
  * La page Technique (lot 7, 0151, maquette docs/maquettes/super-admin-technique.html) :
@@ -17,8 +18,10 @@ export type Light = 'green' | 'orange' | 'red';
 /** Les tâches de nuit du worker (src/workers/index.ts) : même nom de file, même horaire. */
 export const TASKS = [
   { name: 'billing-expire-due', label: 'Abonnements expirés', when: 'chaque nuit à 0 h 05' },
+  { name: 'db-backup', label: 'Sauvegarde de la base', when: 'chaque nuit à 2 h' },
   { name: 'attendance-alerts', label: 'Alertes d’absence', when: 'chaque matin à 6 h' },
   { name: 'sms-delivery-reports', label: 'Accusés de réception SMS', when: 'chaque matin à 6 h 15' },
+  { name: 'platform-metrics', label: 'Relevé de surveillance', when: 'toutes les 5 minutes' },
 ] as const;
 export type TaskName = (typeof TASKS)[number]['name'];
 
@@ -117,9 +120,10 @@ export async function getTechnicalStatus(): Promise<TechnicalStatus | null> {
     (e) => ({ id: e.id, message: e.message, path: e.path, occurrences: e.occurrences, firstSeen: e.first_seen, lastSeen: e.last_seen, detail: e.detail }),
   );
 
+  const workerSeen = r.pgboss && (r.schedules.length > 0 || r.jobs.length > 0);
   return {
     tasks,
-    workerSeen: r.pgboss && (r.schedules.length > 0 || r.jobs.length > 0),
+    workerSeen,
     sms: {
       ...r.sms,
       provider,
@@ -144,7 +148,14 @@ export async function getTechnicalStatus(): Promise<TechnicalStatus | null> {
     },
     config: [
       { label: 'SMS', ok: configured, hint: configured ? `opérateur ${provider}` : 'mode « console » : rien ne part vraiment (clé de l’opérateur absente)' },
-      { label: 'Tâches de nuit', ok: env.WORKER_ENABLED, hint: env.WORKER_ENABLED ? 'activées sur ce serveur' : 'WORKER_ENABLED vaut false sur ce serveur' },
+      // Le worker est un programme à part (PM2 « geschool-worker ») : le site
+      // web a volontairement WORKER_ENABLED=false. On regarde donc ce que le
+      // worker a laissé en base (ses horaires), pas le réglage du site.
+      {
+        label: 'Tâches de nuit',
+        ok: workerSeen,
+        hint: workerSeen ? 'le worker tourne : tâches programmées' : 'le worker n’a jamais tourné sur cette base',
+      },
       { label: 'Suivi des erreurs (Sentry)', ok: Boolean(publicEnv.NEXT_PUBLIC_SENTRY_DSN), hint: publicEnv.NEXT_PUBLIC_SENTRY_DSN ? 'branché' : 'non branché (le journal ci-dessous suffit pour l’instant)' },
       { label: 'Adresse de l’application', ok: !/localhost/.test(publicEnv.NEXT_PUBLIC_APP_URL), hint: publicEnv.NEXT_PUBLIC_APP_URL },
     ],
@@ -155,3 +166,95 @@ export async function getTechnicalStatus(): Promise<TechnicalStatus | null> {
 }
 
 export const overallLight = (s: TechnicalStatus): Light => worst(...s.tasks.map((t) => t.light), s.sms.light, s.db.light, s.security.light, s.errorsLight);
+
+// ---------------------------------------------------------------------------
+// Lot A (0153) : le serveur et les sauvegardes
+// ---------------------------------------------------------------------------
+
+export type Backup = {
+  id: string;
+  startedAt: string;
+  finishedAt: string | null;
+  status: 'RUNNING' | 'OK' | 'FAILED';
+  trigger: 'NIGHT' | 'MANUAL';
+  fileName: string | null;
+  sizeBytes: number | null;
+  durationMs: number | null;
+  error: string | null;
+  /** Le fichier est-il encore sur le disque (les plus anciennes sont effacées) ? */
+  onDisk: boolean;
+};
+
+export type ServerStatus = {
+  snapshot: MetricSnapshot | null;
+  takenAt: string | null;
+  backups: Backup[];
+  backupsBytes: number;
+  lights: { server: Light; processes: Light; site: Light; solver: Light; backup: Light };
+};
+
+const pct = (a: number | null | undefined, b: number | null | undefined) => (a != null && b ? (a / b) * 100 : null);
+const level = (p: number | null, warn: number, bad: number): Light => (p === null ? 'green' : p >= bad ? 'red' : p >= warn ? 'orange' : 'green');
+
+/** Un programme qui a redémarré plus de 10 fois est à surveiller : il peut ralentir tout le VPS. */
+export const RESTARTS_WARN = 10;
+
+export async function getServerStatus(): Promise<ServerStatus> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { backupFilesOnDisk } = await import('@/services/db-backup');
+  const [{ data: last }, { data: rows }, files] = await Promise.all([
+    supabase.from('platform_metrics' as never).select('taken_at, data').order('taken_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase
+      .from('platform_backups' as never)
+      .select('id, started_at, finished_at, status, trigger, file_name, size_bytes, duration_ms, error')
+      .order('started_at', { ascending: false })
+      .limit(14),
+    backupFilesOnDisk(),
+  ]);
+  const onDisk = new Set(files.map((f) => f.name));
+  const snap = ((last as { data: MetricSnapshot } | null)?.data ?? null) as MetricSnapshot | null;
+  const takenAt = (last as { taken_at: string } | null)?.taken_at ?? null;
+
+  const backups: Backup[] = ((rows ?? []) as {
+    id: string; started_at: string; finished_at: string | null; status: Backup['status']; trigger: Backup['trigger'];
+    file_name: string | null; size_bytes: number | null; duration_ms: number | null; error: string | null;
+  }[]).map((b) => ({
+    id: b.id, startedAt: b.started_at, finishedAt: b.finished_at, status: b.status, trigger: b.trigger, fileName: b.file_name,
+    sizeBytes: b.size_bytes, durationMs: b.duration_ms, error: b.error, onDisk: !!b.file_name && onDisk.has(b.file_name),
+  }));
+
+  const now = Date.now();
+  const stale = !takenAt || now - new Date(takenAt).getTime() > 20 * 60_000;
+  const server = snap
+    ? [level(snap.cpu, 80, 95), level(pct(snap.memUsed, snap.memTotal), 85, 95), level(pct(snap.diskUsed, snap.diskTotal), 85, 95)].reduce<Light>(
+        (w, l) => (w === 'red' || l === 'red' ? 'red' : w === 'orange' || l === 'orange' ? 'orange' : 'green'),
+        'green',
+      )
+    : 'orange';
+  const processes: Light = !snap?.processes
+    ? 'orange'
+    : snap.processes.some((p) => p.status !== 'online' && p.name.startsWith('geschool'))
+      ? 'red'
+      : snap.processes.some((p) => p.status !== 'online' || p.restarts > RESTARTS_WARN)
+        ? 'orange'
+        : 'green';
+  const site: Light = !snap ? 'orange' : snap.timings.site === null ? 'red' : snap.timings.site > 3000 ? 'red' : snap.timings.site > 1000 ? 'orange' : 'green';
+  const lastOk = backups.find((b) => b.status === 'OK');
+  const backup: Light =
+    backups[0]?.status === 'FAILED' || !lastOk ? 'red' : now - new Date(lastOk.startedAt).getTime() > 26 * 3_600_000 ? 'red' : 'green';
+
+  return {
+    snapshot: snap,
+    takenAt,
+    backups,
+    backupsBytes: files.reduce((n, f) => n + f.size, 0),
+    lights: {
+      server: stale ? 'orange' : server,
+      processes: stale ? 'orange' : processes,
+      site: stale ? 'orange' : site,
+      solver: !snap ? 'orange' : snap.solverOk ? 'green' : 'red',
+      backup,
+    },
+  };
+}

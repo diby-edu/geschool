@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Technique v2 — Super Admin</title>
+<style>
+  :root { --brand:#4a44e0; --ink:#141433; --muted:#6b6b8a; --page:#f4f4fb; --card:#fff; --line:#e4e4f0; --ok:#0a7d55; --warn:#d98a00; --bad:#c8245a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--ink); font:14px/1.5 -apple-system,"Segoe UI",Roboto,system-ui,sans-serif; }
+  .wrap { max-width:1180px; margin:0 auto; padding:24px 16px 80px; }
+  h1 { font-size:24px; margin:0 0 4px; } .sub { color:var(--muted); margin:0 0 14px; max-width:90ch; }
+  .note { font-size:12.5px; color:var(--muted); background:#fff; border:1px dashed #c9c9df; border-radius:10px; padding:8px 12px; margin:0 0 18px; }
+  .hero { border-radius:16px; padding:16px 18px; color:#fff; background:linear-gradient(115deg,#3730a3,#6d28d9 55%,#c026d3); display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; }
+  .hero h2 { margin:0; font-size:22px; } .hero .s { font-size:13px; opacity:.92; }
+  .btn { font-size:12.5px; font-weight:700; border-radius:9px; padding:6px 12px; border:1px solid var(--line); background:#fff; color:var(--ink); white-space:nowrap; }
+  .hero .btn { background:rgba(255,255,255,.16); color:#fff; border-color:rgba(255,255,255,.3); }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; margin:14px 0; } .tab { font-size:13px; padding:6px 12px; border-radius:10px; border:1px solid var(--line); background:#fff; } .tab.on { background:var(--brand); color:#fff; border-color:var(--brand); font-weight:700; }
+  .sect { margin:30px 0 10px; font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--brand); border-bottom:2px solid var(--brand); padding-bottom:4px; }
+  .grid { display:grid; gap:12px; } .g2{grid-template-columns:repeat(2,minmax(0,1fr))} .g3{grid-template-columns:repeat(3,minmax(0,1fr))} .g5{grid-template-columns:repeat(5,minmax(0,1fr))}
+  @media (max-width:820px){ .g2,.g3,.g5{grid-template-columns:1fr 1fr} } @media (max-width:520px){ .g2,.g3,.g5{grid-template-columns:1fr} }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; min-width:0; }
+  .ct { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; } .ct h3 { margin:0; font-size:15px; }
+  .row { display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-top:1px solid var(--line); font-size:13px; } .row:first-of-type{border-top:0} .row b{text-align:right}
+  .muted { color:var(--muted); font-size:12px; }
+  .pill { font-size:11px; font-weight:700; border-radius:99px; padding:1px 9px; white-space:nowrap; } .ok{background:#e3f5ee;color:var(--ok)} .warn{background:#fff3dc;color:#9a6200} .bad{background:#fde6ee;color:var(--bad)} .grey{background:#eeeef6;color:var(--muted)}
+  .dot { display:inline-block; width:9px; height:9px; border-radius:99px; margin-right:6px; } .d-ok{background:var(--ok)} .d-warn{background:var(--warn)} .d-bad{background:var(--bad)}
+  .tile { background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; } .tile .v { font-weight:800; font-size:14px; } .tile .l { font-size:11.5px; color:var(--muted); }
+  .bar { height:8px; background:#ececf5; border-radius:99px; overflow:hidden; margin:4px 0 2px; } .bar i { display:block; height:100%; }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; } th { text-align:left; font-size:11px; color:var(--muted); font-weight:700; padding:5px 6px; border-bottom:1px solid var(--line); } td { padding:5px 6px; border-bottom:1px solid var(--line); }
+  .mine td { background:#f1f0ff; font-weight:600; }
+  svg.chart { width:100%; height:110px; display:block; }
+  .alert { border-radius:12px; padding:10px 12px; font-size:13px; display:flex; gap:10px; justify-content:space-between; align-items:center; flex-wrap:wrap; }
+  .a-bad { background:#fde6ee; border:1px solid #f5bccf; } .a-warn { background:#fff3dc; border:1px solid #f3d79a; }
+  .field { border:1px solid var(--line); border-radius:9px; padding:6px 10px; font-size:13px; background:#fafaff; }
+  .chk { display:flex; gap:8px; align-items:center; font-size:13px; padding:3px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Technique — version complète (maquette)</h1>
+  <p class="sub">Tout ce qui va ou pas, au même endroit. Les chiffres sont ceux relevés le 27/10 sur ton VPS et ta base quand je les avais ; les autres sont des exemples réalistes.</p>
+  <p class="note">La page est découpée en <b>7 onglets</b> pour rester lisible. Ci-dessous, chaque onglet est montré l’un sous l’autre. Un relevé est fait <b>toutes les 5 minutes</b> par le worker et gardé 30 jours : c’est lui qui nourrit les courbes, la croissance de la base et les alertes.</p>
+
+  <div class="hero">
+    <div><h2>Technique</h2><div class="s">En ce moment : <b>2 points à surveiller</b>, aucun problème grave · dernier relevé il y a 2 min</div></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="btn">Tout lancer maintenant</span><span class="btn">Relever maintenant</span></div>
+  </div>
+  <div class="tabs"><span class="tab on">Vue d’ensemble</span><span class="tab">Serveur</span><span class="tab">Base et sauvegardes</span><span class="tab">Activité</span><span class="tab">Sécurité</span><span class="tab">Tâches</span><span class="tab">Alertes</span></div>
+
+  <!-- ============ 1. VUE D'ENSEMBLE ============ -->
+  <div class="sect">Onglet 1 · Vue d’ensemble</div>
+  <div class="alert a-warn"><span><span class="dot d-warn"></span><b>Base de données à 74 %</b> — au rythme actuel (+2,1 Mo/jour), la limite de 500 Mo sera atteinte vers le <b>29 décembre</b>.</span><span class="btn">Voir</span></div>
+  <div class="grid g5" style="margin-top:10px">
+    <div class="tile"><div class="v"><span class="dot d-ok"></span>En ligne</div><div class="l">Site · 180 ms</div></div>
+    <div class="tile"><div class="v"><span class="dot d-ok"></span>OK</div><div class="l">Serveur · RAM 58 %</div></div>
+    <div class="tile"><div class="v"><span class="dot d-ok"></span>12 / 12</div><div class="l">Programmes du VPS</div></div>
+    <div class="tile"><div class="v"><span class="dot d-ok"></span>Prêt</div><div class="l">Solveur emplois du temps</div></div>
+    <div class="tile"><div class="v"><span class="dot d-warn"></span>74 %</div><div class="l">Base de données</div></div>
+    <div class="tile"><div class="v"><span class="dot d-ok"></span>Cette nuit</div><div class="l">Dernière sauvegarde</div></div>
+    <div class="tile"><div class="v"><span class="dot d-ok"></span>3 / 3</div><div class="l">Tâches de nuit passées</div></div>
+    <div class="tile"><div class="v"><span class="dot d-ok"></span>4 070 SMS</div><div class="l">Crédit Letexto</div></div>
+    <div class="tile"><div class="v"><span class="dot d-ok"></span>88 jours</div><div class="l">Certificat HTTPS</div></div>
+    <div class="tile"><div class="v"><span class="dot d-warn"></span>2 erreurs</div><div class="l">Erreurs (24 h)</div></div>
+  </div>
+  <div class="grid g3" style="margin-top:12px">
+    <div class="card"><div class="ct"><h3>Temps de réponse</h3><span class="muted">24 h</span></div>
+      <svg class="chart" viewBox="0 0 300 110" preserveAspectRatio="none"><polyline fill="none" stroke="#4a44e0" stroke-width="2" points="0,80 20,78 40,82 60,76 80,79 100,60 120,30 140,72 160,80 180,78 200,74 220,77 240,81 260,79 280,76 300,78"/><line x1="0" y1="40" x2="300" y2="40" stroke="#d98a00" stroke-dasharray="4 4"/></svg>
+      <div class="muted">Moyenne 180 ms · pic 1,4 s à 9 h 10 (pointillé = seuil d’alerte 1 s)</div></div>
+    <div class="card"><div class="ct"><h3>Mémoire du serveur</h3><span class="muted">24 h</span></div>
+      <svg class="chart" viewBox="0 0 300 110" preserveAspectRatio="none"><polyline fill="rgba(10,125,85,.12)" stroke="#0a7d55" stroke-width="2" points="0,110 0,50 30,48 60,47 90,46 120,44 150,45 180,47 210,46 240,48 270,47 300,46 300,110"/></svg>
+      <div class="muted">2,2 Go utilisés sur 3,8 Go · geschool 150 Mo</div></div>
+    <div class="card"><div class="ct"><h3>Erreurs et activité</h3><span class="muted">24 h</span></div>
+      <svg class="chart" viewBox="0 0 300 110" preserveAspectRatio="none"><g fill="#c7c4fb"><rect x="70" y="60" width="14" height="50"/><rect x="90" y="30" width="14" height="80"/><rect x="110" y="20" width="14" height="90"/><rect x="130" y="40" width="14" height="70"/><rect x="150" y="55" width="14" height="55"/><rect x="170" y="70" width="14" height="40"/></g><g fill="#c8245a"><rect x="112" y="100" width="10" height="10"/><rect x="152" y="104" width="10" height="6"/></g></svg>
+      <div class="muted">Violet = requêtes · rouge = erreurs. L’activité suit les heures de cours.</div></div>
+  </div>
+
+  <!-- ============ 2. SERVEUR ============ -->
+  <div class="sect">Onglet 2 · Serveur (VPS)</div>
+  <div class="grid g3">
+    <div class="card"><div class="ct"><h3>Ressources</h3><span class="pill ok">Tout va bien</span></div>
+      <div class="row"><span>Processeur (1 cœur)</span><b>18 % en moyenne · 5 min</b></div>
+      <div class="bar"><i style="width:18%;background:var(--ok)"></i></div>
+      <div class="row"><span>Mémoire</span><b>2,2 Go / 3,8 Go (58 %)</b></div>
+      <div class="bar"><i style="width:58%;background:var(--ok)"></i></div>
+      <div class="row"><span>Disque</span><b>21 Go / 49 Go (42 %)</b></div>
+      <div class="bar"><i style="width:42%;background:var(--ok)"></i></div>
+      <div class="row"><span>Swap utilisé</span><b>310 Mo / 4 Go</b></div>
+      <div class="row"><span>Allumé depuis</span><b>41 jours</b></div>
+    </div>
+    <div class="card"><div class="ct"><h3>geschool</h3><span class="pill ok">En ligne</span></div>
+      <div class="row"><span>Version en ligne</span><b>27/10 22:23</b></div>
+      <div class="row"><span>Site web</span><b>150 Mo · 0 redémarrage</b></div>
+      <div class="row"><span>Worker (tâches)</span><b>89 Mo · 0 redémarrage</b></div>
+      <div class="row"><span>Solveur (Docker)</span><b>Prêt · 0,5 cœur max</b></div>
+      <div class="row"><span>Adresse</span><b>gestionscolaire.hebergementci.com</b></div>
+      <div class="row"><span>Certificat HTTPS</span><b>expire dans 88 jours</b></div>
+    </div>
+    <div class="card"><div class="ct"><h3>Temps de réponse</h3><span class="muted">mesuré par le worker</span></div>
+      <div class="row"><span>Page de connexion</span><b>140 ms</b></div>
+      <div class="row"><span>Sonde de santé (site + base)</span><b>210 ms</b></div>
+      <div class="row"><span>Requête base de données</span><b>45 ms</b></div>
+      <div class="row"><span>Solveur</span><b>12 ms</b></div>
+      <div class="muted" style="margin-top:6px">Seuils : orange au-delà de 1 s, rouge au-delà de 3 s ou sans réponse.</div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:12px"><div class="ct"><h3>Les 12 programmes du VPS</h3><span class="muted">tes autres projets sont seulement lus, jamais touchés</span></div>
+    <table><thead><tr><th>Programme</th><th>État</th><th>Mémoire</th><th>Redémarrages</th><th>Depuis</th></tr></thead><tbody>
+      <tr class="mine"><td>geschool</td><td><span class="pill ok">en ligne</span></td><td>150 Mo</td><td>0</td><td>2 h</td></tr>
+      <tr class="mine"><td>geschool-worker</td><td><span class="pill ok">en ligne</span></td><td>89 Mo</td><td>0</td><td>2 h</td></tr>
+      <tr><td>whatsai-web</td><td><span class="pill ok">en ligne</span></td><td>373 Mo</td><td>0</td><td>41 j</td></tr>
+      <tr><td>whatsai-bot</td><td><span class="pill ok">en ligne</span></td><td>162 Mo</td><td>0</td><td>41 j</td></tr>
+      <tr><td>qrhub</td><td><span class="pill ok">en ligne</span></td><td>121 Mo</td><td>0</td><td>41 j</td></tr>
+      <tr><td>repetiteur</td><td><span class="pill warn">en ligne</span></td><td>76 Mo</td><td>117</td><td>3 j</td></tr>
+      <tr><td colspan="5" class="muted">… et les 6 autres (textopro, photopilot, numerik360-api…)</td></tr>
+    </tbody></table>
+    <div class="muted" style="margin-top:6px">Orange quand un programme redémarre souvent : il peut ralentir tout le serveur, donc geschool aussi.</div>
+  </div>
+
+  <!-- ============ 3. BASE ET SAUVEGARDES ============ -->
+  <div class="sect">Onglet 3 · Base de données et sauvegardes</div>
+  <div class="grid g3">
+    <div class="card"><div class="ct"><h3>Taille et croissance</h3><span class="pill warn">À surveiller</span></div>
+      <div class="row"><span>Taille</span><b>370 Mo / 500 Mo (74 %)</b></div>
+      <div class="bar"><i style="width:74%;background:var(--warn)"></i></div>
+      <div class="row"><span>Croissance</span><b>+2,1 Mo par jour (moy. 7 j)</b></div>
+      <div class="row"><span>Limite atteinte vers le</span><b>29 décembre</b></div>
+      <svg class="chart" viewBox="0 0 300 110" preserveAspectRatio="none"><polyline fill="none" stroke="#d98a00" stroke-width="2" points="0,70 50,66 100,62 150,57 200,52 250,48"/><polyline fill="none" stroke="#d98a00" stroke-width="2" stroke-dasharray="5 4" points="250,48 300,30"/><line x1="0" y1="14" x2="300" y2="14" stroke="#c8245a"/></svg>
+      <div class="muted">Trait plein = 30 derniers jours · pointillé = projection · rouge = 500 Mo</div>
+    </div>
+    <div class="card"><div class="ct"><h3>Sauvegardes</h3><span class="pill ok">Tout va bien</span></div>
+      <div class="row"><span>Dernière copie</span><b>cette nuit 2 h 00 · 64 Mo</b></div>
+      <div class="row"><span>Durée</span><b>3 min 10 s</b></div>
+      <div class="row"><span>Copies gardées</span><b>7 (une par nuit)</b></div>
+      <div class="row"><span>Lieu</span><b>sur le VPS, hors du site</b></div>
+      <div class="row"><span>Place prise</span><b>430 Mo</b></div>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><span class="btn">Sauvegarder maintenant</span><span class="btn">Télécharger la dernière</span></div>
+      <div class="muted" style="margin-top:6px">Rouge si une nuit est manquée. La restauration se fait avec moi (procédure écrite), jamais d’un clic.</div>
+    </div>
+    <div class="card"><div class="ct"><h3>Santé de la base</h3><span class="pill ok">Tout va bien</span></div>
+      <div class="row"><span>Connexions ouvertes</span><b>24 / 60</b></div>
+      <div class="row"><span>Lectures servies par le cache</span><b>99,2 %</b></div>
+      <div class="row"><span>Migrations</span><b>152 · dernière 0152</b></div>
+      <div class="muted" style="margin:8px 0 4px"><b>Requêtes les plus lentes</b> (temps moyen)</div>
+      <table><tbody><tr><td>lecture des notes d’une classe</td><td>820 ms</td></tr><tr><td>moyennes du bulletin</td><td>640 ms</td></tr><tr><td>occupation des salles</td><td>410 ms</td></tr></tbody></table>
+    </div>
+  </div>
+  <div class="card" style="margin-top:12px"><div class="ct"><h3>Les plus grosses tables</h3><span class="muted">avec leur croissance sur 7 jours</span></div>
+    <table><thead><tr><th>Table</th><th>Taille</th><th>Lignes</th><th>+7 jours</th></tr></thead><tbody>
+      <tr><td>notes (grades)</td><td>197 Mo</td><td>560 000</td><td>+9 Mo</td></tr>
+      <tr><td>présences (attendance_records)</td><td>89 Mo</td><td>410 000</td><td>+4 Mo</td></tr>
+      <tr><td>séances datées (session_occurrences)</td><td>30 Mo</td><td>95 000</td><td>+1 Mo</td></tr>
+    </tbody></table></div>
+
+  <!-- ============ 4. ACTIVITÉ ============ -->
+  <div class="sect">Onglet 4 · Activité (le pouls)</div>
+  <div class="grid g5">
+    <div class="tile"><div class="v">38</div><div class="l">Connexions aujourd’hui</div></div>
+    <div class="tile"><div class="v">2 / 3</div><div class="l">Écoles actives aujourd’hui</div></div>
+    <div class="tile"><div class="v">54</div><div class="l">Appels faits</div></div>
+    <div class="tile"><div class="v">1 240</div><div class="l">Notes saisies</div></div>
+    <div class="tile"><div class="v">12</div><div class="l">SMS envoyés</div></div>
+  </div>
+  <div class="card" style="margin-top:12px"><div class="ct"><h3>Par école, aujourd’hui</h3><span class="muted">un jour de cours sans activité = orange</span></div>
+    <table><thead><tr><th>École</th><th>Connexions</th><th>Appels</th><th>Notes</th><th>Dernière action</th><th></th></tr></thead><tbody>
+      <tr><td>Lycée d’Excellence de Yopougon</td><td>21</td><td>40</td><td>860</td><td>il y a 4 min</td><td><span class="pill ok">active</span></td></tr>
+      <tr><td>Groupe Scolaire Les Cocotiers (démo)</td><td>17</td><td>14</td><td>380</td><td>il y a 20 min</td><td><span class="pill ok">active</span></td></tr>
+      <tr><td>Autre école</td><td>0</td><td>0</td><td>0</td><td>il y a 3 jours</td><td><span class="pill warn">silencieuse</span></td></tr>
+    </tbody></table>
+    <div class="muted" style="margin-top:6px">Courbe sur 7 jours en dessous (connexions, appels, notes par jour).</div></div>
+
+  <!-- ============ 5. SÉCURITÉ ============ -->
+  <div class="sect">Onglet 5 · Sécurité</div>
+  <div class="grid g2">
+    <div class="card"><div class="ct"><h3>Connexions ratées (24 h)</h3><span class="pill ok">Normal</span></div>
+      <table><thead><tr><th>Identifiant visé</th><th>Essais</th><th>Dernier</th><th>État</th></tr></thead><tbody>
+        <tr><td>07 07 •• •• 12</td><td>5</td><td>08:42</td><td><span class="pill bad">bloqué 15 min</span></td></tr>
+        <tr><td>k•••@gmail.com</td><td>2</td><td>07:15</td><td><span class="pill grey">—</span></td></tr>
+      </tbody></table>
+      <div class="muted" style="margin-top:6px">Orange au-delà de 50 essais par heure (signe d’une attaque).</div></div>
+    <div class="card"><div class="ct"><h3>Changements sensibles (7 jours)</h3><span class="muted">journal</span></div>
+      <div class="row"><span>Nouveau compte Super Admin</span><b>aucun</b></div>
+      <div class="row"><span>Droits d’une fonction modifiés</span><b>2 (Cocotiers, Yopougon)</b></div>
+      <div class="row"><span>Changement de responsable d’école</span><b>aucun</b></div>
+      <div class="row"><span>Comptes suspendus</span><b>1</b></div>
+      <div class="row"><span>Comptes Super Admin</span><b>3 · voir la liste</b></div>
+      <div class="row"><span>Certificat HTTPS</span><b>88 jours restants</b></div>
+    </div>
+  </div>
+
+  <!-- ============ 6. TÂCHES ============ -->
+  <div class="sect">Onglet 6 · Tâches (worker)</div>
+  <div class="grid g2">
+    <div class="card"><div class="ct"><h3>Tâches de nuit</h3><span class="btn">Tout lancer maintenant</span></div>
+      <div class="row"><span><span class="dot d-ok"></span>Abonnements expirés · 0 h 05</span><b>cette nuit · 0,4 s</b></div>
+      <div class="row"><span><span class="dot d-ok"></span>Sauvegarde de la base · 2 h</span><b>cette nuit · 3 min</b></div>
+      <div class="row"><span><span class="dot d-ok"></span>Alertes d’absence · 6 h</span><b>ce matin · 12 s</b></div>
+      <div class="row"><span><span class="dot d-ok"></span>Accusés SMS · 6 h 15</span><b>ce matin · 2 s</b></div>
+      <div class="row"><span><span class="dot d-ok"></span>Relevé de surveillance · 5 min</span><b>il y a 2 min</b></div>
+    </div>
+    <div class="card"><div class="ct"><h3>File d’attente</h3><span class="pill warn">1 échec</span></div>
+      <div class="row"><span>En attente</span><b>0</b></div>
+      <div class="row"><span>En cours</span><b>0</b></div>
+      <div class="row"><span>Réussies (7 jours)</span><b>2 016</b></div>
+      <div class="row"><span>Échouées (7 jours)</span><b>1</b></div>
+      <table style="margin-top:6px"><tbody><tr><td>Alertes d’absence · 26/10 06:00<br><span class="muted">Connection terminated unexpectedly</span></td><td style="text-align:right"><span class="btn">Relancer</span></td></tr></tbody></table>
+    </div>
+  </div>
+
+  <!-- ============ 7. ALERTES ============ -->
+  <div class="sect">Onglet 7 · Alertes</div>
+  <div class="grid g2">
+    <div class="card"><div class="ct"><h3>Où m’alerter</h3><span class="btn">Envoyer une alerte d’essai</span></div>
+      <div class="chk">☑ Par SMS au <span class="field">07 07 00 00 00</span></div>
+      <div class="chk">☑ Par e-mail à <span class="field">votre-adresse@exemple.ci</span></div>
+      <div class="muted">E-mail : il faut d’abord brancher un moyen d’envoi (par exemple la boîte mail de ton hébergement LWS). En attendant, seul le SMS part.</div>
+      <div class="chk" style="margin-top:8px">☐ Pas d’alerte SMS la nuit (22 h – 6 h), sauf site arrêté</div>
+    </div>
+    <div class="card"><div class="ct"><h3>Quand m’alerter</h3><span class="muted">une alerte par problème, puis rappel après 6 h s’il dure</span></div>
+      <div class="chk">☑ Site injoignable ou très lent (plus de 3 s)</div>
+      <div class="chk">☑ Worker arrêté ou tâche de nuit échouée</div>
+      <div class="chk">☑ Sauvegarde manquée</div>
+      <div class="chk">☑ Disque ou mémoire au-dessus de <span class="field">90 %</span></div>
+      <div class="chk">☑ Base au-dessus de <span class="field">85 %</span></div>
+      <div class="chk">☑ Crédit SMS sous <span class="field">500</span></div>
+      <div class="chk">☑ Certificat HTTPS qui expire dans moins de <span class="field">15</span> jours</div>
+      <div class="chk">☑ Plus de <span class="field">20</span> erreurs en une heure</div>
+      <div class="chk">☑ Attaque probable (plus de 50 connexions ratées en une heure)</div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:12px"><div class="ct"><h3>Historique des alertes</h3><span class="muted">30 jours</span></div>
+    <table><thead><tr><th>Quand</th><th>Problème</th><th>Envoyée</th><th>Réglé</th></tr></thead><tbody>
+      <tr><td>26/10 06:00</td><td>Tâche « Alertes d’absence » échouée</td><td>SMS</td><td>26/10 06:15 (relancée)</td></tr>
+      <tr><td>24/10 09:10</td><td>Site lent (1,4 s)</td><td>—  (orange : pas d’envoi)</td><td>24/10 09:20</td></tr>
+    </tbody></table></div>
+
+  <p class="note" style="margin-top:24px"><b>Ce qui reste hors de portée de la page :</b> si le VPS entier s’arrête, elle s’arrête avec lui. Un service gratuit extérieur (UptimeRobot) le surveillera de l’extérieur — je te guiderai pour créer le compte.</p>
+</div>
+</body>
+</html>

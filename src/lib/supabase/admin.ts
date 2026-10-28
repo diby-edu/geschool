@@ -60,7 +60,9 @@ export type AdminOperation =
   // plateforme, sans pouvoir lire le reste des reglages de l'editeur.
   | 'sms.platform_sender'
   // Journal des erreurs de l'application (page Technique, 0151).
-  | 'errors.log';
+  | 'errors.log'
+  // Relevés du serveur et sauvegardes de la base (page Technique, 0153).
+  | 'platform.monitoring';
 
 let cached: SupabaseClient<Database> | null = null;
 

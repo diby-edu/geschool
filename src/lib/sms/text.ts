@@ -25,6 +25,9 @@ export const SMS_UNICODE_LIMIT = 70;
 const GSM_PART = 153;
 const UNICODE_PART = 67;
 
+/** L'extension GSM, ramenée à l'alphabet de base (voir toGsm). */
+const EXTENDED_TO_BASE: Record<string, string> = { '[': '(', ']': ')', '{': '(', '}': ')', '~': '-', '^': '', '\\': '/', '|': '/', '€': 'EUR' };
+
 /** Remplacements évidents : même sens, sans faire basculer le message. */
 const REMPLACEMENTS: [RegExp, string][] = [
   [/[‘’‛]/g, "'"],
@@ -101,9 +104,13 @@ export function countSms(text: string): SmsCount {
 export function toGsm(text: string): string {
   let out = text;
   for (const [de, vers] of REMPLACEMENTS) out = out.replace(de, vers);
+  // L'extension GSM ([ ] { } ~ ^ \ | €) arrive déformée sur certains
+  // téléphones : « [Gestion Scolaire] » reçu « ÄGestion ScolaireÑ » (Letexto,
+  // 27/10/2026). On la remplace par des signes de base, qui passent partout.
+  out = [...out].map((c) => EXTENDED_TO_BASE[c] ?? c).join('');
   // Ce qui reste hors alphabet après remplacement serait facturé double :
   // on le retire plutôt que de laisser le message coûter deux fois.
-  return [...out].map((c) => (GSM_BASE.includes(c) || GSM_EXTENDED.includes(c) ? c : '')).join('');
+  return [...out].map((c) => (GSM_BASE.includes(c) ? c : '')).join('');
 }
 
 /**

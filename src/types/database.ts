@@ -2634,6 +2634,7 @@ export type Database = {
           code: string
           name: string
           capacity: number
+          allows_multiple_classes: boolean
           building: string | null
           floor: string | null
           is_active: boolean
@@ -2649,6 +2650,7 @@ export type Database = {
           code: string
           name: string
           capacity?: number
+          allows_multiple_classes?: boolean
           building?: string | null
           floor?: string | null
           is_active?: boolean
@@ -2664,6 +2666,7 @@ export type Database = {
           code?: string
           name?: string
           capacity?: number
+          allows_multiple_classes?: boolean
           building?: string | null
           floor?: string | null
           is_active?: boolean

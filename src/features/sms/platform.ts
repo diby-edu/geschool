@@ -69,7 +69,7 @@ export async function writePlatformSms(userId: string, patch: Partial<PlatformSm
   if (error) throw error;
 }
 
-function clean(raw: unknown): PlatformSms {
+export function clean(raw: unknown): PlatformSms {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const nombre = (v: unknown, defaut: number, max: number) => {
     const n = Number(v);

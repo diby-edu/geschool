@@ -86,7 +86,11 @@ corepack enable >/dev/null 2>&1 || true
 cd "\$APP_DIR/releases/\$RELEASE"
 
 echo "-> pnpm install --prod (hoisted)"
-pnpm install --prod --frozen-lockfile --node-linker=hoisted --ignore-scripts
+# --ignore-workspace : /var/www/geschool contient une ancienne copie du depot
+# (avec pnpm-workspace.yaml). Sans cette option, pnpm la prend pour la racine,
+# declare « Already up to date » et la release tourne avec les vieilles
+# bibliotheques du dossier parent (constate le 27/10/2026 : undici manquait).
+pnpm install --prod --frozen-lockfile --node-linker=hoisted --ignore-scripts --ignore-workspace
 
 ln -sfn "\$APP_DIR/shared/.env.local" "\$APP_DIR/releases/\$RELEASE/.env.local"
 

@@ -50,6 +50,11 @@ describe('coût réel d’un SMS', () => {
 });
 
 describe('nettoyage du texte', () => {
+  it('remplace l’extension GSM, déformée sur certains téléphones (27/10/2026)', () => {
+    expect(toGsm('[Gestion Scolaire] Essai')).toBe('(Gestion Scolaire) Essai');
+    expect(toGsm('5 € {x} a|b')).toBe('5 EUR (x) a/b');
+  });
+
   it('remplace les caractères typographiques sans changer le sens', () => {
     expect(toGsm('l’élève — « absent »')).toBe('l\'élève - "absent"');
   });

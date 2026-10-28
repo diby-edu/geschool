@@ -6,12 +6,14 @@ import { serverEnv } from '@/lib/env';
  *
  * Il consomme les files pg-boss et fait tourner les taches recurrentes.
  *
- * Deux taches aujourd'hui, toutes deux quotidiennes :
+ * Les taches recurrentes (horaires dans enregistrerTaches) :
+ *   * les ABONNEMENTS expires, chaque nuit (grace puis coupure) ;
+ *   * la SAUVEGARDE de la base sur le VPS, chaque nuit (0153) ;
  *   * les ALERTES D'ABSENCE : compter les heures de chaque eleve sur la periode
  *     et prevenir au franchissement des seuils regles par l'etablissement ;
  *   * les ACCUSES DE RECEPTION SMS : demander a l'operateur ce que sont
- *     devenus les messages partis mais non confirmes, tant que l'application
- *     n'a pas d'adresse publique ou il puisse les pousser lui-meme.
+ *     devenus les messages partis mais non confirmes ;
+ *   * le RELEVE de surveillance, toutes les 5 minutes (page Technique, 0153).
  *
  * Les files de generation d'emploi du temps et d'envoi d'identifiants restent
  * declenchees depuis l'application, pas d'ici.
@@ -85,10 +87,14 @@ async function enregistrerTaches(boss: PgBoss): Promise<void> {
   const ALERTES = 'attendance-alerts';
   const ACCUSES = 'sms-delivery-reports';
   const ABONNEMENTS = 'billing-expire-due';
+  const SAUVEGARDE = 'db-backup';
+  const RELEVE = 'platform-metrics';
 
   await boss.createQueue(ALERTES);
   await boss.createQueue(ACCUSES);
   await boss.createQueue(ABONNEMENTS);
+  await boss.createQueue(SAUVEGARDE);
+  await boss.createQueue(RELEVE);
 
   await boss.work(ALERTES, async () => {
     const { runAttendanceAlerts } = await import('@/services/attendance-alerts');
@@ -116,11 +122,39 @@ async function enregistrerTaches(boss: PgBoss): Promise<void> {
   });
 
   // 6 h 00 et 6 h 15, heure du serveur.
+  // Copie complete de la base sur le VPS (0153) : la nuit, quand personne ne saisit.
+  await boss.work(SAUVEGARDE, async () => {
+    const { runBackup, backupRunning } = await import('@/services/db-backup');
+    if (await backupRunning()) {
+      console.warn('[worker] sauvegarde : une copie est deja en cours, rien de plus.');
+      return;
+    }
+    const r = await runBackup('NIGHT');
+    if (!r.ok) throw new Error(`sauvegarde echouee : ${r.error}`);
+    console.warn(`[worker] sauvegarde : ${r.fileName} (${Math.round((r.sizeBytes ?? 0) / 1e6)} Mo)`);
+  });
+
+  // Releve de surveillance (0153) : serveur, programmes, temps de reponse, base.
+  await boss.work(RELEVE, async () => {
+    const { recordSnapshot } = await import('@/services/platform-metrics');
+    await recordSnapshot();
+    // Puis les alertes (0154) : un souci d'envoi ne doit pas faire echouer le releve.
+    try {
+      const { checkAlerts } = await import('@/services/platform-alerts');
+      const problems = await checkAlerts();
+      if (problems.length > 0) console.warn(`[worker] alertes en cours : ${problems.map((p) => p.key).join(', ')}`);
+    } catch (error) {
+      console.error('[worker] verification des alertes impossible', error);
+    }
+  });
+
   await boss.schedule(ABONNEMENTS, '5 0 * * *');
+  await boss.schedule(SAUVEGARDE, '0 2 * * *');
+  await boss.schedule(RELEVE, '*/5 * * * *');
   await boss.schedule(ALERTES, '0 6 * * *');
   await boss.schedule(ACCUSES, '15 6 * * *');
   console.warn(
-    "[worker] taches quotidiennes enregistrees : alertes d'absence (6 h), accuses de reception (6 h 15).",
+    "[worker] taches enregistrees : abonnements (0 h 05), sauvegarde (2 h), alertes d'absence (6 h), accuses de reception (6 h 15), releve (toutes les 5 min).",
   );
 }
 

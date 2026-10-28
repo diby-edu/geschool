@@ -394,3 +394,30 @@ et pg-boss — `pnpm db:check` le refuse explicitement.
 **À corriger aussi** : `.env.local` contient `DATABASE_URL_POOLER` avec **exactement la même
 valeur** que `DATABASE_URL`. Cette variable n'est lue par aucun code du projet et peut être
 supprimée ; c'est `DATABASE_URL` seule qui compte.
+
+## 8. Sauvegardes de la base et restauration
+
+L'offre Supabase gratuite ne fournit aucune sauvegarde téléchargeable. Depuis la migration
+0153, le worker copie **toute la base chaque nuit à 2 h** avec `pg_dump` (format « custom »,
+compressé, `nice -n 10`) dans `/var/www/geschool/backups/geschool-AAAAMMJJ-HHMM.dump`, hors
+des releases. Les **7 dernières** sont gardées. Le compte rendu (durée, taille, échec) est dans
+`platform_backups` et sur la page Super Admin → Technique → Base et sauvegardes, d'où chaque
+copie se télécharge.
+
+Première copie réelle (27/10/2026) : 39 Mo, 30 s, 168 tables avec données (dont `auth.users`).
+
+### Restaurer — jamais d'un clic
+
+La base est **partagée** entre le poste de développement et la production : restaurer écrase
+tout, pour tout le monde. On ne le fait que sur décision explicite, et toujours dans cet ordre :
+
+1. **Vérifier la copie** sans rien toucher :
+   `pg_restore --list <fichier>.dump | grep -c "TABLE DATA"` (attendu : environ 168).
+2. **Restaurer d'abord ailleurs** : un projet Supabase vide de test, jamais directement la
+   production. `pg_restore --no-owner --no-privileges --dbname="<url du projet de test>" <fichier>.dump`
+3. Si seule une partie est perdue (une école, une table), **copier ces lignes** depuis la base de
+   test vers la production, plutôt que de tout écraser.
+4. Restauration complète de la production (dernier recours) : arrêter `geschool` et
+   `geschool-worker` (PM2), faire une copie de l'état actuel, puis
+   `pg_restore --clean --if-exists --no-owner --no-privileges --dbname="$DATABASE_URL" <fichier>.dump`,
+   relancer les deux programmes, vérifier la page Technique.

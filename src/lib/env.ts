@@ -94,6 +94,15 @@ const serverSchema = z.object({
   // Letexto ne sait pas rappeler localhost.
   SMS_DLR_URL: z.string().default(''),
 
+  // Envoi d'e-mails (alertes de la page Technique, 0154). Vide = e-mail non
+  // branché. Gmail : smtp.gmail.com, port 465, et un « mot de passe
+  // d'application » (16 lettres) — jamais le mot de passe du compte.
+  SMTP_HOST: z.string().default(''),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(465),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASSWORD: z.string().default(''),
+  SMTP_FROM: z.string().default(''),
+
   CHROMIUM_EXECUTABLE_PATH: z.string().default(''),
   PDF_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(4).default(1),
 

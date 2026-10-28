@@ -43,4 +43,24 @@ export async function registerNode(): Promise<void> {
 
   const { Agent, setGlobalDispatcher } = await import('undici');
   setGlobalDispatcher(new Agent({ connect: { timeout: 2_500, ecdhCurve: 'X25519:prime256v1:secp384r1' } }));
+
+  watchTheWorker();
+}
+
+/**
+ * Le site web garde le worker (page Technique, lot B, 0154) : le worker vérifie
+ * tout après chaque relevé, sauf sa propre panne. Toutes les 10 min, le site
+ * regarde donc si un relevé récent existe, et alerte sinon. Sur le VPS
+ * seulement (la base est partagée avec le poste de développement).
+ */
+function watchTheWorker(): void {
+  const g = globalThis as { __geschoolWorkerWatch?: boolean };
+  if (g.__geschoolWorkerWatch || process.env.NODE_ENV !== 'production' || process.platform !== 'linux') return;
+  g.__geschoolWorkerWatch = true;
+  const timer = setInterval(() => {
+    import('./services/platform-alerts')
+      .then(({ watchWorker }) => watchWorker())
+      .catch((e: unknown) => console.error('[alertes] surveillance du worker impossible', e));
+  }, 10 * 60_000);
+  timer.unref();
 }
