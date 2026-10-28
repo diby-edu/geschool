@@ -76,6 +76,8 @@ export default async function SchoolAppLayout({
   }
   // Messages « importants » de la plateforme, jusqu'à « J'ai compris » (lot 5).
   const banners = await platformBanners(ctx).catch(() => []);
+  // Remise d'une sauvegarde en cours (0156) : tout le monde doit le savoir, et ne rien saisir.
+  const restoring = await import('@/services/school-backup').then((m) => m.restoreRunning(ctx.school.id)).catch(() => false);
   const inGrace = ctx.billing?.situation === 'EXPIRED' && !ctx.billing.blocked && isDirection && !ctx.isPlatformAdmin;
 
   const spaces = availableSpaces(ctx);
@@ -128,6 +130,11 @@ export default async function SchoolAppLayout({
       {banners.map((b) => (
         <PlatformBanner key={b.id} slug={slug} banner={b} />
       ))}
+      {restoring ? (
+        <div className="mb-4 rounded-xl border px-4 py-3 text-sm font-semibold" style={{ borderColor: 'var(--color-warning)', background: 'color-mix(in srgb, var(--color-warning) 12%, transparent)' }}>
+          Remise d’une sauvegarde en cours — merci de ne rien saisir pendant quelques minutes. Ce que vous enregistreriez maintenant pourrait être remplacé.
+        </div>
+      ) : null}
       {children}
     </AppShell>
   );

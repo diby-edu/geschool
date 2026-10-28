@@ -400,7 +400,8 @@ supprimée ; c'est `DATABASE_URL` seule qui compte.
 L'offre Supabase gratuite ne fournit aucune sauvegarde téléchargeable. Depuis la migration
 0153, le worker copie **toute la base chaque nuit à 2 h** avec `pg_dump` (format « custom »,
 compressé, `nice -n 10`) dans `/var/www/geschool/backups/geschool-AAAAMMJJ-HHMM.dump`, hors
-des releases. Les **7 dernières** sont gardées. Le compte rendu (durée, taille, échec) est dans
+des releases. Sont gardées : les **7 dernières nuits**, plus la plus récente de chacune des
+**4 dernières semaines** et des **6 derniers mois** (17 copies au plus, `src/lib/backup-retention.ts`). Le compte rendu (durée, taille, échec) est dans
 `platform_backups` et sur la page Super Admin → Technique → Base et sauvegardes, d'où chaque
 copie se télécharge.
 

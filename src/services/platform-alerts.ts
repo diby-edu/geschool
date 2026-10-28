@@ -263,3 +263,11 @@ export async function sendTestAlert(): Promise<{ sms: string; email: string }> {
   }
   return { sms, email };
 }
+
+/** Une école remet une sauvegarde (0156) : le Super Admin est prévenu sur ses canaux d'alerte. */
+export async function notifyPlatformOfRestore(school: string, by: string, what: string): Promise<void> {
+  if (process.platform !== 'linux') return; // seul le VPS envoie (base partagée avec le poste)
+  const s = await readAlertSettings();
+  const text = `[${SHORT}] Remise de sauvegarde lancée : ${school}, par ${by} (${what}).`;
+  await dispatch(s, { urgent: false }, `[${SHORT}] Remise de sauvegarde : ${school}`, text.slice(0, 300), new Date());
+}

@@ -78,6 +78,11 @@ const nextConfig: NextConfig = {
   experimental: {
     // Server Actions : plafond aligne sur UPLOAD_MAX_SIZE_MB
     serverActions: { bodySizeLimit: '10mb' },
+    // Le filtre des requêtes (src/proxy.ts) garde une copie du corps et la coupe
+    // à 10 Mo par défaut : un fichier de sauvegarde d'école (72 Mo pour une grande
+    // école) arrivait tronqué, donc « illisible » (constaté le 28/10/2026). La
+    // vraie limite reste celle de nginx : 15 Mo partout, sauf l'envoi d'une sauvegarde.
+    proxyClientMaxBodySize: '500mb',
   },
 
   images: {

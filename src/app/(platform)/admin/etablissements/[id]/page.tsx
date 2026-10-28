@@ -259,6 +259,16 @@ export default async function PlatformSchoolPage({
             </a>
           </Card>
           <Card>
+            <BlocHead title="Sauvegardes complètes" sub="Toutes les données, signées, à remettre si un problème arrive" />
+            <p className="mt-3 text-sm text-[color:var(--muted-foreground)]">
+              Le ZIP sert à lire ou à rendre les données ; la sauvegarde sert à les remettre (tout, ou par catégories : notes, présences, paramètres…). La page s’ouvre dans
+              l’espace de l’école, comme pour le support : votre passage est noté dans son journal.
+            </p>
+            <Link href={`/e/${school.slug}/sauvegardes`} className="mt-3 inline-block">
+              <Button variant="secondary">Ouvrir les sauvegardes de l’école</Button>
+            </Link>
+          </Card>
+          <Card>
             <BlocHead title="État de l’école" sub="Suspendre ou archiver — jamais de suppression définitive" />
             {sp.statut ? <div className="mt-3"><Alert tone="success">État mis à jour.</Alert></div> : null}
             <p className="mt-3 text-sm text-[color:var(--muted-foreground)]">

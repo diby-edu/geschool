@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sauvegardes de l'école</title>
+<style>
+  :root { --brand:#4a44e0; --ink:#141433; --muted:#6b6b8a; --page:#f4f4fb; --card:#fff; --line:#e4e4f0; --ok:#0a7d55; --warn:#d98a00; --bad:#c8245a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--ink); font:14px/1.5 -apple-system,"Segoe UI",Roboto,system-ui,sans-serif; }
+  .wrap { max-width:1080px; margin:0 auto; padding:24px 16px 80px; }
+  h1 { font-size:24px; margin:0 0 4px; } .sub { color:var(--muted); margin:0 0 14px; max-width:90ch; }
+  .note { font-size:12.5px; color:var(--muted); background:#fff; border:1px dashed #c9c9df; border-radius:10px; padding:8px 12px; margin:0 0 18px; }
+  .hero { border-radius:16px; padding:16px 18px; color:#fff; background:linear-gradient(115deg,#0e7490,#0a7d55); }
+  .hero h2 { margin:0; font-size:22px; } .hero .s { font-size:13px; opacity:.92; }
+  .sect { margin:28px 0 10px; font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--brand); border-bottom:2px solid var(--brand); padding-bottom:4px; }
+  .grid { display:grid; gap:12px; } .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  @media (max-width:760px){ .g2{grid-template-columns:1fr} }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; min-width:0; }
+  .ct { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap } .ct h3 { margin:0; font-size:15px; }
+  .muted { color:var(--muted); font-size:12px; }
+  .btn { display:inline-block; font-size:13px; font-weight:700; border-radius:9px; padding:7px 13px; border:1px solid var(--line); background:#fff; color:var(--ink); }
+  .btn.p { background:var(--brand); color:#fff; border-color:var(--brand); } .btn.d { background:var(--bad); color:#fff; border-color:var(--bad); }
+  .opt { border:1px solid var(--line); border-radius:10px; padding:9px 11px; margin:6px 0; display:flex; gap:8px; align-items:flex-start; }
+  .opt.on { border-color:var(--brand); background:#f1f0ff; }
+  .field { border:1px solid var(--line); border-radius:9px; padding:6px 10px; font-size:13px; background:#fafaff; display:inline-block; }
+  table { width:100%; border-collapse:collapse; font-size:13px; } th { text-align:left; font-size:11px; color:var(--muted); font-weight:700; padding:6px; border-bottom:1px solid var(--line); } td { padding:7px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  .pill { font-size:11px; font-weight:700; border-radius:99px; padding:1px 9px; white-space:nowrap; } .ok{background:#e3f5ee;color:var(--ok)} .warn{background:#fff3dc;color:#9a6200} .grey{background:#eeeef6;color:var(--muted)} .blue{background:#e6f4f8;color:#0e7490}
+  .drop { border:2px dashed #c9c9df; border-radius:12px; padding:18px; text-align:center; color:var(--muted); }
+  .alert { border-radius:12px; padding:10px 12px; font-size:13px; } .a-bad { background:#fde6ee; border:1px solid #f5bccf; } .a-ok { background:#e3f5ee; border:1px solid #b5e3cf; } .a-warn { background:#fff3dc; border:1px solid #f3d79a; }
+  ul { margin:4px 0; padding-left:18px; } li { margin:2px 0; }
+  .chk { display:flex; gap:8px; align-items:center; font-size:13px; padding:3px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Sauvegardes de l’école — maquette</h1>
+  <p class="sub">Une nouvelle page dans l’espace de l’école : <b>Paramètres → Sauvegardes</b>. Exemple avec un grand lycée. Trois écrans : la page, la remise d’une sauvegarde (confirmation), et ce que voit le Super Admin.</p>
+  <p class="note">Deux droits à cocher dans les fonctions : <b>« Sauvegarder et télécharger »</b> (par défaut : Fondateur, Informaticien) et <b>« Remettre une sauvegarde »</b> (par défaut : Fondateur seulement).</p>
+
+  <!-- ============ ÉCRAN 1 ============ -->
+  <div class="sect">Écran 1 · La page Sauvegardes</div>
+  <div class="hero"><h2>Sauvegardes</h2><div class="s">Une copie de toutes les données de l’école, à garder ou à remettre si un problème arrive.</div></div>
+
+  <div class="grid g2" style="margin-top:12px">
+    <div class="card"><div class="ct"><h3>Faire une sauvegarde</h3></div>
+      <div class="opt on">◉ <span><b>Toute l’école</b><br><span class="muted">Toutes les années, toutes les données.</span></span></div>
+      <div class="opt">○ <span><b>Une année scolaire</b> <span class="field">2025-2026 ▾</span><br><span class="muted">Seulement ce qui appartient à cette année : classes, inscriptions, emplois du temps, notes, présences, bulletins…</span></span></div>
+      <div style="margin-top:10px"><span class="btn p">Faire la sauvegarde</span></div>
+      <p class="muted" style="margin-top:8px">Elle se prépare en arrière-plan (environ 1 à 3 minutes pour un grand lycée) et apparaît dans la liste. Vous pouvez continuer à travailler.</p>
+    </div>
+    <div class="card"><div class="ct"><h3>Sauvegardes automatiques</h3><span class="pill ok">Active</span></div>
+      <div class="chk">☑ À la <b>clôture de chaque année scolaire</b>, une sauvegarde de l’année est faite toute seule et gardée.</div>
+      <p class="muted">Elle reste disponible même quand l’année est terminée, pour l’archive.</p>
+      <div class="ct" style="margin-top:12px"><h3>Ce que contient une sauvegarde</h3></div>
+      <ul class="muted">
+        <li><b>Tout</b> : élèves, parents, personnel, enseignants, classes, matières, programme, salles, emplois du temps, notes, présences, bulletins, discipline, annonces, <b>paramètres de l’école</b> (identité, logo, réglages de chaque module, modèles, barèmes), fonctions et droits, journal.</li>
+        <li><b>Sauf</b> les mots de passe (les comptes de connexion restent tels qu’ils sont) et l’abonnement / les paiements (gérés par la plateforme).</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px"><div class="ct"><h3>Les sauvegardes de l’école</h3><span class="muted">gardées sur le serveur : les 10 dernières faites à la main + toutes celles de fin d’année</span></div>
+    <table><thead><tr><th>Quand</th><th>Contenu</th><th>Faite par</th><th>Taille</th><th></th></tr></thead><tbody>
+      <tr><td>28/10 09:14</td><td>Toute l’école</td><td>KOUASSI Jean (Fondateur)</td><td>21 Mo</td><td style="text-align:right"><span class="btn">Télécharger</span> <span class="btn">Remettre</span></td></tr>
+      <tr><td>28/10 09:10</td><td>Année 2025-2026</td><td>—</td><td>—</td><td style="text-align:right"><span class="pill blue">en préparation…</span></td></tr>
+      <tr><td>31/07 18:02</td><td>Année 2024-2025</td><td><span class="pill grey">automatique · clôture</span></td><td>17 Mo</td><td style="text-align:right"><span class="btn">Télécharger</span> <span class="btn">Remettre</span></td></tr>
+    </tbody></table>
+    <p class="muted" style="margin-top:8px">Conseil : téléchargez de temps en temps une sauvegarde et gardez-la sur votre ordinateur ou une clé USB.</p>
+  </div>
+
+  <div class="card" style="margin-top:12px"><div class="ct"><h3>Remettre une sauvegarde depuis un fichier</h3><span class="muted">droit « Remettre une sauvegarde »</span></div>
+    <div class="drop">Glissez ici un fichier <b>.gsbak</b> téléchargé depuis cette page, ou <span style="color:var(--brand);font-weight:700">choisissez-le</span></div>
+    <p class="muted" style="margin-top:8px">L’application vérifie que le fichier <b>vient bien de votre école</b> et qu’il <b>n’a pas été modifié</b> (signature). Un fichier retouché, ou d’une autre école, est refusé.</p>
+  </div>
+
+  <!-- ============ ÉCRAN 2 ============ -->
+  <div class="sect">Écran 2 · Remettre une sauvegarde : choisir quoi remettre</div>
+  <div class="card">
+    <div class="ct"><h3>Remettre la sauvegarde du 28/10 à 09:14 — Toute l’école</h3></div>
+    <div class="opt">○ <span><b>Tout remettre</b><br><span class="muted">L’école revient exactement comme le 28/10 à 09:14. Tout ce qui a été fait depuis est perdu pour elle.</span></span></div>
+    <div class="opt on">◉ <span><b>Choisir les catégories</b><br><span class="muted">Le reste de l’école ne bouge pas.</span></span></div>
+
+    <div class="grid g2" style="margin-top:10px">
+      <div>
+        <p style="margin:4px 0"><b>Données du quotidien</b> <span class="pill warn">remplacées</span></p>
+        <p class="muted" style="margin:0 0 4px">Celles d’aujourd’hui sont remplacées par celles de la sauvegarde.</p>
+        <table><tbody>
+          <tr><td>☑ <b>Notes</b> <span class="muted">(avec les évaluations)</span></td><td>dans la sauvegarde : 542 310</td><td>aujourd’hui : 541 070</td></tr>
+          <tr><td>☐ Présences et absences <span class="muted">(avec les justificatifs)</span></td><td>210 455</td><td>212 980</td></tr>
+          <tr><td>☐ Emplois du temps <span class="muted">(et les cours datés)</span></td><td>1 840 cours</td><td>1 840</td></tr>
+          <tr><td>☐ Bulletins et conseils de classe</td><td>3 690</td><td>3 690</td></tr>
+          <tr><td>☐ Discipline <span class="muted">(incidents, sanctions)</span></td><td>212</td><td>215</td></tr>
+          <tr><td>☐ Annonces et documents</td><td>46</td><td>47</td></tr>
+          <tr><td>☐ <b>Paramètres de l’école</b> <span class="muted">(identité, logo, réglages de chaque module, modèles de bulletin, barèmes, types d’évaluation, d’incidents, de sanctions)</span></td><td colspan="2">3 réglages diffèrent d’aujourd’hui : barème, seuil d’alerte d’absence, logo</td></tr>
+        </tbody></table>
+      </div>
+      <div>
+        <p style="margin:4px 0"><b>Données de base</b> <span class="pill ok">ajout seulement</span></p>
+        <p class="muted" style="margin:0 0 4px">On recrée ce qui a été supprimé ; rien de ce qui existe n’est effacé ni modifié.</p>
+        <table><tbody>
+          <tr><td>☐ Élèves et parents <span class="muted">(inscriptions, groupes)</span></td><td>2 élèves à recréer</td></tr>
+          <tr><td>☐ Enseignants et personnel</td><td>rien à recréer</td></tr>
+          <tr><td>☐ Années, classes et niveaux</td><td>rien à recréer</td></tr>
+          <tr><td>☐ Matières et programme</td><td>1 matière à recréer</td></tr>
+          <tr><td>☐ Salles</td><td>rien à recréer</td></tr>
+          <tr><td>☐ Fonctions et droits <span class="muted">(fonctions supprimées recréées, cases remises comme dans la sauvegarde)</span></td><td>droits de 2 fonctions à remettre</td></tr>
+        </tbody></table>
+      </div>
+    </div>
+
+    <div class="alert a-warn" style="margin-top:12px"><b>Avant de remettre, l’application vérifie les liens :</b> « Notes : 542 310 seront remises. 120 ne peuvent pas l’être car leur élève a été supprimé depuis — cochez aussi “Élèves et parents” pour les récupérer. »</div>
+
+    <div class="grid g2" style="margin-top:10px">
+      <div>
+        <div class="chk">✓ Une sauvegarde de l’état actuel est faite d’abord, toute seule.</div>
+        <div class="chk">✓ Les comptes de connexion et les mots de passe restent tels quels.</div>
+        <div class="chk">✓ L’abonnement, les paiements et les SMS ne changent pas.</div>
+      </div>
+      <div>
+        <p style="margin:0 0 4px"><b>Pour confirmer, tapez le nom de l’école :</b></p>
+        <span class="field" style="width:100%">LYCÉE EXEMPLE DE COCODY</span>
+        <div style="margin-top:10px"><span class="btn d">Remettre les notes</span> <span class="btn">Annuler</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="alert a-warn" style="margin-top:10px">Pendant la remise (quelques minutes), l’école voit un bandeau « Remise d’une sauvegarde en cours — merci de ne rien saisir ». À la fin : « Remis : 542 310 notes » (ou la liste de ce qui n’a pas pu l’être), et le Super Admin est prévenu.</div>
+
+  <p class="note" style="margin-top:10px"><b>Jamais remis :</b> l’adresse de l’espace et le code école (les changer casserait les connexions et les liens déjà donnés), le statut de l’école et les modules activés (liés à l’abonnement). <b>Toujours à part :</b> le journal des actions, les notifications, les accès et identifiants envoyés, l’abonnement, les paiements et les SMS. Ils racontent ce qui s’est réellement passé : une remise ne les efface jamais.</p>
+
+  <!-- ============ ÉCRAN 3 ============ -->
+  <div class="sect">Écran 3 · Côté Super Admin (fiche école, nouvel onglet « Sauvegardes »)</div>
+  <div class="card">
+    <div class="ct"><h3>Sauvegardes de l’école</h3><span class="btn">Faire une sauvegarde</span></div>
+    <p class="muted">La même liste que l’école, avec les mêmes boutons, et l’historique des remises.</p>
+    <table><thead><tr><th>Quand</th><th>Action</th><th>Par</th><th>Résultat</th></tr></thead><tbody>
+      <tr><td>28/10 10:02</td><td>Sauvegarde du 28/10 09:14 : notes remises</td><td>KOUASSI Jean (Fondateur)</td><td><span class="pill ok">réussie · 3 min</span></td></tr>
+    </tbody></table>
+  </div>
+
+  <p class="note" style="margin-top:22px"><b>Limites à connaître :</b> un compte supprimé entre-temps n’est pas recréé (les mots de passe ne sont jamais copiés) — la personne reçoit de nouveaux identifiants. Une sauvegarde faite avant une grosse mise à jour de l’application reste lisible : le fichier note sa version, l’application l’adapte ou refuse clairement.</p>
+</div>
+</body>
+</html>

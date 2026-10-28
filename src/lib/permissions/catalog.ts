@@ -372,6 +372,16 @@ export const PERMISSION_GROUPS: readonly PermissionGroup[] = [
         label: 'Régler les droits des fonctions et les attribuer',
         hint: 'On ne peut accorder ou attribuer que des droits qu’on possède soi-même.',
       },
+      {
+        code: 'backup.manage',
+        label: 'Sauvegarder les données de l’école et télécharger les sauvegardes',
+        hint: 'Toute l’école ou une année. La sauvegarde de l’année se fait aussi toute seule à sa clôture.',
+      },
+      {
+        code: 'backup.restore',
+        label: 'Remettre une sauvegarde',
+        hint: 'Remplace des données actuelles (tout, ou les catégories choisies) par celles d’une sauvegarde. Une copie de l’état actuel est faite avant.',
+      },
       { code: 'billing.view', label: 'Consulter l’abonnement' },
       { code: 'billing.manage', label: 'Gérer l’abonnement' },
     ],

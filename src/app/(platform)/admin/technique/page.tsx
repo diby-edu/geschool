@@ -419,7 +419,7 @@ function DatabaseTab({ s, srv, series }: { s: TechnicalStatus; srv: ServerStatus
       <Card>
         <BlocHead
           title="Sauvegardes"
-          sub="Copie complète chaque nuit à 2 h, sur le VPS · 7 dernières gardées"
+          sub="Copie complète chaque nuit à 2 h, sur le VPS · gardées : 7 dernières nuits, 4 semaines, 6 mois"
           right={srv ? <Pill tone={TONE[srv.lights.backup]}>{WORD[srv.lights.backup]}</Pill> : null}
         />
         {!srv ? null : (

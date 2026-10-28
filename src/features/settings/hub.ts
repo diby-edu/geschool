@@ -93,6 +93,13 @@ export const HUB: HubSection[] = [
         icon: FileSpreadsheet,
         any: ['rooms.create', 'classes.create', 'teachers.create', 'users.create', 'students.create', 'rooms.view', 'classes.view', 'teachers.view', 'users.view', 'students.export'],
       },
+      {
+        path: 'sauvegardes',
+        title: 'Sauvegardes',
+        description: 'Une copie de toutes les données de l’école, à garder ou à remettre si un problème arrive.',
+        icon: ShieldCheck,
+        any: ['backup.manage', 'backup.restore'],
+      },
     ],
   },
   {

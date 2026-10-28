@@ -209,7 +209,7 @@ export async function getServerStatus(): Promise<ServerStatus> {
       .from('platform_backups' as never)
       .select('id, started_at, finished_at, status, trigger, file_name, size_bytes, duration_ms, error')
       .order('started_at', { ascending: false })
-      .limit(14),
+      .limit(20),
     backupFilesOnDisk(),
   ]);
   const onDisk = new Set(files.map((f) => f.name));

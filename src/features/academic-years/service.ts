@@ -107,6 +107,16 @@ export async function closeYear(ctx: TenantContext, id: string): Promise<void> {
   if (error) throw error;
   if (!data) throw new NotFoundError('Année introuvable.');
   await audit(ctx, { action: 'academic_years.close', module: 'academic_years', entityType: 'academic_year', entityId: id });
+  // Sauvegarde automatique de l'année close, gardée pour l'archive (0156). Un
+  // souci ici ne doit pas empêcher la clôture : elle est déjà faite.
+  try {
+    const svc = await import('@/services/school-backup');
+    const backupId = await svc.createBackupRow({ schoolId: ctx.school.id, scope: 'YEAR', yearId: id, trigger: 'YEAR_CLOSE', userId: ctx.user.id });
+    const { enqueue } = await import('@/services/job-queue');
+    await enqueue({ name: 'school-backup', data: { id: backupId } });
+  } catch (e) {
+    console.error('[sauvegardes] sauvegarde de fin d’année impossible', e);
+  }
 }
 
 export async function reopenYear(ctx: TenantContext, id: string): Promise<void> {

@@ -148,6 +148,17 @@ async function enregistrerTaches(boss: PgBoss): Promise<void> {
     }
   });
 
+  // Sauvegardes des ecoles (0156) : demandees depuis le site, faites ici.
+  for (const name of ['school-backup', 'school-restore'] as const) {
+    await boss.createQueue(name);
+    await boss.work<{ id: string }>(name, async ([job]) => {
+      if (!job) return;
+      const { runJobNow } = await import('@/services/job-queue');
+      await runJobNow({ name, data: job.data });
+      console.warn(`[worker] ${name === 'school-backup' ? 'sauvegarde' : 'remise'} d'ecole ${job.data.id} terminee`);
+    });
+  }
+
   await boss.schedule(ABONNEMENTS, '5 0 * * *');
   await boss.schedule(SAUVEGARDE, '0 2 * * *');
   await boss.schedule(RELEVE, '*/5 * * * *');

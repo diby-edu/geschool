@@ -41,6 +41,7 @@ const WRITE_BY_FUNCTION: Record<string, string> = {
   previous_school_averages: 'set_previous_school_average (0114)',
   subject_exemptions: 'fonctions de dispense EPS (0110)',
   payment_receipts: 'app.issue_receipt (0102), lecture seule cote application',
+  school_backups: 'serveur (client d administration, services/school-backup.ts), 0156',
   // Ecritures partielles : l'application n'utilise que les operations couvertes.
   average_completions: 'insert/delete directs (completion.ts), jamais update',
   grade_change_requests: 'insert/update directs (corrections.ts), jamais delete',

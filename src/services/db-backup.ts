@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, readdir, stat, unlink } from 'node:fs/promises';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { serverEnv } from '@/lib/env';
+import { backupsToKeep } from '@/lib/backup-retention';
 
 /**
  * Sauvegarde de la base (page Technique, lot A, 0153).
@@ -13,13 +14,13 @@ import { serverEnv } from '@/lib/env';
  * L'offre Supabase gratuite ne fait aucune sauvegarde téléchargeable : une
  * donnée effacée par erreur serait perdue. On copie donc toute la base chaque
  * nuit avec `pg_dump` (format « custom », compressé), sur le VPS, hors du
- * dossier du site. On garde les 7 dernières copies.
+ * dossier du site. On garde les 7 dernières, plus une par semaine (4) et une
+ * par mois (6) : environ 6 mois d'historique (lib/backup-retention.ts).
  *
  * La restauration ne se fait JAMAIS d'un clic : la base est partagée entre le
  * poste local et la production. Elle suit une procédure écrite (docs/DEPLOYMENT.md).
  */
 
-export const KEEP_BACKUPS = 7;
 const PREFIX = 'geschool-';
 
 /** Sur le VPS : /var/www/geschool/backups. Ailleurs (poste de dev) : le dossier temporaire. */
@@ -56,10 +57,11 @@ function dump(url: string, file: string): Promise<void> {
   });
 }
 
-/** Garde les KEEP_BACKUPS plus récentes, efface les autres. */
+/** Garde les 7 dernières, une par semaine et une par mois ; efface les autres. */
 async function prune(dir: string): Promise<void> {
-  const files = (await readdir(dir)).filter(isBackupFileName).sort().reverse();
-  for (const f of files.slice(KEEP_BACKUPS)) await unlink(path.join(dir, f)).catch(() => undefined);
+  const files = (await readdir(dir)).filter(isBackupFileName);
+  const keep = backupsToKeep(files);
+  for (const f of files) if (!keep.has(f)) await unlink(path.join(dir, f)).catch(() => undefined);
 }
 
 /** Une sauvegarde déjà en cours (moins de 2 h) : on n'en lance pas une seconde. */
