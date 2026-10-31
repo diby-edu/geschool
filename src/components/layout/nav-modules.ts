@@ -1,6 +1,7 @@
 import {
   BadgeCheck,
   Bell,
+  CreditCard,
   CalendarDays,
   ClipboardCheck,
   FileText,
@@ -37,4 +38,5 @@ export const MODULE_ICON: Record<ModuleKey, LucideIcon> = {
   annonces: Megaphone,
   notifications: Bell,
   parametres: SlidersHorizontal,
+  abonnement: CreditCard,
 };

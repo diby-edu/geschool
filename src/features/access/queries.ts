@@ -1,9 +1,11 @@
 import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
+import { callRpc } from '@/lib/supabase/rpc';
 import type { TenantContext } from '@/lib/tenant/context';
 import type { ListParams } from '@/lib/query/list';
 import { personName } from '@/lib/person-name';
+import { lockedUserIds } from '@/services/account-unlock';
 
 /**
  * Statuts affiches dans « Gestion des acces ». Volontairement exclusifs : un
@@ -37,6 +39,8 @@ export type AccessRow = {
   account_status: string;
   delivery_count: number;
   has_pending: boolean;
+  /** Dernier envoi des identifiants : quand, par quel moyen, et s'il est arrivé. */
+  last_delivery: { at: string; channel: string; status: string } | null;
 };
 
 type Filterable<T> = {
@@ -120,11 +124,23 @@ async function countDeliveries(ctx: TenantContext, status: string): Promise<numb
   return count ?? 0;
 }
 
-/** Compteurs des tuiles et des pastilles, tous calcules pour le filtre en cours. */
+/**
+ * Compteurs des tuiles et des pastilles, tous calcules pour le filtre en cours.
+ * Une seule lecture (access_overview, 0159) au lieu de onze comptages ; les
+ * comptages separes ne servent plus que si la migration n'est pas appliquee.
+ */
 export async function getOverview(
   ctx: TenantContext,
   filters: Pick<AccessFilters, 'kind' | 'status'>,
 ): Promise<AccessOverview> {
+  const supabase = await createClient();
+  const grouped = await callRpc<AccessOverview>(supabase, 'access_overview', {
+    p_school: ctx.school.id,
+    p_kind: filters.kind ?? null,
+    p_status: filters.status ?? null,
+  });
+  if (grouped.data) return grouped.data;
+
   const [all, notActivated, activated, suspended, kAll, teachers, guardians, staff, pending, sent, failed] =
     await Promise.all([
       countAccess(ctx, filters.kind, undefined),
@@ -156,7 +172,7 @@ export async function listAccounts(
   ctx: TenantContext,
   filters: AccessFilters,
   page: Pick<ListParams, 'from' | 'to'>,
-): Promise<{ rows: AccessRow[]; total: number }> {
+): Promise<{ rows: AccessRow[]; total: number; locked: Set<string> }> {
   const supabase = await createClient();
   const terms = searchTerms(filters.q);
   // Une recherche par nom filtre sur la personne : jointure interne. Sinon,
@@ -185,7 +201,7 @@ export async function listAccounts(
         .select(`id, ${users}`, { count: 'exact', head: true })
         .eq('school_id', ctx.school.id);
       const { count: total } = await applySearch(applyStatus(applyKind(head, filters.kind), filters.status), terms);
-      return { rows: [], total: total ?? 0 };
+      return { rows: [], total: total ?? 0, locked: new Set() };
     }
     throw error;
   }
@@ -201,20 +217,30 @@ export async function listAccounts(
     users: { display_name: string | null; first_name: string; last_name: string } | null;
   }[];
 
-  // Envois en attente ou en echec, pour les seuls comptes de la page.
-  let pendingSet = new Set<string>();
-  if (rows.length > 0) {
-    const { data: pend } = await supabase
-      .from('credential_deliveries')
-      .select('user_id')
-      .eq('school_id', ctx.school.id)
-      .in('status', ['PENDING', 'FAILED'])
-      .in('user_id', rows.map((r) => r.user_id));
-    pendingSet = new Set((pend ?? []).map((p) => p.user_id));
-  }
+  // Envois en attente ou en echec, et comptes bloques apres 5 essais rates :
+  // pour les seuls comptes de la page, lus ensemble (et non l'un apres l'autre).
+  // Le dernier envoi de chacun sert aussi a la colonne « Identifiants envoyes ».
+  type Delivery = { user_id: string; status: string; channel: string; created_at: string; sent_at: string | null };
+  const [deliveries, locked] =
+    rows.length > 0
+      ? await Promise.all([
+          supabase
+            .from('credential_deliveries')
+            .select('user_id, status, channel, created_at, sent_at')
+            .eq('school_id', ctx.school.id)
+            .in('user_id', rows.map((r) => r.user_id))
+            .order('created_at', { ascending: false })
+            .then(({ data }) => (data ?? []) as Delivery[]),
+          lockedUserIds(ctx.school.id, rows),
+        ])
+      : [[] as Delivery[], new Set<string>()];
+  const pendingSet = new Set(deliveries.filter((d) => d.status === 'PENDING' || d.status === 'FAILED').map((d) => d.user_id));
+  const lastDelivery = new Map<string, Delivery>();
+  for (const d of deliveries) if (!lastDelivery.has(d.user_id)) lastDelivery.set(d.user_id, d);
 
   return {
     total: count ?? 0,
+    locked,
     rows: rows.map((r) => ({
       id: r.id,
       user_id: r.user_id,
@@ -225,6 +251,10 @@ export async function listAccounts(
       account_status: r.account_status,
       delivery_count: r.delivery_count,
       has_pending: pendingSet.has(r.user_id),
+      last_delivery: (() => {
+        const d = lastDelivery.get(r.user_id);
+        return d ? { at: d.sent_at ?? d.created_at, channel: d.channel, status: d.status } : null;
+      })(),
     })),
   };
 }

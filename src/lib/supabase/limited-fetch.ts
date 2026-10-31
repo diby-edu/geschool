@@ -23,6 +23,8 @@
  * bien relie au reseau qui sert beaucoup de monde peut monter le plafond et desactiver la relance.
  */
 
+import { splitLongIn } from './split-long-in';
+
 const DEFAULT_LIMIT = 8;
 const DEFAULT_RETRIES = 2;
 /**
@@ -171,16 +173,39 @@ export function createLimitedFetch(
 
 function configuredLimit(): number {
   const raw = Number(process.env.SUPABASE_MAX_CONCURRENT_REQUESTS);
-  return Number.isInteger(raw) && raw >= 1 ? raw : DEFAULT_LIMIT;
+  // Sur le VPS, bien relié : 8 à la fois faisait patienter le tableau de bord (≈ 25 lectures).
+  const serverDefault = process.env.NODE_ENV === 'production' && process.platform === 'linux' ? 24 : DEFAULT_LIMIT;
+  return Number.isInteger(raw) && raw >= 1 ? raw : serverDefault;
 }
 
 /** SUPABASE_HEDGE_AFTER_MS : delai avant relance d'une lecture sans reponse ; 0 la desactive. */
 function configuredHedge(): { hedgeAfterMs: number; hedges: number } {
   const raw = process.env.SUPABASE_HEDGE_AFTER_MS;
-  const ms = raw === undefined || raw === '' ? DEFAULT_HEDGE_AFTER_MS : Number(raw);
+  // Sur le VPS (production, Linux), la connexion à Supabase est stable : la relance
+  // ne servait qu'à doubler les lectures longues. Mesuré le 2026-10-28 : la page
+  // Présences (lecture de 1,7 s) mettait 11 s, lancée trois fois. Désactivée par
+  // défaut en production ; le poste de développement, lui, la garde.
+  const serverDefault = process.env.NODE_ENV === 'production' && process.platform === 'linux' ? 0 : DEFAULT_HEDGE_AFTER_MS;
+  const ms = raw === undefined || raw === '' ? serverDefault : Number(raw);
   if (!Number.isFinite(ms) || ms < 0) return { hedgeAfterMs: DEFAULT_HEDGE_AFTER_MS, hedges: DEFAULT_HEDGES };
   return ms === 0 ? { hedgeAfterMs: DEFAULT_HEDGE_AFTER_MS, hedges: 0 } : { hedgeAfterMs: ms, hedges: DEFAULT_HEDGES };
 }
+
+/**
+ * SUPABASE_TRACE=1 : chaque appel à Supabase est noté dans la console (début, durée, adresse), pour
+ * compter les allers-retours d'une page et voir lesquels s'enchaînent au lieu de partir ensemble.
+ */
+const traceOrigin = Date.now();
+const tracedFetch: typeof fetch = async (input, init) => {
+  const start = Date.now();
+  const url = String(input instanceof Request ? input.url : input);
+  const label = `${(init?.method ?? 'GET').toUpperCase()} ${decodeURIComponent(url.replace(/^https?:\/\/[^/]+/, '')).slice(0, 140)}`;
+  try {
+    return await fetch(input, init);
+  } finally {
+    console.warn(`[sb] +${start - traceOrigin}ms ${Date.now() - start}ms ${label}`);
+  }
+};
 
 /**
  * Une seule instance par processus : le plafond vaut pour l'ensemble des requetes en cours, meme si
@@ -189,7 +214,10 @@ function configuredHedge(): { hedgeAfterMs: number; hedges: number } {
 const SHARED_KEY = Symbol.for('geschool.supabase-fetch');
 const registry = globalThis as unknown as Record<symbol, typeof fetch | undefined>;
 
-export const supabaseFetch: typeof fetch = (registry[SHARED_KEY] ??= createLimitedFetch(
-  (input, init) => fetch(input, init),
-  { limit: configuredLimit(), ...configuredHedge() },
+// Les lectures à adresse trop longue sont découpées AVANT le plafond : chaque morceau y prend sa place.
+export const supabaseFetch: typeof fetch = (registry[SHARED_KEY] ??= splitLongIn(
+  createLimitedFetch(process.env.SUPABASE_TRACE === '1' ? tracedFetch : (input, init) => fetch(input, init), {
+    limit: configuredLimit(),
+    ...configuredHedge(),
+  }),
 ));

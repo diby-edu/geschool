@@ -78,7 +78,7 @@ export async function getSchoolSheet(id: string): Promise<SchoolSheet> {
     ),
     headCount(supabase.from('account_access').select('id', { count: 'exact', head: true }).eq('school_id', id).eq('subject_kind', 'STAFF')),
     supabase.from('payments').select('amount, currency, paid_at').eq('school_id', id).eq('status', 'PAID').gte('paid_at', yearStart).order('paid_at', { ascending: false }),
-    headCount(supabase.from('payments').select('id', { count: 'exact', head: true }).eq('school_id', id).eq('status', 'PENDING')),
+    headCount(supabase.from('payments').select('id', { count: 'exact', head: true }).eq('school_id', id).eq('status', 'PENDING').or('provider.is.null,provider.neq.paydunya')),
   ]);
   const paidRows = (paid.data ?? []) as { amount: number | string; currency: string | null; paid_at: string | null }[];
 

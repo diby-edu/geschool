@@ -63,8 +63,21 @@ export default async function SchoolAppLayout({
   const roleCodes = ctx.membership?.roles ?? [];
   const isDirection = hasPermission(ctx, 'billing.view') || roleCodes.includes('SCHOOL_ADMIN') || roleCodes.includes('DIRECTOR');
   if (ctx.billing?.blocked && !ctx.isPlatformAdmin) {
+    // Payer en ligne tout l'abonnement depuis la page de coupure (0157).
+    let online = null;
+    if (hasPermission(ctx, 'billing.manage')) {
+      const { readOnlineOffer, feeOf } = await import('@/services/online-payments');
+      const { readBilling } = await import('@/features/billing/subscription');
+      const { payModulesOnlineAction } = await import('@/features/billing/online-actions');
+      const [offer, billing] = await Promise.all([readOnlineOffer().catch(() => null), readBilling(ctx).catch(() => null)]);
+      const amount = billing?.modules.reduce((n, m) => n + (m.pricePaid ?? m.price), 0) ?? 0;
+      if (offer?.open && amount > 0) {
+        online = { action: payModulesOnlineAction.bind(null, slug, 'ALL'), amount, fee: feeOf(amount, offer.feePct), feePct: offer.feePct };
+      }
+    }
     return (
       <BillingBlockedPage
+        online={online}
         schoolName={ctx.school.name}
         endsOn={ctx.billing.endsOn}
         isDirection={isDirection}

@@ -30,7 +30,9 @@ export async function listOccurrences(ctx: TenantContext, date: string, classId?
   const { data, error } = await supabase
     .from('session_occurrences')
     .select(
-      'id, occurs_on, starts_at, ends_at, ' +
+      // L'appel vient AVEC la séance : une seconde requête « in (480 identifiants) »
+      // dépassait la taille d'adresse admise et la page attendait 10 s pour rien.
+      'id, occurs_on, starts_at, ends_at, attendance_registers(id, status), ' +
         'schedule_sessions(subject_id, subjects(name), ' +
         `${TARGETS_SELECT}, ` +
         'schedule_session_teachers(teachers(first_name, last_name)))',
@@ -46,6 +48,7 @@ export async function listOccurrences(ctx: TenantContext, date: string, classId?
     occurs_on: string;
     starts_at: string;
     ends_at: string;
+    attendance_registers: { id: string; status: string } | null;
     schedule_sessions: {
       subjects: { name: string } | null;
       schedule_session_targets: SessionTarget[];
@@ -64,27 +67,12 @@ export async function listOccurrences(ctx: TenantContext, date: string, classId?
       class_id: audience.classIds[0] ?? null,
       class_ids: audience.classIds,
       teacher: t ? `${t.last_name.toUpperCase()} ${t.first_name}` : null,
-      register_id: null as string | null,
-      register_status: null as string | null,
+      register_id: o.attendance_registers?.id ?? null,
+      register_status: o.attendance_registers?.status ?? null,
     };
   });
 
   if (classId) rows = rows.filter((r) => r.class_ids.includes(classId));
-
-  // État des appels de ces occurrences.
-  const ids = rows.map((r) => r.id);
-  if (ids.length > 0) {
-    const { data: regs } = await supabase
-      .from('attendance_registers')
-      .select('id, session_occurrence_id, status')
-      .eq('school_id', ctx.school.id)
-      .in('session_occurrence_id', ids);
-    const byOcc = new Map((regs ?? []).map((r) => [r.session_occurrence_id, r]));
-    rows = rows.map((r) => {
-      const reg = byOcc.get(r.id);
-      return reg ? { ...r, register_id: reg.id, register_status: reg.status } : r;
-    });
-  }
 
   return rows;
 }

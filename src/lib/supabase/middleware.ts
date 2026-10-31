@@ -19,7 +19,8 @@ import type { Database } from '@/types/database';
  */
 
 // Prefixes accessibles sans session
-const PUBLIC_PREFIXES = ['/login', '/first-login', '/mot-de-passe-oublie', '/api/health', '/auth', '/hors-ligne', '/inscription'];
+// /api/paiements/ipn : PayDunya appelle sans session ; la route vérifie elle-même l'origine (0157).
+const PUBLIC_PREFIXES = ['/login', '/first-login', '/mot-de-passe-oublie', '/api/health', '/api/paiements/ipn', '/auth', '/hors-ligne', '/inscription'];
 
 function isPublicPath(pathname: string): boolean {
   // La racine est la vitrine publique (marketing) : elle-meme decide, cote

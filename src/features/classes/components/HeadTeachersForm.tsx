@@ -26,6 +26,12 @@ export function HeadTeachersForm({
     Object.fromEntries(rows.map((r) => [r.classId, r.currentId ?? ''])),
   );
   const nameOf = useMemo(() => new Map(teachers.map((t) => [t.id, t.name])), [teachers]);
+  // Filtres d'affichage : les lignes masquées restent dans le formulaire et sont
+  // enregistrées comme les autres.
+  const levels = useMemo(() => [...new Set(rows.map((r) => r.level).filter((l): l is string => Boolean(l)))], [rows]);
+  const [level, setLevel] = useState('');
+  const [onlyEmpty, setOnlyEmpty] = useState(false);
+  const visible = (r: HeadTeacherRow) => (!level || r.level === level) && (!onlyEmpty || !values[r.classId]);
   const empty = rows.filter((r) => !values[r.classId]).length;
   const withSuggestion = rows.filter((r) => !values[r.classId] && r.suggestionId).length;
 
@@ -57,6 +63,29 @@ export function HeadTeachersForm({
         ) : null}
       </div>
 
+      <div className="flex flex-wrap items-end gap-2 rounded-2xl border px-3 py-2.5" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)' }}>
+        <label className="flex min-w-[9rem] flex-col gap-1 text-xs text-[color:var(--muted-foreground)]">
+          Niveau
+          <select
+            value={level}
+            onChange={(e) => setLevel(e.target.value)}
+            className="h-9 rounded-xl border bg-[color:var(--surface)] px-2.5 text-sm text-[color:var(--foreground)]"
+            style={{ borderColor: 'var(--border)' }}
+          >
+            <option value="">Tous les niveaux</option>
+            {levels.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex h-9 cursor-pointer items-center gap-1.5 self-end text-sm">
+          <input type="checkbox" checked={onlyEmpty} onChange={(e) => setOnlyEmpty(e.target.checked)} className="size-4" />
+          Seulement les classes sans professeur principal
+        </label>
+      </div>
+
       <div className="overflow-x-auto rounded-[--radius-card] border" style={{ borderColor: 'var(--border)' }}>
         <table className="w-full text-sm">
           <thead className="bg-[color:var(--muted)] text-left text-xs uppercase tracking-wide text-[color:var(--muted-foreground)]">
@@ -71,7 +100,7 @@ export function HeadTeachersForm({
               const v = values[r.classId] ?? '';
               const inClass = new Set(r.classTeacherIds);
               return (
-                <tr key={r.classId} className="border-t">
+                <tr key={r.classId} className="border-t" hidden={!visible(r)}>
                   <td className="px-3 py-1.5 font-medium">
                     {r.className}
                     {r.level ? <span className="ml-1 text-xs text-[color:var(--muted-foreground)]">{r.level}</span> : null}

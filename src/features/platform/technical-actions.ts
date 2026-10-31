@@ -15,6 +15,7 @@ const TAB_OF: Record<TaskName, string> = {
   'attendance-alerts': 'taches',
   'sms-delivery-reports': 'taches',
   'platform-metrics': 'serveur',
+  'online-payments-check': 'taches',
 };
 
 /**
@@ -42,6 +43,10 @@ async function runTask(task: TaskName, userId: string): Promise<string> {
       void runBackup('MANUAL');
       result = 'sauvegarde lancée, elle prend quelques minutes';
     }
+  } else if (task === 'online-payments-check') {
+    const { recheckPendingPayments } = await import('@/services/online-payments');
+    const r = await recheckPendingPayments();
+    result = `${r.checked} paiement(s) vérifié(s) : ${r.paid} confirmé(s), ${r.closed} clos`;
   } else if (task === 'platform-metrics') {
     const { recordSnapshot, canRecordHere } = await import('@/services/platform-metrics');
     const snap = await recordSnapshot();

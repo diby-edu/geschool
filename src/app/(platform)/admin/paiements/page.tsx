@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { listPayments } from '@/features/platform/admin';
-import { settlePaymentAction, savePaymentSettingsAction } from '@/features/billing/actions';
+import { settlePaymentAction, savePaymentSettingsAction, saveOnlineSettingsAction } from '@/features/billing/actions';
+import { OnlineSettingsForm } from '@/features/billing/components/OnlineSettingsForm';
 import { readPaymentSettingsForAdmin } from '@/features/billing/payment-settings';
 import { PaymentSettingsForm } from '@/features/billing/components/PaymentSettingsForm';
 import { Alert } from '@/components/ui/alert';
@@ -49,7 +50,10 @@ export default async function PlatformPaymentsPage({
     listPayments(all ? 'ALL' : 'PENDING'),
     readPaymentSettingsForAdmin(),
   ]);
-  const pending = payments.filter((p) => p.status === 'PENDING');
+  const pending = payments.filter((p) => p.status === 'PENDING' && !p.online);
+  const { readOnlineOffer } = await import('@/services/online-payments');
+  const { serverEnv } = await import('@/lib/env');
+  const offer = await readOnlineOffer();
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">
@@ -81,6 +85,20 @@ export default async function PlatformPaymentsPage({
         </CardContent>
       </Card>
 
+      <Card>
+        <CardContent className="space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold">Paiement en ligne (PayDunya)</h2>
+            <p className="text-sm text-[color:var(--muted-foreground)]">
+              {offer.open
+                ? `Ouvert — mode ${serverEnv().PAYDUNYA_MODE === 'live' ? 'production (argent réel)' : 'test (sans argent réel)'}. Les écoles paient leur abonnement et leurs SMS en ligne ; c’est confirmé tout seul.`
+                : 'Fermé : les clés PayDunya ne sont pas sur le serveur (scripts/paydunya-cles.ps1).'}
+            </p>
+          </div>
+          <OnlineSettingsForm action={saveOnlineSettingsAction} feePct={offer.feePct} packs={offer.smsPacks} />
+        </CardContent>
+      </Card>
+
       {payments.length === 0 ? (
         <EmptyState
           title={all ? 'Aucun paiement' : 'Aucun paiement en attente'}
@@ -100,12 +118,18 @@ export default async function PlatformPaymentsPage({
                       </Link>
                     </p>
                     <p className="text-xs text-[color:var(--muted-foreground)]">
-                      {METHOD_LABEL[p.method] ?? p.method}
+                      {p.purpose === 'SMS_PACK' ? `Pack de ${p.smsQuantity} SMS · ` : ''}
+                      {p.online ? `En ligne · PayDunya${p.fee ? ` (+ ${money(p.fee, p.currency)} de frais payés par l’école)` : ''}` : (METHOD_LABEL[p.method] ?? p.method)}
                       {p.reference ? ` · réf. ${p.reference}` : ''} ·{' '}
-                      {new Date(p.createdAt).toLocaleDateString('fr-FR')} · {STATUS_LABEL[p.status] ?? p.status}
+                      {new Date(p.createdAt).toLocaleDateString('fr-FR')} ·{' '}
+                      {p.online && p.status === 'PAID'
+                        ? 'confirmé automatiquement'
+                        : p.online && p.status === 'PENDING'
+                          ? 'en cours chez PayDunya (rien à confirmer)'
+                          : (STATUS_LABEL[p.status] ?? p.status)}
                     </p>
                   </div>
-                  {p.status === 'PENDING' ? (
+                  {p.status === 'PENDING' && !p.online ? (
                     <div className="flex shrink-0 gap-2">
                       <ConfirmSubmit
                         action={settlePaymentAction.bind(null, p.schoolId, p.id, 'PAID')}

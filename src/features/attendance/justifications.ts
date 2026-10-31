@@ -154,30 +154,25 @@ export async function decideJustification(
 async function markExcused(ctx: TenantContext, studentId: string, from: string, to: string): Promise<number> {
   const supabase = await createClient();
 
-  // Occurrences de la période -> registres correspondants.
-  const { data: occs } = await supabase
-    .from('session_occurrences')
-    .select('id')
+  // Les présences de CET élève sur la période (jointure sur le cours daté) :
+  // lister d'abord tous les cours de l'école dépassait la taille d'adresse admise.
+  const { data: recs } = await supabase
+    .from('attendance_records')
+    .select('id, attendance_registers!inner(session_occurrences!inner(occurs_on))')
     .eq('school_id', ctx.school.id)
-    .gte('occurs_on', from)
-    .lte('occurs_on', to);
-  const occIds = (occs ?? []).map((o) => o.id);
-  if (occIds.length === 0) return 0;
-
-  const { data: regs } = await supabase
-    .from('attendance_registers')
-    .select('id')
-    .eq('school_id', ctx.school.id)
-    .in('session_occurrence_id', occIds);
-  const regIds = (regs ?? []).map((r) => r.id);
-  if (regIds.length === 0) return 0;
+    .eq('student_id', studentId)
+    .in('status', ['ABSENT', 'LATE'])
+    .gte('attendance_registers.session_occurrences.occurs_on', from)
+    .lte('attendance_registers.session_occurrences.occurs_on', to);
+  const recIds = ((recs ?? []) as unknown as { id: string }[]).map((r) => r.id);
+  if (recIds.length === 0) return 0;
 
   const { data: updated, error } = await supabase
     .from('attendance_records')
     .update({ status: 'EXCUSED', minutes_late: 0 })
     .eq('school_id', ctx.school.id)
     .eq('student_id', studentId)
-    .in('register_id', regIds)
+    .in('id', recIds)
     .in('status', ['ABSENT', 'LATE'])
     .select('id');
   if (error) throw error;

@@ -54,7 +54,7 @@ export function statusLabel(s: string): string {
 export async function listAssessments(
   ctx: TenantContext,
   yearId: string,
-  filters: { periodId?: string; classId?: string; subjectId?: string; status?: AssessmentStatus } = {},
+  filters: { periodId?: string; levelId?: string; classId?: string; subjectId?: string; status?: AssessmentStatus } = {},
   range?: { from: number; to: number },
 ): Promise<{ rows: AssessmentRow[]; total: number }> {
   const supabase = await createClient();
@@ -62,7 +62,8 @@ export async function listAssessments(
     .from('assessments')
     .select(
       'id, title, assessment_date, max_score, coefficient, sequence_number, status, ' +
-        'subjects(name), classes(name), groups(name), assessment_types(name), academic_periods(name)',
+        // Filtre par niveau : la classe devient obligatoire (jointure interne) et porte le niveau.
+        `subjects(name), ${filters.levelId ? 'classes!inner(name, level_id)' : 'classes(name)'}, groups(name), assessment_types(name), academic_periods(name)`,
       { count: 'exact' },
     )
     .eq('school_id', ctx.school.id)
@@ -70,6 +71,7 @@ export async function listAssessments(
     .order('assessment_date', { ascending: false })
     .order('id');
   if (filters.periodId) query = query.eq('academic_period_id', filters.periodId);
+  if (filters.levelId) query = query.eq('classes.level_id', filters.levelId);
   if (filters.classId) query = query.eq('class_id', filters.classId);
   if (filters.subjectId) query = query.eq('subject_id', filters.subjectId);
   if (filters.status) query = query.eq('status', filters.status);
@@ -401,17 +403,18 @@ export async function transitionMany(ctx: TenantContext, ids: string[], action: 
 export async function assessmentIdsMatching(
   ctx: TenantContext,
   yearId: string,
-  filters: { periodId?: string; classId?: string; subjectId?: string; status?: AssessmentStatus },
+  filters: { periodId?: string; levelId?: string; classId?: string; subjectId?: string; status?: AssessmentStatus },
 ): Promise<string[]> {
   const supabase = await createClient();
   const rows = await fetchAllRows<{ id: string }>((cursor) => {
     let q = supabase
       .from('assessments')
-      .select('id')
+      .select(filters.levelId ? 'id, classes!inner(level_id)' : 'id')
       .eq('school_id', ctx.school.id)
       .eq('academic_year_id', yearId)
       .order('id') // curseur : tri total requis (cf. lib/supabase/pagination)
       .limit(500);
+    if (filters.levelId) q = q.eq('classes.level_id', filters.levelId);
     if (filters.periodId) q = q.eq('academic_period_id', filters.periodId);
     if (filters.classId) q = q.eq('class_id', filters.classId);
     if (filters.subjectId) q = q.eq('subject_id', filters.subjectId);

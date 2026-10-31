@@ -90,6 +90,98 @@ export async function listStudents(
   return { rows, total: count ?? 0 };
 }
 
+/** Une ligne de la liste des élèves (0161, maquette validée le 2026-10-30). */
+export type StudentListRow = {
+  id: string;
+  matricule: string;
+  first_name: string;
+  last_name: string;
+  gender: 'M' | 'F' | 'OTHER' | null;
+  is_state_assigned: boolean | null;
+  is_repeating: boolean;
+  /** Aucune inscription dans l'école une année précédente. */
+  is_new: boolean;
+  class_id: string | null;
+  class_name: string | null;
+  level_name: string | null;
+  level_seq: number;
+  /** Téléphone du parent à contacter, prêt à afficher ; null s'il n'y en a aucun. */
+  guardian_phone: string | null;
+};
+
+export type StudentListQuery = {
+  level?: string | undefined;
+  classId?: string | undefined;
+  assigned?: 'affecte' | 'non-affecte' | 'inconnu' | undefined;
+  situation?: 'redoublant' | 'nouveau' | undefined;
+  q?: string | undefined;
+  sort: 'classe' | 'nom' | 'matricule';
+  desc: boolean;
+  page: number;
+  pageSize: number;
+};
+
+/**
+ * Liste des élèves inscrits : filtrée, triée (par classe : niveau puis classe)
+ * et découpée en pages par la base, en une lecture (students_page, 0161).
+ * Avant la migration : `null`, la page reprend l'ancienne liste.
+ */
+export async function listStudentsPage(
+  ctx: TenantContext,
+  yearId: string,
+  q: StudentListQuery,
+): Promise<{ rows: StudentListRow[]; total: number } | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('students_page' as never, {
+    p_school: ctx.school.id,
+    p_year: yearId,
+    p_level: q.level || null,
+    p_class: q.classId || null,
+    p_assigned: q.assigned ?? null,
+    p_situation: q.situation ?? null,
+    p_q: q.q || null,
+    p_sort: q.sort,
+    p_desc: q.desc,
+    p_limit: q.pageSize,
+    p_offset: (q.page - 1) * q.pageSize,
+  } as never);
+  if (error) {
+    if (error.code === 'PGRST202' || error.code === '42883') return null;
+    throw error;
+  }
+  const res = data as unknown as { total: number; rows: StudentListRow[] };
+  return {
+    total: res.total,
+    rows: res.rows.map((r) => ({
+      ...r,
+      guardian_phone: r.guardian_phone ? formatPhoneForDisplay(r.guardian_phone, ctx.school.countryCode) : null,
+    })),
+  };
+}
+
+/** Niveaux et classes de l'année, dans l'ordre de l'école, pour les filtres. */
+export async function listClassFilterOptions(
+  ctx: TenantContext,
+  yearId: string,
+): Promise<{ levels: { id: string; name: string }[]; classes: { id: string; name: string; levelId: string }[] }> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('classes')
+    .select('id, name, level_id, levels(name, sequence)')
+    .eq('school_id', ctx.school.id)
+    .eq('academic_year_id', yearId)
+    .eq('status', 'ACTIVE');
+  const rows = ((data ?? []) as unknown as { id: string; name: string; level_id: string | null; levels: { name: string; sequence: number } | null }[]).sort(
+    (a, b) => (a.levels?.sequence ?? 999) - (b.levels?.sequence ?? 999) || a.name.localeCompare(b.name, 'fr', { numeric: true }),
+  );
+  const levels = new Map<string, string>();
+  for (const r of rows) if (r.level_id && r.levels) levels.set(r.level_id, r.levels.name);
+  return {
+    levels: [...levels].map(([id, name]) => ({ id, name })),
+    classes: rows.map((r) => ({ id: r.id, name: r.name, levelId: r.level_id ?? '' })),
+  };
+}
+
 export async function getStudentDetail(ctx: TenantContext, id: string) {
   const supabase = await createClient();
   const { data: student } = await supabase

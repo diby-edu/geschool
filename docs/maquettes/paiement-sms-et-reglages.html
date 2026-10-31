@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Acheter des SMS</title>
+<style>
+  :root { --brand:#4a44e0; --ink:#141433; --muted:#6b6b8a; --page:#f4f4fb; --card:#fff; --line:#e4e4f0; --ok:#0a7d55; --warn:#d98a00; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--ink); font:14px/1.5 -apple-system,"Segoe UI",Roboto,system-ui,sans-serif; }
+  .wrap { max-width:960px; margin:0 auto; padding:24px 16px 80px; }
+  h1 { font-size:24px; margin:0 0 4px; } .sub { color:var(--muted); margin:0 0 14px; }
+  .sect { margin:26px 0 10px; font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--brand); border-bottom:2px solid var(--brand); padding-bottom:4px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .muted { color:var(--muted); font-size:12.5px; }
+  .packs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:12px 0; } @media (max-width:640px){ .packs{grid-template-columns:1fr} }
+  .pack { border:1px solid var(--line); border-radius:12px; padding:12px; } .pack.on { border-color:var(--brand); background:#f1f0ff; }
+  .pack b { font-size:20px; display:block; }
+  .btn { display:inline-block; font-weight:700; border-radius:10px; padding:9px 15px; background:var(--brand); color:#fff; }
+  .row { display:flex; justify-content:space-between; padding:3px 0; } .tot { border-top:1px solid var(--line); font-weight:800; margin-top:4px; padding-top:6px; }
+  .bar { height:10px; border-radius:99px; background:#ececf5; overflow:hidden; margin:6px 0; } .bar i { display:block; height:100%; width:92%; background:var(--warn); }
+  table { width:100%; border-collapse:collapse; font-size:13px; } td,th { padding:6px; border-bottom:1px solid var(--line); text-align:left; } th { font-size:11px; color:var(--muted); }
+  .field { border:1px solid var(--line); border-radius:8px; padding:4px 9px; background:#fafaff; display:inline-block; min-width:70px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Acheter des SMS et réglages du paiement en ligne — maquette</h1>
+  <p class="sub">Complète la maquette « Paiement en ligne » : les deux écrans qui manquent.</p>
+
+  <div class="sect">Écran 1 · École : Paramètres → SMS</div>
+  <div class="card">
+    <b>SMS du mois</b>
+    <div class="bar"><i></i></div>
+    <div class="muted">920 / 1 000 SMS utilisés en octobre — il vous en reste 80.</div>
+    <hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
+    <b>Acheter des SMS</b>
+    <div class="packs">
+      <div class="pack"><b>500 SMS</b><span class="muted">7 500 F</span></div>
+      <div class="pack on"><b>1 000 SMS</b><span class="muted">15 000 F</span></div>
+      <div class="pack"><b>5 000 SMS</b><span class="muted">70 000 F</span></div>
+    </div>
+    <div style="max-width:320px">
+      <div class="row"><span>Pack de 1 000 SMS</span><span>15 000 F</span></div>
+      <div class="row muted"><span>Frais de paiement en ligne (3 %)</span><span>450 F</span></div>
+      <div class="row tot"><span>Total à payer</span><span>15 450 F</span></div>
+    </div>
+    <p style="margin:10px 0"><span class="btn">Payer 15 450 F en ligne</span></p>
+    <p class="muted">Les SMS sont ajoutés dès que le paiement est confirmé, avec un reçu.</p>
+  </div>
+
+  <div class="sect">Écran 2 · Super Admin : Paiements → réglages du paiement en ligne</div>
+  <div class="card">
+    <table>
+      <tr><td>Paiement en ligne (PayDunya)</td><td><b>ouvert — mode test</b> <span class="muted">(les clés sont sur le serveur)</span></td></tr>
+      <tr><td>Frais payés par l’école</td><td><span class="field">3</span> % <span class="muted">— ajoutés au montant, pour couvrir les frais de PayDunya</span></td></tr>
+    </table>
+    <p style="margin:14px 0 6px"><b>Packs de SMS proposés aux écoles</b></p>
+    <table>
+      <tr><th>Nombre de SMS</th><th>Prix</th><th>Prix par SMS</th><th></th></tr>
+      <tr><td><span class="field">500</span></td><td><span class="field">7 500</span> F</td><td>15 F</td><td class="muted">retirer</td></tr>
+      <tr><td><span class="field">1 000</span></td><td><span class="field">15 000</span> F</td><td>15 F</td><td class="muted">retirer</td></tr>
+      <tr><td><span class="field">5 000</span></td><td><span class="field">70 000</span> F</td><td>14 F</td><td class="muted">retirer</td></tr>
+      <tr><td colspan="4" class="muted">+ ajouter un pack</td></tr>
+    </table>
+  </div>
+</div>
+</body>
+</html>

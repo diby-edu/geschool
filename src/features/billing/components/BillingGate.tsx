@@ -6,6 +6,8 @@ import type { PaymentSettings } from '../payment-settings';
 import { createRequestAction } from '@/features/support/actions';
 import { TextForm } from '@/features/support/components/TextForm';
 import type { RequestThread } from '@/features/support/requests';
+import type { FormState } from '@/lib/forms';
+import { OnlinePayButton } from './OnlinePayButton';
 
 /**
  * Abonnement expiré (0143), décidé le 2026-10-25 :
@@ -38,6 +40,7 @@ export function BillingBlockedPage({
   payment,
   contact,
   support,
+  online,
 }: {
   schoolName: string;
   endsOn: string | null;
@@ -51,6 +54,8 @@ export function BillingBlockedPage({
   contact?: { slug: string; threads: RequestThread[] } | null;
   /** Coordonnées du support (Réglages de la plateforme, lot 6). */
   support?: { phone: string; email: string } | null;
+  /** Paiement en ligne de tout l'abonnement (PayDunya, 0157) : l'école se débloque seule. */
+  online?: { action: (p: FormState, fd: FormData) => Promise<FormState>; amount: number; fee: number; feePct: number } | null;
 }) {
   return (
     <main className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center gap-5 px-5 py-10">
@@ -66,6 +71,12 @@ export function BillingBlockedPage({
       {isDirection ? (
         <div className="space-y-3 rounded-2xl border p-5" style={{ backgroundColor: 'var(--surface)' }}>
           <h2 className="font-bold">Comment payer</h2>
+          {online ? (
+            <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-brand)' }}>
+              <p className="mb-2 text-sm font-semibold">Payer en ligne — l’accès revient dès que le paiement est confirmé</p>
+              <OnlinePayButton action={online.action} amount={online.amount} fee={online.fee} feePct={online.feePct} />
+            </div>
+          ) : null}
           {payment && (payment.mobileMoneyNumber || payment.instructions) ? (
             <div className="space-y-1.5 text-sm">
               {payment.mobileMoneyNumber ? (

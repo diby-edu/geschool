@@ -156,6 +156,11 @@ export type DeclaredPayment = {
   reference: string | null;
   status: string;
   createdAt: string;
+  /** Payé en ligne (PayDunya, 0157) : confirmé par PayDunya, jamais à la main. */
+  online: boolean;
+  purpose: string;
+  smsQuantity: number | null;
+  fee: number;
 };
 
 /** Les paiements déclarés par les écoles, en attente de confirmation (0058). */
@@ -164,7 +169,7 @@ export async function listPayments(status: 'PENDING' | 'ALL' = 'PENDING'): Promi
   const supabase = await createClient();
   let q = supabase
     .from('payments')
-    .select('id, school_id, amount, currency, method, provider_reference, status, created_at, schools(name)')
+    .select('id, school_id, amount, currency, method, provider, provider_reference, status, created_at, purpose, sms_quantity, fee_amount, schools(name)')
     .order('created_at', { ascending: false })
     .limit(200);
   if (status === 'PENDING') q = q.eq('status', 'PENDING');
@@ -176,11 +181,19 @@ export async function listPayments(status: 'PENDING' | 'ALL' = 'PENDING'): Promi
     amount: number;
     currency: string;
     method: string;
+    provider: string | null;
     provider_reference: string | null;
     status: string;
     created_at: string;
+    purpose: string | null;
+    sms_quantity: number | null;
+    fee_amount: number | null;
     schools: { name: string } | null;
   }[]).map((p) => ({
+    online: p.provider === 'paydunya',
+    purpose: p.purpose ?? 'SUBSCRIPTION',
+    smsQuantity: p.sms_quantity,
+    fee: Number(p.fee_amount ?? 0),
     id: p.id,
     schoolId: p.school_id,
     schoolName: p.schools?.name ?? '—',

@@ -13,6 +13,8 @@ import type { TenantContext } from '@/lib/tenant/context';
 
 export type SubscribedModule = {
   id: string;
+  /** Le module du catalogue (pour le payer en ligne). */
+  moduleId: string;
   code: string;
   name: string;
   description: string;
@@ -99,6 +101,7 @@ export async function readBilling(ctx: TenantContext, receiptLimit = 5): Promise
       const jours = daysUntil(l.ends_on);
       return {
         id: l.id,
+        moduleId: l.modules!.id,
         code: l.modules!.code,
         name: l.modules!.name,
         description: l.modules!.description,

@@ -4,7 +4,6 @@ import type { EducationTrack } from '@/features/structure/official-tracks';
 import { schoolTracks } from '@/features/structure/queries';
 
 import { createClient } from '@/lib/supabase/server';
-import { fetchAllRows } from '@/lib/supabase/pagination';
 import type { TenantContext } from '@/lib/tenant/context';
 import type { Space } from '@/lib/permissions/roles';
 import { myChildrenIds } from '@/features/family/children';
@@ -90,34 +89,27 @@ export async function loadClasses(
   schoolId: string,
   yearId: string,
 ): Promise<{ classes: ClassRow[]; enrolledByClass: Map<string, number> }> {
-  // Inscriptions lues en entier : une réponse PostgREST s'arrête à 1000 lignes, et un
-  // grand établissement les dépasse (effectifs par niveau faussés sans rien dire).
-  const [{ data: classData }, enrollData] = await Promise.all([
-    supabase
-      .from('classes')
-      .select('id, name, capacity, level_id, levels(name, sequence, cycles(sequence))')
-      .eq('school_id', schoolId)
-      .eq('academic_year_id', yearId)
-      .eq('status', 'ACTIVE'),
-    fetchAllRows<{ id: string; class_id: string }>((cursor) => {
-      let q = supabase
-        .from('student_enrollments')
-        .select('id, class_id')
-        .eq('school_id', schoolId)
-        .eq('academic_year_id', yearId)
-        .eq('status', 'ENROLLED')
-        .order('id')
-        .limit(1000);
-      if (cursor) q = q.gt('id', cursor);
-      return q;
-    }),
-  ]);
+  // Effectif de chaque classe compté par la base, dans la même lecture que les
+  // classes. Lire les inscriptions pour les compter ici prenait, sur 4 000 élèves,
+  // cinq paquets de 1 000 l'un après l'autre (0,6 s sur le tableau de bord).
+  const { data: classData } = await supabase
+    .from('classes')
+    .select('id, name, capacity, level_id, levels(name, sequence, cycles(sequence)), student_enrollments(count)')
+    .eq('school_id', schoolId)
+    .eq('academic_year_id', yearId)
+    .eq('status', 'ACTIVE')
+    .eq('student_enrollments.status', 'ENROLLED')
+    .eq('student_enrollments.academic_year_id', yearId);
 
-  const classes = ((classData ?? []) as unknown as ClassRow[]).sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
+  const rows = (classData ?? []) as unknown as (ClassRow & { student_enrollments: { count: number }[] | null })[];
   const enrolledByClass = new Map<string, number>();
-  for (const row of enrollData) {
-    enrolledByClass.set(row.class_id, (enrolledByClass.get(row.class_id) ?? 0) + 1);
+  for (const row of rows) {
+    const n = row.student_enrollments?.[0]?.count ?? 0;
+    if (n > 0) enrolledByClass.set(row.id, n);
   }
+  const classes: ClassRow[] = rows
+    .map(({ student_enrollments: _count, ...c }) => c)
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
   return { classes, enrolledByClass };
 }
 
@@ -332,29 +324,23 @@ async function loadTeacherStats(
     const sessionIds = ((sessionRows ?? []) as unknown as { session_id: string }[]).map((r) => r.session_id);
 
     if (sessionIds.length > 0) {
+      // L'appel vient avec chaque séance : un « in » sur toutes les séances de
+      // l'année dépassait la taille d'adresse admise (le compte restait à 0).
       const { data: occRows } = await supabase
         .from('session_occurrences')
-        .select('id, occurs_on')
+        .select('id, occurs_on, attendance_registers(status)')
         .in('schedule_session_id', sessionIds)
         .eq('status', 'SCHEDULED')
         .lte('occurs_on', today);
-      const occurrences = (occRows ?? []) as { id: string; occurs_on: string }[];
+      const occurrences = (occRows ?? []) as unknown as { id: string; occurs_on: string; attendance_registers: { status: string } | null }[];
       callsExpectedYear = occurrences.length;
       const periodStart = period.current?.starts_on ?? null;
       const periodOccurrences = periodStart ? occurrences.filter((o) => o.occurs_on >= periodStart) : occurrences;
       callsExpectedPeriod = periodOccurrences.length;
 
-      const occIds = occurrences.map((o) => o.id);
-      if (occIds.length > 0) {
-        const { data: regRows } = await supabase
-          .from('attendance_registers')
-          .select('session_occurrence_id')
-          .in('session_occurrence_id', occIds)
-          .in('status', ['SUBMITTED', 'VALIDATED']);
-        const done = new Set(((regRows ?? []) as { session_occurrence_id: string }[]).map((r) => r.session_occurrence_id));
-        callsDoneYear = occurrences.filter((o) => done.has(o.id)).length;
-        callsDonePeriod = periodOccurrences.filter((o) => done.has(o.id)).length;
-      }
+      const done = (o: (typeof occurrences)[number]) => ['SUBMITTED', 'VALIDATED'].includes(o.attendance_registers?.status ?? '');
+      callsDoneYear = occurrences.filter(done).length;
+      callsDonePeriod = periodOccurrences.filter(done).length;
     }
   }
 

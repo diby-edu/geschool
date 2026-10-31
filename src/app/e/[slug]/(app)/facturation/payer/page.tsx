@@ -7,6 +7,8 @@ import { readBilling } from '@/features/billing/subscription';
 import { readPaymentSettings, onlineOpen } from '@/features/billing/payment-settings';
 import { recordPaymentAction } from '@/features/billing/actions';
 import { PaymentForm } from '@/features/billing/components/PaymentForm';
+import { OnlinePayButton } from '@/features/billing/components/OnlinePayButton';
+import { payModulesOnlineAction } from '@/features/billing/online-actions';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Alert } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
@@ -48,7 +50,12 @@ export default async function PayPage({
   const montant = souscrit ? (souscrit.pricePaid ?? souscrit.price) : (offre?.price ?? null);
   const devise = souscrit?.currency ?? offre?.currency ?? 'XOF';
   const renouvellement = souscrit !== null;
-  const enLigne = onlineOpen(paiement);
+  const { readOnlineOffer, feeOf } = await import('@/services/online-payments');
+  const offer = await readOnlineOffer();
+  // Paiement en ligne PayDunya (0157) : ouvert dès que les clés sont sur le serveur.
+  const enLigne = offer.open || onlineOpen(paiement);
+  const target = code ?? (billing.modules.length > 0 ? 'ALL' : null);
+  const aPayer = code ? montant : billing.modules.reduce((n, m) => n + (m.pricePaid ?? m.price), 0);
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -80,12 +87,19 @@ export default async function PayPage({
         </Card>
       ) : null}
 
-      {enLigne ? (
-        <Alert tone="info">
-          Le paiement en ligne est ouvert ({paiement.provider}). Il se conclut sur votre téléphone, et votre reçu
-          s’émet aussitôt.
-        </Alert>
-      ) : (
+      {offer.open && target && aPayer ? (
+        <Card>
+          <CardContent className="space-y-2 py-4">
+            <h2 className="text-sm font-semibold">Payer en ligne</h2>
+            <OnlinePayButton
+              action={payModulesOnlineAction.bind(null, slug, target)}
+              amount={aPayer}
+              fee={feeOf(aPayer, offer.feePct)}
+              feePct={offer.feePct}
+            />
+          </CardContent>
+        </Card>
+      ) : enLigne ? null : (
         <Card>
           <CardContent className="space-y-3">
             <div>

@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Listes et présences — maquette</title>
+<style>
+  :root{--bg:#f4f5fb;--surface:#fff;--border:#e3e5ef;--muted:#6b7090;--text:#1b1d33;--brand:#4a44e0;--ok:#16a06a;--warn:#d98a00;--bad:#d64545;--soft:#eef0fb}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text)}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 16px 60px}
+  .intro{background:#141433;color:#fff;border-radius:16px;padding:16px 20px;margin-bottom:16px}
+  .intro h1{margin:0 0 4px;font-size:18px}.intro p{margin:0;opacity:.85;font-size:13px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:7px 14px;font-weight:600;cursor:pointer;color:var(--muted)}
+  .tab.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .view{display:none}.view.on{display:block}
+  .banner{border-radius:18px;padding:18px 20px;color:#fff;display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .banner h2{margin:0;font-size:22px}.banner p{margin:2px 0 0;opacity:.9;font-size:13px}
+  .btn{border:0;border-radius:10px;padding:8px 13px;font-weight:700;cursor:pointer;font-size:13px;white-space:nowrap}
+  .btn.white{background:#fff;color:#1b1d33}.btn.ghost{background:rgba(255,255,255,.18);color:#fff}
+  .btn.line{background:var(--surface);border:1px solid var(--border);color:var(--text)}
+  .menuwrap{position:relative;display:inline-block}
+  .menu{position:absolute;right:0;top:calc(100% + 6px);background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 30px rgba(20,20,51,.16);min-width:220px;padding:6px;z-index:5}
+  .menu a{display:block;padding:8px 10px;border-radius:8px;color:inherit;text-decoration:none;font-size:13px}
+  .menu a:hover{background:var(--soft)}.menu .sep{height:1px;background:var(--border);margin:5px 4px}.menu .danger{color:var(--bad)}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+  .tile{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
+  .tile b{display:block;font-size:22px}.tile span{color:var(--muted);font-size:12px}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:10px 12px;margin-bottom:10px}
+  .bar label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+  select,input[type=search]{height:34px;border:1px solid var(--border);border-radius:9px;padding:0 10px;background:#fff;font:inherit;min-width:130px}
+  input[type=search]{min-width:200px;flex:1}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{border:1px solid var(--border);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:600;background:#fff;cursor:pointer}
+  .chip.on{background:var(--text);color:#fff;border-color:var(--text)}
+  .count{font-size:12px;color:var(--muted);margin:4px 2px 8px}
+  .tbl{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  .scroll{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;min-width:720px}
+  th{background:#f7f8fc;text-align:left;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:9px 12px;white-space:nowrap}
+  th.sort{cursor:pointer}th.sort::after{content:" ↕";opacity:.4}th.sorted::after{content:" ↑";opacity:1;color:var(--brand)}
+  td{padding:9px 12px;border-top:1px solid var(--border);vertical-align:middle;white-space:nowrap}
+  tr.row:hover td{background:#fafbff}
+  .muted{color:var(--muted)}.mono{font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+  .pill{display:inline-block;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700}
+  .p-ok{background:#e3f6ee;color:var(--ok)}.p-warn{background:#fdf1dc;color:#a76a00}.p-bad{background:#fbe5e5;color:var(--bad)}.p-grey{background:#eef0f5;color:var(--muted)}.p-brand{background:#ecebfd;color:var(--brand)}
+  .who{display:flex;align-items:center;gap:9px}
+  .av{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff;flex:none}
+  .sub{font-size:12px;color:var(--muted)}
+  .prog{width:110px;height:7px;background:#eef0f5;border-radius:9px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:7px}
+  .prog i{display:block;height:100%}
+  .group td{background:#f7f8fc;font-weight:800;font-size:12px;color:var(--muted);letter-spacing:.03em}
+  .detail td{background:#fbfbfe;padding:0}
+  .detail table{min-width:0}.detail td td{padding:7px 12px 7px 40px;border-top:1px dashed var(--border);font-size:13px}
+  .dots{border:1px solid var(--border);background:#fff;border-radius:9px;width:34px;height:30px;cursor:pointer;font-weight:900;letter-spacing:1px}
+  .note{background:#fffbea;border:1px solid #f2df9a;border-radius:12px;padding:10px 14px;font-size:13px;margin:12px 0}
+  .note b{color:#7a5a00}
+  .why{font-size:12.5px;color:var(--muted);margin:10px 2px 0}
+  .pager{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)}
+  .copy{border:0;background:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0 4px}
+  @media (max-width:640px){.banner h2{font-size:19px}input[type=search]{min-width:0;width:100%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="intro">
+    <h1>Maquette de 5 pages séparées de l'application</h1>
+    <p>Ces 5 pages n'ont pas de lien entre elles : chacune reste à sa place dans le menu de gauche (Emploi du temps, Présences, Élèves, Enseignants, et Gestion des accès dans « Comptes »). Les boutons ci-dessous servent seulement à passer d'une maquette à l'autre ; ils n'existeront pas dans l'application. Données de Cocotiers ; les filtres et menus répondent aux clics.</p>
+  </div>
+
+  <div class="tabs" style="align-items:center"><span style="font-size:12px;color:var(--muted);margin-right:4px">Voir la maquette de la page :</span>
+    <button class="tab on" data-v="gen">Emploi du temps → Générer</button>
+    <button class="tab" data-v="pres">Présences du jour</button>
+    <button class="tab" data-v="eleves">Élèves</button>
+    <button class="tab" data-v="ens">Enseignants</button>
+    <button class="tab" data-v="acces">Gestion des accès</button>
+  </div>
+
+
+  <!-- ============================ GÉNÉRER ============================ -->
+  <section class="view on" id="gen">
+    <div class="banner" style="background:linear-gradient(135deg,#b45309,#ea580c)">
+      <div><h2>Générer l'emploi du temps</h2><p>Année 2026-2027 · 904 enseignements · 2 072 heures de cours par semaine</p></div>
+      <div style="display:flex;gap:6px"><button class="btn ghost">Retour à l'emploi du temps</button></div>
+    </div>
+
+    <div class="tiles" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+      <div class="tile"><span style="font-weight:800;color:var(--text)">① Heures par semaine</span><span>Réglées par niveau et par matière dans <a href="#" style="color:var(--brand)">Programme</a> (ex. 4 h de maths en 3e).</span></div>
+      <div class="tile"><span style="font-weight:800;color:var(--text)">② Qui enseigne quoi</span><span>Chaque matière de chaque classe a son professeur dans <a href="#" style="color:var(--brand)">Affectations</a>.</span></div>
+      <div class="tile" style="border-color:var(--brand)"><span style="font-weight:800;color:var(--brand)">③ Découpage et génération</span><span>Ici : comment répartir les heures (2+2, 1+1+1+1…), puis « Générer ».</span></div>
+    </div>
+
+    <div class="note"><b>Le programme a changé depuis la dernière synchronisation</b> (Mathématiques 3e : 4 h → 5 h, le 29/10). Les cours ci-dessous gardent l'ancien volume tant que vous ne synchronisez pas. <button class="btn line" style="margin-left:6px">Synchroniser maintenant</button></div>
+
+    <div class="tbl" style="padding:14px 16px;margin-bottom:12px">
+      <div style="font-weight:800;margin-bottom:2px">Découper en une fois</div>
+      <div class="sub" style="margin-bottom:10px">Appliquez le même découpage à une matière dans toutes les classes d'un niveau, au lieu de le saisir classe par classe.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <label class="sub" style="display:flex;flex-direction:column;gap:3px">Matière<select id="bk-sub"></select></label>
+        <label class="sub" style="display:flex;flex-direction:column;gap:3px">Niveau<select id="bk-lvl"></select></label>
+        <label class="sub" style="display:flex;flex-direction:column;gap:3px">Découpage<input type="search" id="bk-cut" value="2+2" style="min-width:110px;flex:none"></label>
+        <button class="btn" style="background:var(--brand);color:#fff;height:34px" id="bk-go">Appliquer</button>
+      </div>
+      <div id="bk-preview" style="margin-top:10px;font-size:13px"></div>
+    </div>
+
+    <div class="bar">
+      <label>Niveau<select id="gn-lvl"></select></label>
+      <label>Classe<select id="gn-cls"></select></label>
+      <label>Matière<select id="gn-sub"></select></label>
+      <label>Enseignant<select id="gn-prof"></select></label>
+      <label>Découpage<select id="gn-cut"><option value="">Tous</option><option value="1">Seulement des cours d'1 h</option><option value="n">Avec des cours de plusieurs heures</option></select></label>
+      <label style="flex:1">Recherche<input type="search" id="gn-q" placeholder="Classe, matière ou professeur…"></label>
+    </div>
+    <div class="count" id="gn-count"></div>
+    <div class="tbl"><div class="scroll"><table>
+      <thead><tr><th class="sort sorted">Classe</th><th>Matière</th><th>Enseignant</th><th>Heures / semaine</th><th>Découpage</th><th>Salle</th><th></th></tr></thead>
+      <tbody id="gn-body"></tbody>
+    </table></div>
+    <div class="pager"><span id="gn-page"></span><span>‹ Précédent · Suivant ›</span></div></div>
+
+    <div class="tbl" style="padding:14px 16px;margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div><b>Prêt à générer</b><div class="sub">904 enseignements actifs · 2 072 h par semaine · la génération prend environ 2 minutes</div></div>
+      <button class="btn" style="background:#ea580c;color:#fff">Générer l'emploi du temps</button>
+    </div>
+    <p class="why"><b>Ce qui change :</b> aujourd'hui la page affiche les 904 enseignements d'un bloc, dans le désordre, chacun avec son formulaire complet (environ 300 écrans de défilement) : le champ « Découpage » existe mais reste introuvable. Ici : les 3 étapes rappelées en haut avec leurs liens, un avertissement quand le programme a changé, le <b>découpage en une fois</b> par matière et par niveau, les mêmes filtres que sur les autres pages, un tri par classe et 50 lignes par page. Le découpage se modifie directement dans la ligne ; « Enregistrer » n'apparaît que sur une ligne modifiée. La colonne Salle montre la vraie salle : celle de la classe (chaque classe de Cocotiers a la sienne), ou la règle particulière du cours (EPS au terrain, SVT au labo de préférence). « Modifier » permet d'imposer une autre salle pour ce cours.</p>
+  </section>
+
+  <!-- ============================ PRÉSENCES ============================ -->
+  <section class="view" id="pres">
+    <div class="banner" style="background:linear-gradient(135deg,#12a99b,#16a06a)">
+      <div><h2>Appel et présences</h2><p>Vendredi 30 octobre · un résumé par classe, le détail des cours en un clic</p></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <input type="date" value="2026-10-30" style="height:34px;border:0;border-radius:9px;padding:0 8px">
+        <button class="btn ghost">Absences</button><button class="btn ghost">Appels non faits</button><button class="btn white">Justificatifs</button>
+      </div>
+    </div>
+    <div class="tiles">
+      <div class="tile"><b style="color:var(--ok)">142</b><span>cours terminés <b style="display:inline;font-size:inherit">avec</b> appel</span></div>
+      <div class="tile"><b style="color:var(--warn)">19</b><span>cours terminés <b style="display:inline;font-size:inherit">sans</b> appel (le professeur l'a oublié)</span></div>
+      <div class="tile"><b>80</b><span>cours en ce moment</span></div>
+      <div class="tile"><b style="color:var(--bad)">63</b><span>élèves absents aujourd'hui, dont 9 avec justificatif</span></div>
+      <div class="tile"><b>21</b><span>élèves arrivés en retard</span></div>
+    </div>
+    <div class="bar">
+      <div class="chips" id="pres-levels"></div>
+      <input type="search" id="pres-q" placeholder="Classe (ex. 4e B)…">
+      <label style="flex-direction:row;align-items:center;gap:6px;color:var(--text);font-size:13px"><input type="checkbox" id="pres-missing"> Seulement les classes avec un appel manquant</label>
+    </div>
+    <div class="count" id="pres-count"></div>
+    <div class="tbl"><div class="scroll"><table>
+      <thead><tr><th>Classe</th><th>Journée de la classe</th><th>Élèves absents</th><th>En retard</th><th>Cours en ce moment</th><th></th></tr></thead>
+      <tbody id="pres-body"></tbody>
+    </table></div></div>
+    <p class="why" style="display:flex;gap:14px;flex-wrap:wrap"><span><i style="display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--ok)"></i> appel fait</span><span><i style="display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--warn)"></i> terminé sans appel</span><span><i style="display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--brand)"></i> en cours</span><span><i style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#d5d8e4"></i> plus tard</span></p>
+    <p class="why"><b>Comment lire une ligne :</b> « 6e A — 1 / 5 : 1 cours passé sur les 5 de la journée, 1 en cours (Mathématiques, 2 h d'affilée : une pastille double, un seul appel), 3 plus tard ». Un cours de 2 h compte pour 1 cours et 1 appel, mais pour 2 heures dans la paie et dans les heures d'absence. <b>Pourquoi :</b> aujourd'hui la page liste les 480 cours un par un. Ici, 80 lignes, une par classe. Le détail s'ouvre sous la ligne (▸), et la page ne charge que le résumé : elle s'ouvre en environ 0,3 s.</p>
+  </section>
+
+  <!-- ============================ ÉLÈVES ============================ -->
+  <section class="view" id="eleves">
+    <div class="banner" style="background:linear-gradient(135deg,#4a44e0,#8b5cf6)">
+      <div><h2>Élèves</h2><p>Année 2026-2027 · 4 000 inscrits dans 80 classes</p></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn white">Inscrire un élève</button>
+        <div class="menuwrap"><button class="btn ghost" data-menu="m-el">Plus ▾</button>
+          <div class="menu" id="m-el" hidden><a href="#">Réinscription</a><a href="#">Importer / exporter</a><a href="#">Exporter cette liste (CSV)</a></div></div>
+      </div>
+    </div>
+    <div class="bar">
+      <label>Niveau<select id="el-level"></select></label>
+      <label>Classe<select id="el-class"></select></label>
+      <label>Affectation<select id="el-aff"><option value="">Toutes</option><option>Affecté</option><option>Non affecté</option><option value="—">Non renseignée</option></select></label>
+      <label>Situation<select id="el-red"><option value="">Tous</option><option value="R">Redoublants</option><option value="N">Nouveaux</option></select></label>
+      <label style="flex:1">Recherche<input type="search" id="el-q" placeholder="Nom, prénom ou matricule…"></label>
+      <label style="flex-direction:row;align-items:center;gap:6px;color:var(--text);font-size:13px;align-self:flex-end;padding-bottom:7px"><input type="checkbox" id="el-group" checked> Regrouper par classe</label>
+    </div>
+    <div class="count" id="el-count"></div>
+    <div class="tbl"><div class="scroll"><table>
+      <thead><tr><th class="sort" data-s="name">Nom</th><th class="sort" data-s="mat">Matricule</th><th class="sort sorted" data-s="cls">Classe</th><th>Sexe</th><th>Affectation</th><th>Situation</th><th>Parent</th></tr></thead>
+      <tbody id="el-body"></tbody>
+    </table></div>
+    <div class="pager"><span id="el-page"></span><span>‹ Précédent · Suivant ›</span></div></div>
+    <p class="why"><b>Ce qui change :</b> on filtre par niveau puis par classe, et on trie en cliquant sur les titres de colonnes (par classe par défaut). La colonne « Statut » disait « Non renseigné » pour les 4 000 élèves. Elle devient « Affectation », avec un tiret discret quand l'information manque, et un filtre pour retrouver ceux à compléter. On ajoute aussi le sexe, la situation (redoublant, nouveau) et le parent joignable.</p>
+  </section>
+
+  <!-- ============================ ENSEIGNANTS ============================ -->
+  <section class="view" id="ens">
+    <div class="banner" style="background:linear-gradient(135deg,#0e7490,#0891b2)">
+      <div><h2>Enseignants</h2><p>170 enseignants · 136 permanents, 34 vacataires</p></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn white">Nouvel enseignant</button>
+        <div class="menuwrap"><button class="btn ghost" data-menu="m-en">Plus ▾</button>
+          <div class="menu" id="m-en" hidden><a href="#">Service hebdomadaire</a><a href="#">Heures faites et paie</a><a href="#">Importer / exporter</a></div></div>
+      </div>
+    </div>
+    <div class="bar">
+      <label>Matière<select id="en-sub"></select></label>
+      <label>Classe<select id="en-cls"></select></label>
+      <label>Contrat<select id="en-ct"><option value="">Tous</option><option>Permanent</option><option>Vacataire</option></select></label>
+      <label style="flex:1">Recherche<input type="search" id="en-q" placeholder="Nom ou matricule…"></label>
+    </div>
+    <div class="count" id="en-count"></div>
+    <div class="tbl"><div class="scroll"><table>
+      <thead><tr><th class="sort sorted">Nom</th><th>Matières enseignées</th><th>Classes</th><th>Service</th><th>Contrat</th><th>Accès</th></tr></thead>
+      <tbody id="en-body"></tbody>
+    </table></div></div>
+    <p class="why"><b>Ce qui change :</b> la « Spécialité » était vide pour les 170 enseignants. On affiche à la place les matières qu'ils enseignent vraiment, d'après leurs affectations, et leurs classes. On filtre par matière et par classe : « qui enseigne les maths en 3e ? ». Les quatre boutons du haut, qui se faisaient couper sur un écran étroit, deviennent un bouton principal et un menu « Plus ». La colonne « Diplôme », vide partout, sort du tableau et reste sur la fiche.</p>
+  </section>
+
+  <!-- ============================ ACCÈS ============================ -->
+  <section class="view" id="acces">
+    <div class="banner" style="background:linear-gradient(135deg,#7c3aed,#a855f7)">
+      <div><h2>Gestion des accès</h2><p>Qui peut se connecter à l'application, et avec quel identifiant</p></div>
+      <div style="display:flex;gap:6px"><button class="btn white">Renvoyer les identifiants à ceux qui ne se sont jamais connectés</button><button class="btn ghost">Historique</button></div>
+    </div>
+    <div class="note" style="background:#f1f0fe;border-color:#d9d6fb">
+      <b style="color:#4a44e0">À quoi sert cette page ?</b> Chaque enseignant, parent et membre du personnel reçoit par SMS (ou par e-mail) un <b>identifiant</b> et un <b>mot de passe</b> pour se connecter à l'application. Ici, vous voyez qui a déjà utilisé son accès, et vous pouvez renvoyer ses identifiants s'il les a perdus, changer son mot de passe, ou lui couper l'accès.
+    </div>
+    <div class="tiles">
+      <div class="tile"><b>188</b><span>personnes ont un accès</span></div>
+      <div class="tile"><b style="color:var(--ok)">188</b><span>se sont déjà connectées au moins une fois</span></div>
+      <div class="tile"><b>0</b><span>ne se sont jamais connectées</span></div>
+      <div class="tile"><b>0</b><span>accès coupés par l'école</span></div>
+      <div class="tile"><b>0</b><span>SMS d'identifiants non arrivés</span></div>
+    </div>
+    <div class="bar">
+      <div class="chips"><span class="chip on">Tous 188</span><span class="chip">Enseignants 170</span><span class="chip">Parents 7</span><span class="chip">Personnel 11</span></div>
+      <input type="search" placeholder="Nom, téléphone ou e-mail…">
+    </div>
+    <div class="tbl"><div class="scroll"><table>
+      <thead><tr><th>Personne</th><th>Se connecte avec</th><th>État de l'accès</th><th>Identifiants envoyés</th><th style="text-align:right"></th></tr></thead>
+      <tbody id="ac-body"></tbody>
+    </table></div>
+    <div class="pager"><span>1 – 6 sur 188</span><span>‹ Précédent · Suivant ›</span></div></div>
+    <div class="note"><b>« Retour aux paramètres » retiré</b> des pages qu'on ouvre depuis le menu de gauche (Gestion des accès, Rôles et droits, Abonnement…). Il ne reste que sur les vraies sous-pages des Paramètres (SMS, Horaires, Bulletins…), là où l'on arrive depuis les Paramètres.</div>
+    <p class="why"><b>Ce qui change :</b> une ligne par compte, sans retour à la ligne. Le type passe sous le nom, l'identifiant est affiché en entier avec un bouton copier, et les 8 boutons qui débordaient deviennent un seul bouton « Actions ». Le menu ne propose que les actions possibles pour ce compte (pas « Débloquer » s'il n'est pas bloqué) et que vos droits autorisent.</p>
+  </section>
+</div>
+
+<script>
+// ---------- outils
+const $=s=>document.querySelector(s), h=(t,a={},c='')=>`<${t} ${Object.entries(a).map(([k,v])=>`${k}="${v}"`).join(' ')}>${c}</${t}>`;
+const COL=['#4a44e0','#12a99b','#d98a00','#d64545','#0891b2','#8b5cf6','#16a06a'];
+const LEVELS=[['6e',10],['5e',13],['4e',11],['3e',12],['2nde',10],['1ère',12],['Tle',12]];
+const SUBJ=['Mathématiques','Français','Anglais','Physique-Chimie','SVT','Histoire-Géographie','Philosophie','EPS','Espagnol','Allemand','Éducation civique'];
+let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};const pick=a=>a[Math.floor(rnd()*a.length)];
+const CLASSES=[];LEVELS.forEach(([l,n],li)=>{for(let i=0;i<n;i++)CLASSES.push({name:`${l} ${l==='1ère'||l==='Tle'||l==='2nde'?['A','C','D'][i%3]+(Math.floor(i/3)+1):String.fromCharCode(65+i)}`,level:l,li})});
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab,.view').forEach(x=>x.classList.remove('on'));b.classList.add('on');$('#'+b.dataset.v).classList.add('on')});
+document.querySelectorAll('[data-menu]').forEach(b=>b.onclick=e=>{e.stopPropagation();const m=$('#'+b.dataset.menu);const open=m.hidden;document.querySelectorAll('.menu').forEach(x=>x.hidden=true);m.hidden=!open});
+document.addEventListener('click',()=>document.querySelectorAll('.menu').forEach(x=>x.hidden=true));
+
+// ---------- présences
+// La journée d'une classe : 6 créneaux. Un cours peut en prendre deux (bloc de 2 h) :
+// c'est UN cours, donc UN appel, qui compte pour 2 heures.
+const SLOTS=[['07:30','08:25'],['08:25','09:20'],['09:20','10:15'],['10:15','11:10'],['11:10','12:05'],['14:30','15:25']];
+const PROF={'Français':'KOUAME Awa','Mathématiques':'TRAORE Adjoua','Anglais':'KONE Ibrahim','SVT':'BAMBA Mariam','EPS':'OUATTARA Moussa','Histoire-Géographie':'DIABATE Fatoumata','Physique-Chimie':'YAO Serge','Philosophie':'SANOGO Adjoua','Espagnol':'TOURE Aminata','Allemand':'AKA Hervé','Éducation civique':'GNAGNE Grâce'};
+const DAY=['Français','Mathématiques','Espagnol','Anglais','SVT','EPS'];
+const PRES=CLASSES.map((c,ci)=>{
+  // Une classe sur trois a 2 h de maths d'affilée (créneaux 2 et 3).
+  const block=ci%3===0;
+  const subjects=block?['Français','Mathématiques','Anglais','SVT','EPS']:DAY;
+  const courses=[];let slot=0;
+  subjects.forEach(sj=>{const h=block&&sj==='Mathématiques'?2:1;courses.push({sj,h,start:SLOTS[slot][0],end:SLOTS[slot+h-1][1]});slot+=h;});
+  // Heure actuelle simulée : 10:00 (pour 3e ligne, 10:30).
+  const now=ci%5===2?'10:30':'10:00';
+  courses.forEach(k=>{k.state=k.end<=now?'past':k.start<=now?'now':'later'});
+  const past=courses.filter(k=>k.state==='past');
+  const forgot=rnd()<.2&&past.length?1:0;
+  past.forEach((k,i)=>{k.call=i<past.length-forgot?'done':'missed'});
+  return {...c,courses,forgot,abs:Math.floor(rnd()*3),late:Math.floor(rnd()*2)};
+});
+let presLevel='';
+const COLOR={done:'var(--ok)',missed:'var(--warn)',now:'var(--brand)',later:'#d5d8e4'};
+const kind=k=>k.state==='past'?k.call:k.state;
+$('#pres-levels').innerHTML=['Tous',...LEVELS.map(l=>l[0])].map(l=>`<span class="chip ${l==='Tous'?'on':''}" data-l="${l==='Tous'?'':l}">${l}</span>`).join('');
+$('#pres-levels').onclick=e=>{const c=e.target.closest('.chip');if(!c)return;presLevel=c.dataset.l;$('#pres-levels').querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===c));drawPres()};
+['#pres-q','#pres-missing'].forEach(s=>$(s).oninput=drawPres);
+function drawPres(){const q=$('#pres-q').value.toLowerCase(),miss=$('#pres-missing').checked;
+ const rows=PRES.filter(c=>(!presLevel||c.level===presLevel)&&(!q||c.name.toLowerCase().includes(q))&&(!miss||c.forgot));
+ $('#pres-count').textContent=`${rows.length} classe(s) affichée(s) sur 80`;
+ $('#pres-body').innerHTML=rows.map((c,i)=>{
+  const n=st=>c.courses.filter(k=>k.state===st).length;
+  const past=n('past'),cur=c.courses.find(k=>k.state==='now'),later=n('later'),two=c.courses.filter(k=>k.h>1).length;
+  // Une pastille par cours ; un cours de 2 h fait une pastille deux fois plus large.
+  const dots=c.courses.map(k=>`<i title="${k.start}–${k.end} ${k.sj}${k.h>1?' ('+k.h+' h)':''}" style="display:inline-block;width:${14*k.h+3*(k.h-1)}px;height:14px;border-radius:4px;margin-right:3px;background:${COLOR[kind(k)]}"></i>`).join('');
+  const call=`<div style="display:flex;align-items:center;gap:8px"><b style="font-size:15px">${past} / ${c.courses.length}</b><span>${dots}</span></div><div class="sub">${past} cours passé${past>1?'s':''} · ${cur?'1 en cours':'aucun en cours'} · ${later} plus tard${two?` · dont ${two} cours de plusieurs heures`:''}</div>`+(c.forgot?`<span class="pill p-warn">⚠ ${c.forgot} cours terminé sans appel</span>`:`<span class="pill p-ok">✓ appel fait à chaque cours passé</span>`);
+  const nowCell=cur?`${cur.sj} <span class="sub">· ${cur.start}–${cur.end}${cur.h>1?' ('+cur.h+' h)':''}</span>`:'<span class="muted">pause</span>';
+  return `<tr class="row"><td><b>${c.name}</b></td><td>${call}</td><td>${c.abs?'<span class="pill p-bad">'+c.abs+' élève'+(c.abs>1?'s':'')+'</span>':'<span class="muted">aucun</span>'}</td><td>${c.late?c.late+' élève'+(c.late>1?'s':''):'<span class="muted">aucun</span>'}</td><td>${nowCell}</td><td><button class="btn line" data-d="${i}">Voir la journée ▸</button></td></tr>
+  <tr class="detail" id="d${i}" hidden><td colspan="6"><table><tbody>${c.courses.map(k=>`<tr><td>${k.start}–${k.end} ${k.sj}${k.h>1?' <span class="pill p-brand">'+k.h+' h · un seul appel</span>':''}</td><td class="sub">${PROF[k.sj]||'—'}</td><td>${{done:'<span class="pill p-ok">✓ appel fait</span>',missed:'<span class="pill p-warn">⚠ terminé sans appel</span>',now:'<span class="pill p-brand">en cours</span>',later:'<span class="pill p-grey">plus tard</span>'}[kind(k)]}</td><td><a href="#" style="color:var(--brand)">Voir</a></td></tr>`).join('')}</tbody></table></td></tr>`}).join('');
+ $('#pres-body').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const d=$('#d'+b.dataset.d);d.hidden=!d.hidden;b.textContent=d.hidden?'Voir la journée ▸':'Masquer ▾'});}
+drawPres();
+
+// ---------- élèves
+const FN=['Awa','Koffi','Aya','Yao','Adjoua','Kouadio','Mariam','Ibrahim','Fatou','Serge','Akissi','Moussa','Grâce','Jean-Marc','Aminata','Hervé'];
+const LN=['KOUAME','TRAORE','KONE','DIABATE','YAO','KOUASSI','OUATTARA','BAMBA','COULIBALY','N\'GUESSAN','TOURE','SANOGO','AKA','GNAGNE'];
+const ST=[];CLASSES.filter((c,k)=>k%4===0).forEach((c,ci)=>{for(let i=0;i<4;i++)ST.push({name:`${pick(LN)} ${pick(FN)}`,mat:`COC-26-${String(ci*50+i+1).padStart(4,'0')}`,cls:c,sex:rnd()<.5?'F':'G',aff:rnd()<.55?'—':rnd()<.7?'Affecté':'Non affecté',red:rnd()<.12?'R':rnd()<.15?'N':'',par:rnd()<.9})});
+const fill=(sel,opts)=>$(sel).innerHTML=opts.map(([v,t])=>`<option value="${v}">${t}</option>`).join('');
+fill('#el-level',[['','Tous les niveaux'],...LEVELS.map(l=>[l[0],l[0]])]);
+const elClasses=()=>fill('#el-class',[['','Toutes les classes'],...CLASSES.filter(c=>!$('#el-level').value||c.level===$('#el-level').value).map(c=>[c.name,c.name])]);elClasses();
+$('#el-level').onchange=()=>{elClasses();drawEl()};['#el-class','#el-aff','#el-red','#el-q','#el-group'].forEach(s=>$(s).oninput=drawEl);
+let elSort='cls';document.querySelectorAll('#eleves th.sort').forEach(t=>t.onclick=()=>{elSort=t.dataset.s;document.querySelectorAll('#eleves th.sort').forEach(x=>x.classList.toggle('sorted',x===t));drawEl()});
+function drawEl(){const L=$('#el-level').value,C=$('#el-class').value,A=$('#el-aff').value,R=$('#el-red').value,q=$('#el-q').value.toLowerCase(),g=$('#el-group').checked;
+ let rows=ST.filter(s=>(!L||s.cls.level===L)&&(!C||s.cls.name===C)&&(!A||s.aff===A)&&(!R||s.red===R)&&(!q||(s.name+s.mat).toLowerCase().includes(q)));
+ rows.sort((a,b)=>elSort==='name'?a.name.localeCompare(b.name):elSort==='mat'?a.mat.localeCompare(b.mat):(a.cls.li-b.cls.li)||a.cls.name.localeCompare(b.cls.name,'fr',{numeric:true})||a.name.localeCompare(b.name));
+ $('#el-count').textContent=`${rows.length} élève(s) affiché(s) · sur la vraie page, 50 par page et les 4 000 au total`;
+ $('#el-page').textContent=`1 – ${Math.min(50,rows.length)} sur ${rows.length}`;
+ let last='',out='';rows.forEach(s=>{if(g&&elSort==='cls'&&s.cls.name!==last){last=s.cls.name;out+=`<tr class="group"><td colspan="7">${s.cls.name} · ${rows.filter(x=>x.cls.name===last).length} élève(s)</td></tr>`}
+  const ini=s.name.split(' ').map(w=>w[0]).join('').slice(0,2);
+  out+=`<tr class="row"><td><div class="who"><span class="av" style="background:${COL[s.cls.li]}">${ini}</span><b>${s.name}</b></div></td><td class="mono">${s.mat}</td><td><span class="pill" style="background:${COL[s.cls.li]}1a;color:${COL[s.cls.li]}">${s.cls.name}</span></td><td>${s.sex==='F'?'Fille':'Garçon'}</td><td>${s.aff==='—'?'<span class="muted">—</span>':s.aff==='Affecté'?'<span class="pill p-ok">Affecté</span>':'<span class="pill p-grey">Non affecté</span>'}</td><td>${s.red==='R'?'<span class="pill p-warn">Redoublant</span>':s.red==='N'?'<span class="pill p-brand">Nouveau</span>':'<span class="muted">—</span>'}</td><td>${s.par?'<span class="sub">07 08 ·· ·· 12</span>':'<span class="pill p-bad">aucun numéro</span>'}</td></tr>`});
+ $('#el-body').innerHTML=out||'<tr><td colspan="7" class="muted" style="padding:20px">Aucun élève pour ces filtres.</td></tr>';}
+drawEl();
+
+// ---------- enseignants
+const TE=Array.from({length:22},(_,i)=>{const subs=[SUBJ[i%SUBJ.length]];if(rnd()<.25)subs.push(pick(SUBJ.filter(x=>x!==subs[0])));const cls=Array.from({length:3+Math.floor(rnd()*4)},()=>pick(CLASSES)).filter((c,k,a)=>a.indexOf(c)===k);return {name:`${pick(LN)} ${pick(FN)}`,mat:`ENS-${String(i+1).padStart(4,'0')}`,subs,cls,ct:rnd()<.8?'Permanent':'Vacataire',h:cls.length*3}});
+fill('#en-sub',[['','Toutes les matières'],...SUBJ.map(s=>[s,s])]);fill('#en-cls',[['','Toutes les classes'],...CLASSES.map(c=>[c.name,c.name])]);
+['#en-sub','#en-cls','#en-ct','#en-q'].forEach(s=>$(s).oninput=drawEn);
+function drawEn(){const S=$('#en-sub').value,C=$('#en-cls').value,T=$('#en-ct').value,q=$('#en-q').value.toLowerCase();
+ const rows=TE.filter(t=>(!S||t.subs.includes(S))&&(!C||t.cls.some(c=>c.name===C))&&(!T||t.ct===T)&&(!q||(t.name+t.mat).toLowerCase().includes(q))).sort((a,b)=>a.name.localeCompare(b.name));
+ $('#en-count').textContent=`${rows.length} enseignant(s) affiché(s) sur 170`;
+ $('#en-body').innerHTML=rows.map(t=>`<tr class="row"><td><div class="who"><span class="av" style="background:#0891b2">${t.name.split(' ').map(w=>w[0]).join('').slice(0,2)}</span><div><b>${t.name}</b><div class="sub mono">${t.mat}</div></div></div></td><td>${t.subs.map(s=>`<span class="pill p-brand" style="margin-right:4px">${s}</span>`).join('')}</td><td><b>${t.cls.length}</b> <span class="sub">${t.cls.slice(0,3).map(c=>c.name).join(', ')}${t.cls.length>3?'…':''}</span></td><td>${t.h} h / sem.</td><td>${t.ct==='Permanent'?'<span class="pill p-ok">Permanent</span>':'<span class="pill p-warn">Vacataire</span>'}</td><td><span class="pill p-ok">activé</span></td></tr>`).join('')||'<tr><td colspan="6" class="muted" style="padding:20px">Aucun enseignant pour ces filtres.</td></tr>';}
+drawEn();
+
+// ---------- générer
+const PROG={'Français':[5,5,4,4,4,4,3],'Mathématiques':[4,4,4,4,5,5,5],'Anglais':[3,3,3,3,3,3,3],'Physique-Chimie':[0,0,2,2,3,3,4],'SVT':[2,2,2,2,2,2,2],'Histoire-Géographie':[3,3,3,3,3,3,3],'Philosophie':[0,0,0,0,0,0,3],'EPS':[2,2,2,2,2,2,2],'Espagnol':[0,0,2,2,2,2,2]};
+const roomOf=c=>'Salle '+(CLASSES.indexOf(c)+1);
+const GEN=[];CLASSES.forEach(c=>Object.entries(PROG).forEach(([sj,hs])=>{const h=hs[c.li];if(!h)return;GEN.push({cls:c,sj,h,prof:PROF[sj],cut:Array(h).fill(1),room:sj==='EPS'?'<b>Terrain</b> <span class="pill p-grey">imposé</span>':sj==='SVT'?`<b>Labo</b> de préférence, sinon ${roomOf(c)}`:`<b>${roomOf(c)}</b> <span class="sub">salle de la classe</span>`})}));
+GEN.filter(g=>g.sj==='Mathématiques'&&g.cls.level==='Tle').forEach(g=>g.cut=[2,2,1]);
+const SUBS=Object.keys(PROG);
+fill('#gn-lvl',[['','Tous les niveaux'],...LEVELS.map(l=>[l[0],l[0]])]);
+const gnClasses=()=>fill('#gn-cls',[['','Toutes les classes'],...CLASSES.filter(c=>!$('#gn-lvl').value||c.level===$('#gn-lvl').value).map(c=>[c.name,c.name])]);gnClasses();
+fill('#gn-sub',[['','Toutes les matières'],...SUBS.map(x=>[x,x])]);
+fill('#gn-prof',[['','Tous les enseignants'],...[...new Set(SUBS.map(x=>PROF[x]))].sort().map(x=>[x,x])]);
+fill('#bk-sub',SUBS.map(x=>[x,x]));$('#bk-sub').value='Mathématiques';
+fill('#bk-lvl',LEVELS.map(l=>[l[0],l[0]]));$('#bk-lvl').value='3e';
+$('#gn-lvl').onchange=()=>{gnClasses();drawGen()};['#gn-cls','#gn-sub','#gn-prof','#gn-cut','#gn-q'].forEach(x=>$(x).oninput=drawGen);
+const cutText=c=>c.every(x=>x===1)?`${c.length} cours d'1 h`:c.map(x=>x+' h').join(' + ');
+function bkPreview(){const sj=$('#bk-sub').value,lv=$('#bk-lvl').value,raw=$('#bk-cut').value;const parts=raw.split(/[+\s]+/).filter(Boolean).map(Number);const rows=GEN.filter(g=>g.sj===sj&&g.cls.level===lv);
+ if(!rows.length){$('#bk-preview').innerHTML='<span class="muted">Cette matière n\'est pas au programme de ce niveau.</span>';return null}
+ const h=rows[0].h,sum=parts.reduce((a,b)=>a+b,0);
+ if(parts.some(x=>!Number.isInteger(x)||x<1||x>8))$('#bk-preview').innerHTML='<span class="pill p-bad">Chaque cours dure de 1 à 8 heures, en heures entières.</span>';
+ else if(sum!==h)$('#bk-preview').innerHTML=`<span class="pill p-bad">${raw} = ${sum} h, mais ${sj} en ${lv} a ${h} h par semaine au programme.</span>`;
+ else{$('#bk-preview').innerHTML=`<span class="pill p-ok">✓ ${rows.length} classes de ${lv} : ${sj}, ${h} h par semaine → ${cutText(parts)}</span>`;return {rows,parts}}
+ return null}
+['#bk-sub','#bk-lvl','#bk-cut'].forEach(x=>$(x).oninput=bkPreview);bkPreview();
+$('#bk-go').onclick=()=>{const r=bkPreview();if(!r)return;r.rows.forEach(g=>g.cut=[...r.parts]);$('#bk-preview').innerHTML+=` <b style="color:var(--ok)">Appliqué.</b>`;drawGen()};
+function drawGen(){const L=$('#gn-lvl').value,C=$('#gn-cls').value,S=$('#gn-sub').value,P=$('#gn-prof').value,K=$('#gn-cut').value,q=$('#gn-q').value.toLowerCase();
+ const rows=GEN.filter(g=>(!L||g.cls.level===L)&&(!C||g.cls.name===C)&&(!S||g.sj===S)&&(!P||g.prof===P)&&(!K||(K==='1'?g.cut.every(x=>x===1):g.cut.some(x=>x>1)))&&(!q||(g.cls.name+g.sj+g.prof).toLowerCase().includes(q)))
+  .sort((a,b)=>(a.cls.li-b.cls.li)||a.cls.name.localeCompare(b.cls.name,'fr',{numeric:true})||a.sj.localeCompare(b.sj));
+ $('#gn-count').textContent=`${rows.length} enseignement(s) sur ${GEN.length} · triés par classe`;
+ $('#gn-page').textContent=`1 – ${Math.min(50,rows.length)} sur ${rows.length}`;
+ let last='',out='';rows.slice(0,50).forEach((g,i)=>{if(g.cls.name!==last){last=g.cls.name;const all=rows.filter(x=>x.cls.name===last);out+=`<tr class="group"><td colspan="7">${last} · ${all.length} matière${all.length>1?'s':''} · ${all.reduce((n,x)=>n+x.h,0)} h par semaine</td></tr>`}
+  out+=`<tr class="row"><td><span class="pill" style="background:${COL[g.cls.li]}1a;color:${COL[g.cls.li]}">${g.cls.name}</span></td><td><b>${g.sj}</b></td><td class="sub">${g.prof}</td><td>${g.h} h</td><td><input type="search" value="${g.cut.join('+')}" style="min-width:0;width:90px;flex:none" data-g="${GEN.indexOf(g)}"> <span class="sub">${cutText(g.cut)}</span></td><td>${g.room} <a href="#" style="color:var(--brand);font-size:12px">Modifier</a></td><td class="save"></td></tr>`});
+ $('#gn-body').innerHTML=out||'<tr><td colspan="7" class="muted" style="padding:20px">Aucun enseignement pour ces filtres.</td></tr>';
+ $('#gn-body').querySelectorAll('input[data-g]').forEach(inp=>inp.oninput=()=>{inp.closest('tr').querySelector('.save').innerHTML='<button class="btn" style="background:var(--brand);color:#fff">Enregistrer</button>'});}
+drawGen();
+
+// ---------- accès
+const AC=[['KOUAME Awa','Enseignant','+225 07 08 45 12 90','Activé','le 28/10 par SMS (bien reçu)',false],['KOUASSI Hervé','Personnel · Inspecteur','inspecteur@cocotiers.geschool.local','Activé','le 12/10 par e-mail',false],['TRAORE Adjoua','Enseignant','+225 05 44 18 22 07','Activé','le 28/10 par SMS (bien reçu)',true],['BAMBA Mariam (parent)','Parent · 2 enfants','+225 01 02 33 71 58','Activé','le 20/10 par SMS (bien reçu)',false],['KONE Ibrahim','Enseignant','+225 07 77 10 64 31','Activé','le 28/10 par SMS (bien reçu)',false],['Secrétariat','Personnel · Secrétaire','secretaire@cocotiers.geschool.local','Activé','le 12/10 par e-mail',false]];
+$('#ac-body').innerHTML=AC.map(([n,k,id,st,last,locked],i)=>`<tr class="row"><td><b>${n}</b><div class="sub">${k}</div></td><td><span class="mono">${id}</span><button class="copy" title="Copier">⧉</button></td><td>${locked?'<span class="pill p-bad">Bloqué : 5 mots de passe faux</span>':'<span class="pill p-ok">Actif, déjà connecté</span>'}</td><td class="sub">${last}</td><td style="text-align:right"><div class="menuwrap"><button class="btn line" data-menu="am${i}">Actions ▾</button><div class="menu" id="am${i}" ${i===2?'':'hidden'} style="text-align:left"><a href="#">Renvoyer les identifiants</a><a href="#">Réinitialiser le mot de passe</a>${locked?'<a href="#">Débloquer le compte</a>':''}<a href="#">Changer l'identifiant</a><a href="#">Déconnecter de partout</a><div class="sep"></div><a href="#" class="danger">Suspendre l'accès</a></div></div></td></tr>`).join('');
+document.querySelectorAll('#acces [data-menu]').forEach(b=>b.onclick=e=>{e.stopPropagation();const m=$('#'+b.dataset.menu);const open=m.hidden;document.querySelectorAll('.menu').forEach(x=>x.hidden=true);m.hidden=!open});
+</script>
+</body>
+</html>

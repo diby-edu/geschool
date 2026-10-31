@@ -4,9 +4,9 @@ import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { parseListParams } from '@/lib/query/list';
-import { listRooms, ROOM_SORTABLE, type RoomRow } from '@/features/rooms/queries';
+import { listRooms, listRoomTypes, ROOM_SORTABLE, type RoomRow } from '@/features/rooms/queries';
 import { DataTable, type Column } from '@/components/data-table/DataTable';
-import { SearchBar } from '@/components/data-table/SearchBar';
+import { ListFilters } from '@/components/data-table/ListFilters';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Flash } from '@/components/ui/flash';
 import { Button } from '@/components/ui/button';
@@ -51,7 +51,9 @@ export default async function RoomsPage({
   const canDelete = hasPermission(ctx, 'rooms.delete');
 
   const listParams = parseListParams(sp, { sortable: ROOM_SORTABLE, defaultSort: 'code' });
-  const { rows, total } = tab === 'salles' ? await listRooms(ctx, listParams) : { rows: [], total: 0 };
+  const typeId = typeof sp.type === 'string' ? sp.type : '';
+  const [{ rows, total }, roomTypes] =
+    tab === 'salles' ? await Promise.all([listRooms(ctx, listParams, typeId || undefined), listRoomTypes(ctx)]) : [{ rows: [], total: 0 }, []];
 
   // Onglet Affectation : le réglage de l'école, ses classes et ses salles.
   const [policy, assignments, roomOptions] =
@@ -283,11 +285,11 @@ export default async function RoomsPage({
       {tab === 'salles' ? (
       <>
       <div className="mb-4">
-        <SearchBar
+        <ListFilters
           basePath={base}
-          defaultValue={listParams.q}
-          placeholder="Rechercher par nom ou code…"
-          hidden={{ onglet: 'salles', ...(listParams.sort ? { sort: listParams.sort, dir: listParams.dir } : {}) }}
+          keep={{ onglet: 'salles', sort: listParams.sort ?? '', dir: listParams.sort ? listParams.dir : '' }}
+          fields={[{ name: 'type', label: 'Type de salle', allLabel: 'Tous les types', value: typeId, options: roomTypes.map((t) => ({ value: t.id, label: t.name })) }]}
+          search={{ value: listParams.q, placeholder: 'Nom ou code de la salle…' }}
         />
       </div>
 

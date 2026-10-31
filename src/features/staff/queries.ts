@@ -92,44 +92,33 @@ type Access = {
 export async function listStaff(ctx: TenantContext): Promise<StaffRow[]> {
   const supabase = await createClient();
 
-  // 1. Fonctions concernées : la copie de l'établissement, sinon le modèle.
-  const { data: roles, error: rolesError } = await supabase
-    .from('roles')
-    .select('id, code, name')
-    .or(`school_id.eq.${ctx.school.id},school_id.is.null`);
-  if (rolesError) throw rolesError;
-  // Fonctions prévues, et celles créées par la plateforme (« F_… », lot 6).
-  const staffRoles = (roles ?? []).filter((r) => r.code === 'SCHOOL_ADMIN' || isStaffFunction(r.code));
-  const codeByRole = new Map(staffRoles.map((r) => [r.id, r.code]));
-  const nameByCode = new Map(staffRoles.map((r) => [r.code, r.name]));
-  if (codeByRole.size === 0) return [];
-
-  // 2. Personnes qui les exercent (uniquement dans CET établissement).
+  // 1. Personnes de CET établissement avec leurs fonctions, en une lecture (le
+  // lien, sa fonction et la personne). Avant : fonctions, puis liens, puis
+  // personnes, l'un après l'autre — trois allers-retours sur le tableau de bord.
+  // Enseignants, parents et élèves sont écartés par la base : une école compte
+  // des milliers de parents.
   const { data: links, error: linksError } = await supabase
     .from('membership_roles')
-    .select('membership_id, role_id, school_memberships!inner(school_id)')
-    .in('role_id', [...codeByRole.keys()])
-    .eq('school_memberships.school_id', ctx.school.id);
+    .select(
+      'membership_id, roles!inner(code, name), ' +
+        'school_memberships!inner(id, user_id, school_id, users(first_name, last_name, display_name, contact_email))',
+    )
+    .eq('school_memberships.school_id', ctx.school.id)
+    .not('roles.code', 'in', '(TEACHER,PARENT,STUDENT)');
   if (linksError) throw linksError;
   const codesByMembership = new Map<string, string[]>();
-  for (const l of (links ?? []) as unknown as { membership_id: string; role_id: string }[]) {
-    const code = codeByRole.get(l.role_id);
-    if (code) codesByMembership.set(l.membership_id, [...(codesByMembership.get(l.membership_id) ?? []), code]);
+  const nameByCode = new Map<string, string>();
+  const byMembership = new Map<string, Membership>();
+  for (const l of (links ?? []) as unknown as { membership_id: string; roles: { code: string; name: string } | null; school_memberships: Membership | null }[]) {
+    const code = l.roles?.code;
+    // Fonctions prévues, et celles créées par la plateforme (« F_… », lot 6).
+    if (!code || !(code === 'SCHOOL_ADMIN' || isStaffFunction(code)) || !l.school_memberships) continue;
+    codesByMembership.set(l.membership_id, [...(codesByMembership.get(l.membership_id) ?? []), code]);
+    if (l.roles?.name) nameByCode.set(code, l.roles.name);
+    byMembership.set(l.membership_id, l.school_memberships);
   }
-  const membershipIds = [...codesByMembership.keys()];
-  if (membershipIds.length === 0) return [];
-
-  // 3. Données des personnes, par lots.
-  const memberships: Membership[] = [];
-  for (const ids of chunk(membershipIds)) {
-    const { data, error } = await supabase
-      .from('school_memberships')
-      .select('id, user_id, users(first_name, last_name, display_name, contact_email)')
-      .eq('school_id', ctx.school.id)
-      .in('id', ids);
-    if (error) throw error;
-    memberships.push(...((data ?? []) as unknown as Membership[]));
-  }
+  const memberships = [...byMembership.values()];
+  if (memberships.length === 0) return [];
   const userIds = memberships.map((m) => m.user_id);
 
   const accesses = new Map<string, Access>();

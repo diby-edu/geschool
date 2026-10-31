@@ -51,6 +51,40 @@ export async function listMissingCalls(ctx: TenantContext, from: string, to: str
   if (probleme) throw new ValidationError(probleme);
 
   const supabase = await createClient();
+  const maintenant = new Date().toISOString();
+
+  // Une lecture qui ne rend que les cours SANS appel (missing_calls, 0165) ;
+  // avant la migration, la lecture complete ci-dessous.
+  const direct = await supabase.rpc('missing_calls' as never, { p_school: ctx.school.id, p_from: from, p_to: to, p_now: maintenant } as never);
+  if (!direct.error) {
+    return ((direct.data ?? []) as {
+      occurrence_id: string;
+      occurs_on: string;
+      starts_at: string;
+      ends_at: string;
+      subject: string;
+      class_name: string | null;
+      teacher_id: string | null;
+      teacher: string | null;
+      reason: string | null;
+      note: string | null;
+      reviewed_at: string | null;
+    }[]).map((o) => ({
+      occurrenceId: o.occurrence_id,
+      date: o.occurs_on,
+      startsAt: hm(o.starts_at),
+      endsAt: hm(o.ends_at),
+      subject: o.subject,
+      klass: o.class_name ?? '—',
+      teacherId: o.teacher_id,
+      teacher: o.teacher,
+      reason: o.reason,
+      note: o.note,
+      reviewedAt: o.reviewed_at,
+    }));
+  }
+  if (direct.error.code !== 'PGRST202' && direct.error.code !== '42883') throw direct.error;
+
   // L'appel et la qualification sont ramenes EN RELATION, pas par une seconde
   // requete filtree sur les identifiants : PostgREST passe ses filtres dans
   // l'URL, et quatre cents identifiants la font deborder — la requete echouait
@@ -63,7 +97,6 @@ export async function listMissingCalls(ctx: TenantContext, from: string, to: str
     'attendance_registers(status), ' +
     'attendance_gaps(reason, note, reviewed_at)';
 
-  const maintenant = new Date().toISOString();
   const occurrences = await fetchAllRows<Brute>((cursor) => {
     let q = supabase
       .from('session_occurrences')

@@ -62,7 +62,9 @@ export type AdminOperation =
   // Journal des erreurs de l'application (page Technique, 0151).
   | 'errors.log'
   // Relevés du serveur et sauvegardes de la base (page Technique, 0153).
-  | 'platform.monitoring';
+  | 'platform.monitoring'
+  // Paiement en ligne PayDunya (0157) : créer, vérifier, confirmer un paiement.
+  | 'billing.online';
 
 let cached: SupabaseClient<Database> | null = null;
 

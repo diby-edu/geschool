@@ -75,7 +75,12 @@ export async function sendAndLog(input: SendSmsInput): Promise<SendSmsOutcome> {
   // Le quota AVANT l'envoi : une fois le message parti, l'operateur est paye.
   if (input.schoolId && !HORS_QUOTA.has(kind)) {
     const quota = await quotaDuSysteme(admin, input.schoolId);
-    if (!quotaAllows(quota, parts)) {
+    // Quota du mois épuisé : on prend dans la réserve de SMS achetés (0157),
+    // valable jusqu'à épuisement. Elle ne baisse que si le SMS part ici.
+    const fromReserve =
+      !quotaAllows(quota, parts) &&
+      Boolean((await admin.rpc('sms_credit_consume' as never, { p_school: input.schoolId, p_parts: parts } as never)).data);
+    if (!quotaAllows(quota, parts) && !fromReserve) {
       // On garde la trace du refus : l'ecole doit pouvoir constater que des
       // alertes n'ont pas ete envoyees, et pourquoi.
       const { data } = await admin

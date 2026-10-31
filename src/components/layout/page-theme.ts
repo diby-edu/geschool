@@ -42,6 +42,8 @@ const ROUTE_MODULE: Record<string, ModuleKey> = {
   annonces: 'annonces',
   notifications: 'notifications',
   parametres: 'parametres',
+  facturation: 'abonnement',
+  paiement: 'abonnement',
 };
 
 /** Rubriques de Paramètres (features/settings/hub.ts) : mêmes teintes que leurs cartes. */

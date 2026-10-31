@@ -38,11 +38,15 @@ export async function readChecklist(ctx: TenantContext): Promise<Checklist> {
 
   // L'annee EN COURS, sinon celle qui existe sans avoir ete activee : une
   // annee creee mais endormie ne doit pas faire croire que tout est a refaire.
-  const { data: annees } = await supabase
-    .from('academic_years')
-    .select('id, name, is_current')
-    .eq('school_id', ctx.school.id)
-    .order('starts_on', { ascending: false });
+  // L'année en cours est déjà connue (contexte) : la relire coûtait un aller-retour
+  // avant tous les comptages du tableau de bord.
+  const { data: annees } = ctx.academicYear?.isCurrent
+    ? { data: [{ id: ctx.academicYear.id, name: ctx.academicYear.name, is_current: true }] }
+    : await supabase
+        .from('academic_years')
+        .select('id, name, is_current')
+        .eq('school_id', ctx.school.id)
+        .order('starts_on', { ascending: false });
   const toutes = (annees ?? []) as { id: string; name: string; is_current: boolean }[];
   const active = toutes.find((y) => y.is_current) ?? null;
   const dormante = active ? null : (toutes[0] ?? null);

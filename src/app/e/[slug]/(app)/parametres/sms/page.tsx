@@ -4,6 +4,9 @@ import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess } from '@/lib/permissions/guard';
 import { readSender } from '@/features/sms/sender';
 import { readSmsQuota, quotaLabel, WARN_RATIO } from '@/features/sms/quota';
+import { SmsPackForm } from '@/features/billing/components/SmsPackForm';
+import { buySmsPackAction } from '@/features/billing/online-actions';
+import { hasPermission } from '@/lib/permissions';
 import { buildDossier, dossierEmail, exemples } from '@/features/sms/dossier';
 import { saveSenderAction, markSenderRequestedAction, setSenderStatusAction } from '@/features/sms/actions';
 import { SenderForm } from '@/features/sms/components/SenderForm';
@@ -32,6 +35,15 @@ export default async function SmsSenderPage({
 
   const sender = await readSender(ctx);
   const quota = await readSmsQuota(ctx);
+  // SMS achetés (0157) : réserve valable jusqu'à épuisement, et achat en ligne.
+  const { readOnlineOffer } = await import('@/services/online-payments');
+  const { createClient } = await import('@/lib/supabase/server');
+  const [offer, reserveRow] = await Promise.all([
+    readOnlineOffer().catch(() => null),
+    (await createClient()).from('sms_credit_balances' as never).select('balance').eq('school_id', ctx.school.id).maybeSingle(),
+  ]);
+  const reserve = Number((reserveRow.data as { balance: number } | null)?.balance ?? 0);
+  const canBuy = Boolean(offer?.open && offer.smsPacks.length > 0 && hasPermission(ctx, 'billing.manage'));
   const { row, missing } = await buildDossier(ctx);
   const jours = waitingDays(sender.requestedOn);
   const mail = dossierEmail(ctx.school.name, sender.name || sender.platformSender);
@@ -108,17 +120,31 @@ export default async function SmsSenderPage({
 
             <p className="text-sm text-[color:var(--muted-foreground)]">{quotaLabel(quota)}</p>
 
-            {quota.remaining === 0 ? (
+            {reserve > 0 ? (
+              <p className="text-sm">
+                Réserve de SMS achetés : <b>{reserve.toLocaleString('fr-FR')} SMS</b>, valables jusqu’à épuisement (utilisés une fois le quota du mois atteint).
+              </p>
+            ) : null}
+            {quota.remaining === 0 && reserve === 0 ? (
               <Alert tone="error">
                 Quota épuisé. Les alertes d’absence par SMS ne partent plus jusqu’au mois prochain.{' '}
-                <strong>Les identifiants de connexion continuent de partir</strong> — ils ne sont jamais bloqués. Pour
-                en obtenir davantage dès maintenant, contactez la plateforme.
+                <strong>Les identifiants de connexion continuent de partir</strong> — ils ne sont jamais bloqués.{' '}
+                {canBuy ? 'Pour en avoir tout de suite, achetez un pack ci-dessous.' : 'Pour en obtenir davantage dès maintenant, contactez la plateforme.'}
               </Alert>
             ) : quota.ratio >= WARN_RATIO ? (
               <Alert tone="warning">
                 Il vous reste {quota.remaining.toLocaleString('fr-FR')} SMS. Au-delà, seules les alertes s’arrêtent.
               </Alert>
             ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {canBuy && offer ? (
+        <Card>
+          <CardContent className="space-y-3">
+            <p className="text-sm font-semibold">Acheter des SMS</p>
+            <SmsPackForm action={buySmsPackAction.bind(null, slug)} packs={offer.smsPacks} feePct={offer.feePct} />
           </CardContent>
         </Card>
       ) : null}

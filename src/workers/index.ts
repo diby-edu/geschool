@@ -13,7 +13,8 @@ import { serverEnv } from '@/lib/env';
  *     et prevenir au franchissement des seuils regles par l'etablissement ;
  *   * les ACCUSES DE RECEPTION SMS : demander a l'operateur ce que sont
  *     devenus les messages partis mais non confirmes ;
- *   * le RELEVE de surveillance, toutes les 5 minutes (page Technique, 0153).
+ *   * le RELEVE de surveillance, toutes les 5 minutes (page Technique, 0153) ;
+ *   * les PAIEMENTS EN LIGNE en attente, revérifiés toutes les 15 minutes (0157).
  *
  * Les files de generation d'emploi du temps et d'envoi d'identifiants restent
  * declenchees depuis l'application, pas d'ici.
@@ -159,13 +160,23 @@ async function enregistrerTaches(boss: PgBoss): Promise<void> {
     });
   }
 
+  // Paiements en ligne (0157) : un message PayDunya perdu ne laisse jamais un paiement en attente.
+  const PAIEMENTS = 'online-payments-check';
+  await boss.createQueue(PAIEMENTS);
+  await boss.work(PAIEMENTS, async () => {
+    const { recheckPendingPayments } = await import('@/services/online-payments');
+    const r = await recheckPendingPayments();
+    if (r.checked > 0) console.warn(`[worker] paiements en ligne : ${r.checked} verifie(s), ${r.paid} confirme(s), ${r.closed} clos`);
+  });
+  await boss.schedule(PAIEMENTS, '*/15 * * * *');
+
   await boss.schedule(ABONNEMENTS, '5 0 * * *');
   await boss.schedule(SAUVEGARDE, '0 2 * * *');
   await boss.schedule(RELEVE, '*/5 * * * *');
   await boss.schedule(ALERTES, '0 6 * * *');
   await boss.schedule(ACCUSES, '15 6 * * *');
   console.warn(
-    "[worker] taches enregistrees : abonnements (0 h 05), sauvegarde (2 h), alertes d'absence (6 h), accuses de reception (6 h 15), releve (toutes les 5 min).",
+    "[worker] taches enregistrees : abonnements (0 h 05), sauvegarde (2 h), alertes d'absence (6 h), accuses de reception (6 h 15), releve (toutes les 5 min), paiements en ligne (toutes les 15 min).",
   );
 }
 

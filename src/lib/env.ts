@@ -103,6 +103,15 @@ const serverSchema = z.object({
   SMTP_PASSWORD: z.string().default(''),
   SMTP_FROM: z.string().default(''),
 
+  // Paiement en ligne PayDunya (0157). Vides = paiement en ligne fermé (le
+  // versement manuel reste). Les clés se déposent sur le VPS avec
+  // scripts/paydunya-cles.ps1 — jamais dans le code ni dans une conversation.
+  PAYDUNYA_MASTER_KEY: z.string().default(''),
+  PAYDUNYA_PRIVATE_KEY: z.string().default(''),
+  PAYDUNYA_PUBLIC_KEY: z.string().default(''),
+  PAYDUNYA_TOKEN: z.string().default(''),
+  PAYDUNYA_MODE: z.enum(['test', 'live']).default('test'),
+
   CHROMIUM_EXECUTABLE_PATH: z.string().default(''),
   PDF_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(4).default(1),
 

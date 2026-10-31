@@ -5,9 +5,11 @@ import { requirePageAccess, requireFeature } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { listAssessments, statusLabel, type AssessmentStatus } from '@/features/evaluations/assessments';
 import { listPeriods } from '@/features/academic-years/queries';
-import { listYearClasses, listActiveSubjects } from '@/features/assignments/queries';
+import { listActiveSubjects } from '@/features/assignments/queries';
 import { bulkTransitionAction } from '@/features/evaluations/actions';
-import { AssessmentFilters, BulkSelectionForm } from '@/features/evaluations/components/AssessmentAdmin';
+import { BulkSelectionForm } from '@/features/evaluations/components/AssessmentAdmin';
+import { ListFilters } from '@/components/data-table/ListFilters';
+import { listClassFilterOptions } from '@/features/students/queries';
 import { parseListParams, pageCount, mergeQuery } from '@/lib/query/list';
 import { getMyTaughtClasses } from '@/features/teachers/my-scope';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
@@ -87,16 +89,17 @@ export default async function EvaluationsPage({
   };
   const filters = {
     ...(pick('periode') ? { periodId: pick('periode')! } : {}),
+    ...(pick('niveau') ? { levelId: pick('niveau')! } : {}),
     ...(pick('classe') ? { classId: pick('classe')! } : {}),
     ...(pick('matiere') ? { subjectId: pick('matiere')! } : {}),
     ...(pick('etat') ? { status: pick('etat') as AssessmentStatus } : {}),
   };
   const lp = parseListParams(sp, { sortable: [], pageSize: 50 });
   // 10 000 evaluations par an dans une vraie ecole : on n'en lit qu'une page.
-  const [{ rows: assessments, total }, periods, classes, subjects] = await Promise.all([
+  const [{ rows: assessments, total }, periods, options, subjects] = await Promise.all([
     listAssessments(ctx, yearId, filters, { from: lp.from, to: lp.to }),
     listPeriods(ctx, yearId),
-    listYearClasses(ctx, yearId),
+    listClassFilterOptions(ctx, yearId),
     listActiveSubjects(ctx),
   ]);
   const pages = pageCount(total, lp.pageSize);
@@ -162,12 +165,26 @@ export default async function EvaluationsPage({
         }
       />
 
-      <AssessmentFilters
+      <ListFilters
         basePath={base}
-        searchParams={sp}
-        periods={periods.map((p) => ({ id: p.id, name: p.name }))}
-        classes={classes}
-        subjects={subjects}
+        fields={[
+          { name: 'periode', label: 'Période', allLabel: 'Toutes', value: pick('periode') ?? '', options: periods.map((p) => ({ value: p.id, label: p.name })) },
+          { name: 'niveau', label: 'Niveau', allLabel: 'Tous les niveaux', value: pick('niveau') ?? '', options: options.levels.map((l) => ({ value: l.id, label: l.name })) },
+          { name: 'classe', label: 'Classe', allLabel: 'Toutes les classes', value: pick('classe') ?? '', dependsOn: 'niveau', options: options.classes.map((c) => ({ value: c.id, label: c.name, parent: c.levelId })) },
+          { name: 'matiere', label: 'Matière', allLabel: 'Toutes les matières', value: pick('matiere') ?? '', options: subjects.map((s) => ({ value: s.id, label: s.name })) },
+          {
+            name: 'etat',
+            label: 'État',
+            allLabel: 'Tous',
+            value: pick('etat') ?? '',
+            options: [
+              { value: 'DRAFT', label: 'Brouillon' },
+              { value: 'OPEN', label: 'Prête à clôturer' },
+              { value: 'CLOSED', label: 'Clôturée' },
+              { value: 'PUBLISHED', label: 'Publiée' },
+            ],
+          },
+        ]}
       />
 
       {sp.lot !== undefined ? (
@@ -193,6 +210,7 @@ export default async function EvaluationsPage({
             back={`${base}${mergeQuery(sp, {})}`}
             filters={{
               periodId: filters.periodId ?? '',
+              levelId: filters.levelId ?? '',
               classId: filters.classId ?? '',
               subjectId: filters.subjectId ?? '',
               status: filters.status ?? '',

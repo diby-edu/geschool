@@ -20,7 +20,8 @@ export type ModuleKey =
   | 'bulletins'
   | 'annonces'
   | 'notifications'
-  | 'parametres';
+  | 'parametres'
+  | 'abonnement';
 
 export type ModuleStyle = {
   c1: string;
@@ -45,6 +46,7 @@ export const MODULE_STYLE: Record<ModuleKey, ModuleStyle> = {
   annonces: { c1: '#9a3412', c2: '#c2410c', onBlock: '#ffffff', tint: '#ffe6d5', ink: '#9a3412', dtint: 'rgba(251,146,60,0.16)', dink: '#fdba74' },
   notifications: { c1: '#1e293b', c2: '#475569', onBlock: '#ffffff', tint: '#e6eaf0', ink: '#334155', dtint: 'rgba(148,163,184,0.16)', dink: '#cbd5e1' },
   parametres: { c1: '#1e293b', c2: '#475569', onBlock: '#ffffff', tint: '#e6eaf0', ink: '#334155', dtint: 'rgba(148,163,184,0.16)', dink: '#cbd5e1' },
+  abonnement: { c1: '#0f766e', c2: '#14a38f', onBlock: '#ffffff', tint: '#d5f5ef', ink: '#0f766e', dtint: 'rgba(45,212,191,0.18)', dink: '#5eead4' },
 };
 
 /** Degrade CSS d'un bloc plein. */
@@ -67,4 +69,5 @@ export const MODULE_LABEL: Record<ModuleKey, string> = {
   annonces: 'Annonces',
   notifications: 'Notifications',
   parametres: 'Paramètres',
+  abonnement: 'Abonnement',
 };

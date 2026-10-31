@@ -7,6 +7,10 @@ import { listOccurrences } from '@/features/attendance/occurrences';
 import { getCurrentCoursesForTeacher } from '@/features/attendance/current';
 import { loadAppel } from '@/features/attendance/registers';
 import { CurrentAppelCard } from '@/features/attendance/components/CurrentAppelCard';
+import { DayClassTable } from '@/features/attendance/components/DayClassTable';
+import { loadDayByClass } from '@/features/attendance/day-classes';
+import { schoolToday } from '@/features/dashboard/time';
+import { ListFilters } from '@/components/data-table/ListFilters';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -95,27 +99,122 @@ export default async function AttendancePage({
     );
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const today = schoolToday(ctx.school.timezone, now);
   const date = typeof sp.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : today;
-  const occurrences = await listOccurrences(ctx, date);
 
   const canJustify = hasPermission(ctx, 'attendance.justify');
   const canSeeMissing = hasPermission(ctx, 'attendance.missing_calls') || hasPermission(ctx, 'attendance.view_all');
+  const headerAction = (
+    <div className="flex flex-wrap items-center gap-2">
+      <Link href={`${base}/absences`}><Button variant="ghost">Absences</Button></Link>
+      {canSeeMissing ? (
+        <Link href={`${base}/non-faits`}><Button variant="ghost">Appels non faits</Button></Link>
+      ) : null}
+      {canJustify ? <Link href={`${base}/justificatifs`}><Button variant="secondary">Justificatifs</Button></Link> : null}
+    </div>
+  );
+
+  // Un résumé par classe (0162, maquette validée le 2026-10-30) ; sans la
+  // fonction ou sans le droit de tout voir, l'ancienne liste des cours.
+  const byClass = await loadDayByClass(ctx, date, now);
+  if (byClass) {
+    const pick = (v: string | string[] | undefined) => (typeof v === 'string' ? v : '');
+    const niveau = pick(sp.niveau);
+    const appels = pick(sp.appels);
+    const q = pick(sp.q).trim().toLowerCase();
+    const levels = [...new Map(byClass.filter((c) => c.levelId).map((c) => [c.levelId!, c.levelName ?? '—'])).entries()];
+    const shown = byClass.filter(
+      (c) =>
+        (!niveau || c.levelId === niveau) &&
+        (!q || c.name.toLowerCase().includes(q)) &&
+        (appels !== 'manquant' || c.courses.some((k) => k.state === 'missed')),
+    );
+    // Les chiffres du haut comptent chaque cours une fois, même commun à deux classes.
+    const courses = [...new Map(byClass.flatMap((c) => c.courses.map((k) => [k.id, k] as const))).values()];
+    const done = courses.filter((k) => k.ended && k.state === 'done').length;
+    const missed = courses.filter((k) => k.state === 'missed').length;
+    const ongoing = courses.filter((k) => !k.ended && (k.state === 'now' || k.state === 'done')).length;
+    const absent = byClass.reduce((n, c) => n + c.absent, 0);
+    const excused = byClass.reduce((n, c) => n + c.excused, 0);
+    const late = byClass.reduce((n, c) => n + c.late, 0);
+    const dayLabel = new Date(`${date}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const tile = (value: number, label: React.ReactNode, color?: string) => (
+      <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)' }}>
+        <b className="block text-2xl tabular-nums" style={color ? { color } : undefined}>{value.toLocaleString('fr-FR')}</b>
+        <span className="text-xs text-[color:var(--muted-foreground)]">{label}</span>
+      </div>
+    );
+
+    return (
+      <div className="mx-auto max-w-6xl space-y-4">
+        <PageHeader
+          title="Appel et présences"
+          description={`${dayLabel.charAt(0).toUpperCase()}${dayLabel.slice(1)}${date === today ? '' : ' (autre jour)'} · un résumé par classe, le détail des cours en un clic`}
+          action={headerAction}
+        />
+        {courses.length === 0 ? (
+          <EmptyState title="Aucun cours ce jour" hint="Les cours proviennent d’un emploi du temps publié. Choisissez un autre jour ou publiez une version." />
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2.5 md:grid-cols-5">
+              {tile(done, <>cours terminés <b>avec</b> appel</>, 'var(--color-success)')}
+              {tile(missed, <>cours terminés <b>sans</b> appel (le professeur l’a oublié)</>, missed ? 'var(--color-warning)' : undefined)}
+              {tile(ongoing, 'cours en ce moment')}
+              {tile(absent, `élève${absent > 1 ? 's' : ''} absent${absent > 1 ? 's' : ''}${excused ? `, dont ${excused} avec justificatif` : ''}`, absent ? 'var(--color-danger)' : undefined)}
+              {tile(late, `élève${late > 1 ? 's' : ''} arrivé${late > 1 ? 's' : ''} en retard`)}
+            </div>
+            <ListFilters
+              basePath={base}
+              fields={[
+                { name: 'date', label: 'Jour', allLabel: '', value: date, options: [], type: 'date' },
+                { name: 'niveau', label: 'Niveau', allLabel: 'Tous les niveaux', value: niveau, options: levels.map(([id, name]) => ({ value: id, label: name })) },
+                {
+                  name: 'appels',
+                  label: 'Appels',
+                  allLabel: 'Toutes les classes',
+                  value: appels,
+                  options: [{ value: 'manquant', label: 'Avec un appel manquant' }],
+                },
+              ]}
+              search={{ value: pick(sp.q), placeholder: 'Classe (ex. 4e B)…' }}
+            />
+            <p className="px-1 text-xs text-[color:var(--muted-foreground)]">
+              {shown.length} classe{shown.length > 1 ? 's' : ''}
+              {shown.length !== byClass.length ? ` sur ${byClass.length}` : ''}
+            </p>
+            {shown.length === 0 ? (
+              <EmptyState title="Aucune classe pour ces filtres" hint="Changez de filtre ou effacez la recherche." />
+            ) : (
+              <DayClassTable classes={shown} base={base} />
+            )}
+            <p className="flex flex-wrap gap-4 px-1 text-xs text-[color:var(--muted-foreground)]">
+              {[
+                ['var(--color-success)', 'appel fait'],
+                ['var(--color-warning)', 'terminé sans appel'],
+                ['var(--color-brand)', 'en cours'],
+                ['var(--border)', 'plus tard'],
+              ].map(([c, l]) => (
+                <span key={l} className="inline-flex items-center gap-1.5">
+                  <i className="inline-block h-3 w-3 rounded" style={{ backgroundColor: c }} /> {l}
+                </span>
+              ))}
+              <span>· une pastille double = un cours de 2 h (un seul appel)</span>
+            </p>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  const occurrences = await listOccurrences(ctx, date);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
         title="Appel et présences"
         description="Suivre l’appel des cours du jour, fait par chaque enseignant pendant son cours"
-        action={
-          <div className="flex items-center gap-2">
-            <Link href={`${base}/absences`}><Button variant="ghost">Absences</Button></Link>
-            {canSeeMissing ? (
-              <Link href={`${base}/non-faits`}><Button variant="ghost">Appels non faits</Button></Link>
-            ) : null}
-            {canJustify ? <Link href={`${base}/justificatifs`}><Button variant="secondary">Justificatifs</Button></Link> : null}
-          </div>
-        }
+        action={headerAction}
       />
 
       <Card>

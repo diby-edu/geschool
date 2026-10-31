@@ -22,6 +22,8 @@ export const ROOM_SORTABLE = ['code', 'name', 'capacity'] as const;
 export async function listRooms(
   ctx: TenantContext,
   params: ListParams,
+  /** Filtre par type de salle (laboratoire, terrain…). */
+  typeId?: string,
 ): Promise<{ rows: RoomRow[]; total: number }> {
   const supabase = await createClient();
   let query = supabase
@@ -30,6 +32,7 @@ export async function listRooms(
     .eq('school_id', ctx.school.id);
 
   if (params.q) query = query.or(`name.ilike.%${params.q}%,code.ilike.%${params.q}%`);
+  if (typeId) query = query.eq('room_type_id', typeId);
 
   const sort = params.sort && (ROOM_SORTABLE as readonly string[]).includes(params.sort)
     ? params.sort

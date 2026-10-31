@@ -15,6 +15,8 @@ const envoyes: { to: string; body: string }[] = [];
 const lignes: Record<string, unknown>[] = [];
 let quota = { included: 0, granted: 0, used: 0 };
 let quotaErreur: { message: string } | null = null;
+/** Réserve de SMS achetés (0157) : nombre de SMS qu'elle peut encore donner. */
+let reserve = 0;
 
 vi.mock('@/lib/sms', () => ({
   getSmsProvider: () => ({
@@ -28,7 +30,17 @@ vi.mock('@/lib/sms', () => ({
 
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({
-    rpc: async () => ({ data: quotaErreur ? null : [quota], error: quotaErreur }),
+    rpc: async (nom: string, args?: { p_parts?: number }) => {
+      if (nom === 'sms_credit_consume') {
+        const parts = args?.p_parts ?? 0;
+        if (reserve >= parts) {
+          reserve -= parts;
+          return { data: true, error: null };
+        }
+        return { data: false, error: null };
+      }
+      return { data: quotaErreur ? null : [quota], error: quotaErreur };
+    },
     from: () => ({
       insert: (ligne: Record<string, unknown>) => {
         lignes.push(ligne);
@@ -45,6 +57,7 @@ beforeEach(() => {
   lignes.length = 0;
   quota = { included: 0, granted: 0, used: 0 };
   quotaErreur = null;
+  reserve = 0;
 });
 
 const base = { schoolId: 'ecole-1', to: '+2250700000000', body: 'Bonjour', sender: 'TEST' };
@@ -52,6 +65,15 @@ const base = { schoolId: 'ecole-1', to: '+2250700000000', body: 'Bonjour', sende
 describe('quota epuise', () => {
   beforeEach(() => {
     quota = { included: 10, granted: 0, used: 10 };
+    reserve = 0;
+  });
+
+  it('prend dans la réserve de SMS achetés, valable jusqu’à épuisement (0157)', async () => {
+    reserve = 5;
+    const r = await sendAndLog({ ...base, kind: 'ATTENDANCE' });
+    expect(r.ok).toBe(true);
+    expect(envoyes).toHaveLength(1);
+    expect(reserve).toBe(4);
   });
 
   it('bloque une alerte sans rien envoyer', async () => {

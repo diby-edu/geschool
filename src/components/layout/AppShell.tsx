@@ -5,6 +5,9 @@ import { ModuleScope } from './ModuleScope';
 import { ThemeToggle } from './ThemeToggle';
 import { AppLogo } from './AppLogo';
 import { TopBar, type TopBarData } from './TopBar';
+import { Suspense } from 'react';
+import { NavProgress } from './NavProgress';
+import { HoverPrefetch } from './HoverPrefetch';
 
 export type { NavItem } from './nav-modules';
 import type { NavItem } from './nav-modules';
@@ -39,6 +42,10 @@ export function AppShell({
 }) {
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[15rem_1fr]">
+      <Suspense fallback={null}>
+        <NavProgress />
+        <HoverPrefetch />
+      </Suspense>
       {/* Menu sombre en clair comme en sombre : variante « mixte » de la Mosaïque. */}
       <aside className="zone-sombre border-b md:border-b-0 md:border-r" style={{ backgroundColor: 'var(--surface)' }}>
         {back ? (

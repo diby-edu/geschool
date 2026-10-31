@@ -54,6 +54,7 @@ export async function bulkTransitionAction(
       scope === 'filter'
         ? await assessmentIdsMatching(ctx, ctx.academicYear.id, {
             ...(str('periodId') ? { periodId: str('periodId')! } : {}),
+            ...(str('levelId') ? { levelId: str('levelId')! } : {}),
             ...(str('classId') ? { classId: str('classId')! } : {}),
             ...(str('subjectId') ? { subjectId: str('subjectId')! } : {}),
             ...(str('status') ? { status: str('status') as AssessmentStatus } : {}),

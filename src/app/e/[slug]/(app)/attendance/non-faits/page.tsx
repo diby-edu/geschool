@@ -12,6 +12,9 @@ import { Alert } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
+import { listClassFilterOptions } from '@/features/students/queries';
+import { ListFilters } from '@/components/data-table/ListFilters';
+
 export const metadata: Metadata = { title: 'Appels non faits' };
 export const dynamic = 'force-dynamic';
 
@@ -44,9 +47,19 @@ export default async function MissingCallsPage({
   const to = typeof sp.au === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(sp.au) ? sp.au : jour(0);
   const probleme = windowProblem(from, to);
 
-  const [toutes, reasons] = probleme
-    ? [[], await readGapReasons(ctx)]
-    : await Promise.all([listMissingCalls(ctx, from, to), readGapReasons(ctx)]);
+  const [lues, reasons, options] = await Promise.all([
+    probleme ? Promise.resolve([]) : listMissingCalls(ctx, from, to),
+    readGapReasons(ctx),
+    ctx.academicYear ? listClassFilterOptions(ctx, ctx.academicYear.id) : Promise.resolve({ levels: [], classes: [] }),
+  ]);
+  // Filtres niveau et classe : un créneau compte s'il concerne la classe (un
+  // cours commun « 6e A + 6e B » compte pour les deux).
+  const niveau = typeof sp.niveau === 'string' ? sp.niveau : '';
+  const classe = typeof sp.classe === 'string' ? sp.classe : '';
+  const wanted = new Set(
+    options.classes.filter((c) => (!classe || c.id === classe) && (!niveau || c.levelId === niveau)).map((c) => c.name),
+  );
+  const toutes = niveau || classe ? lues.filter((r) => r.klass.split(' + ').some((n) => wanted.has(n))) : lues;
 
   // Sur une semaine, un etablissement entier produit des centaines de lignes :
   // on commence par QUI, et on ouvre ensuite le detail d'une personne.
@@ -54,7 +67,7 @@ export default async function MissingCallsPage({
   const prof = typeof sp.prof === 'string' ? sp.prof : null;
   const rows = prof ? toutes.filter((r) => (r.teacherId ?? '—') === prof) : toutes.slice(0, DETAIL_SANS_FILTRE);
   const tronque = !prof && toutes.length > DETAIL_SANS_FILTRE;
-  const periode = new URLSearchParams({ du: from, au: to });
+  const periode = new URLSearchParams({ du: from, au: to, ...(niveau ? { niveau } : {}), ...(classe ? { classe } : {}) });
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -71,42 +84,18 @@ export default async function MissingCallsPage({
         }
       />
 
-      <Card>
-        <CardContent>
-          <form method="get" className="flex flex-wrap items-end gap-3">
-            <div>
-              <label htmlFor="du" className="mb-1 block text-sm font-medium">
-                Du
-              </label>
-              <input
-                id="du"
-                name="du"
-                type="date"
-                defaultValue={from}
-                className="h-10 rounded-[--radius-card] border bg-[color:var(--surface)] px-3 text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="au" className="mb-1 block text-sm font-medium">
-                Au
-              </label>
-              <input
-                id="au"
-                name="au"
-                type="date"
-                defaultValue={to}
-                className="h-10 rounded-[--radius-card] border bg-[color:var(--surface)] px-3 text-sm"
-              />
-            </div>
-            <Button type="submit" variant="secondary" size="sm">
-              Afficher
-            </Button>
-            <span className="text-xs text-[color:var(--muted-foreground)]">
-              Au plus {MAX_WINDOW_DAYS} jours à la fois.
-            </span>
-          </form>
-        </CardContent>
-      </Card>
+      <ListFilters
+        basePath={`/e/${slug}/attendance/non-faits`}
+        keep={{ prof: prof ?? '' }}
+        fields={[
+          { name: 'du', label: 'Du', allLabel: '', value: from, options: [], type: 'date' },
+          { name: 'au', label: 'Au', allLabel: '', value: to, options: [], type: 'date' },
+          { name: 'niveau', label: 'Niveau', allLabel: 'Tous les niveaux', value: niveau, options: options.levels.map((l) => ({ value: l.id, label: l.name })) },
+          { name: 'classe', label: 'Classe', allLabel: 'Toutes les classes', value: classe, dependsOn: 'niveau', options: options.classes.map((c) => ({ value: c.id, label: c.name, parent: c.levelId })) },
+        ]}
+      >
+        <span className="self-end pb-2 text-xs text-[color:var(--muted-foreground)]">Au plus {MAX_WINDOW_DAYS} jours à la fois.</span>
+      </ListFilters>
 
       {probleme ? null : resume.length > 0 ? (
         <Card>

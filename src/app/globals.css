@@ -277,3 +277,11 @@ input:disabled,
 [aria-disabled='true'] {
   cursor: not-allowed;
 }
+
+/* Barre de chargement en haut de l'écran (components/layout/NavProgress.tsx). */
+@keyframes nav-progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+.nav-progress-bar { animation: nav-progress 0.9s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .nav-progress-bar { animation: none; width: 100%; opacity: 0.6; } }

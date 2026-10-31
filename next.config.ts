@@ -83,6 +83,9 @@ const nextConfig: NextConfig = {
     // école) arrivait tronqué, donc « illisible » (constaté le 28/10/2026). La
     // vraie limite reste celle de nginx : 15 Mo partout, sauf l'envoi d'une sauvegarde.
     proxyClientMaxBodySize: '500mb',
+    // Une page préchargée au survol (HoverPrefetch) sert 30 s au plus : au-delà,
+    // le clic redemande la page, pour ne jamais afficher des chiffres anciens.
+    staleTimes: { static: 30 },
   },
 
   images: {

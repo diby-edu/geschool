@@ -56,6 +56,26 @@ export type StaffDashboard = {
 
 const SIX_WEEKS = 6;
 
+type Timer = (<T>(label: string, p: PromiseLike<T>) => Promise<T>) & { done: () => void };
+
+/**
+ * Relevé des temps d'un tableau de bord : quand il dépasse 0,6 s, une ligne dans
+ * le journal du serveur dit quelle lecture s'est terminée quand (en ms depuis le
+ * début). Mesurer en ligne sans rien activer : la base répond vite, le reste
+ * (réseau, serveur) ne se voit qu'ici.
+ */
+function timer(what: string): Timer {
+  const t0 = Date.now();
+  const marks: string[] = [];
+  const timed = (<T,>(label: string, p: PromiseLike<T>) =>
+    Promise.resolve(p).finally(() => marks.push(`${label} ${Date.now() - t0}`))) as Timer;
+  timed.done = () => {
+    const total = Date.now() - t0;
+    if (total > 600) console.warn(`[lent] ${what} ${total} ms : ${marks.join(', ')}`);
+  };
+  return timed;
+}
+
 // ---------------------------------------------------------------------------
 // Periodes de l'annee active
 // ---------------------------------------------------------------------------
@@ -94,6 +114,7 @@ async function loadOverview(
   supabase: Supabase,
   today: string,
   nowIso: string,
+  timed: Timer,
 ): Promise<StaffOverview> {
   const schoolId = ctx.school.id;
   const yearId = ctx.academicYear?.id ?? null;
@@ -130,16 +151,19 @@ async function loadOverview(
       canTeachers
         ? supabase.from('teachers').select('employment_type, user_id').eq('school_id', schoolId).is('deleted_at', null).limit(5000)
         : Promise.resolve(null),
-      canClasses && yearId ? loadClasses(supabase, schoolId, yearId) : Promise.resolve(null),
-      hasPermission(ctx, 'access_accounts.view') ? loadParents(supabase, schoolId) : Promise.resolve(null),
-      hasPermission(ctx, 'users.view') ? listStaff(ctx) : Promise.resolve(null),
+      canClasses && yearId ? timed('classes', loadClasses(supabase, schoolId, yearId)) : Promise.resolve(null),
+      hasPermission(ctx, 'access_accounts.view') ? timed('parents', loadParents(supabase, schoolId)) : Promise.resolve(null),
+      hasPermission(ctx, 'users.view') ? timed('personnel', listStaff(ctx)) : Promise.resolve(null),
       canAttendance
-        ? callRpc<{ week_start: string; records: number; ok: number }[]>(supabase, 'dashboard_weekly_attendance', {
-            p_school: schoolId,
-            p_from: weekFrom,
-            p_to: today,
-            p_now: nowIso,
-          })
+        ? timed(
+            'tendance',
+            callRpc<{ week_start: string; records: number; ok: number }[]>(supabase, 'dashboard_weekly_attendance', {
+              p_school: schoolId,
+              p_from: weekFrom,
+              p_to: today,
+              p_now: nowIso,
+            }),
+          )
         : Promise.resolve(null),
       canJustify
         ? supabase.from('absence_justifications').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).eq('status', 'PENDING')
@@ -152,7 +176,7 @@ async function loadOverview(
             .eq('academic_year_id', yearId)
             .eq('status', 'PUBLISHED')
         : Promise.resolve(null),
-      hasPermission(ctx, 'billing.view') ? getSchoolSubscription(schoolId) : Promise.resolve(null),
+      hasPermission(ctx, 'billing.view') ? timed('abonnement', getSchoolSubscription(schoolId)) : Promise.resolve(null),
     ]);
 
   // Places, niveaux
@@ -286,23 +310,40 @@ export async function loadStaffDashboard(ctx: TenantContext, params: DashParams,
   const canWatch = hasPermission(ctx, 'attendance.view_all') && include.watch;
   const canGrading = hasPermission(ctx, 'grades.view_all') && Boolean(yearId) && include.grading;
 
-  const { periods, year } = await loadPeriods(supabase, ctx);
-  const topRange = resolveRange(params.top, today, periods, year) ?? { from: today, to: today };
-  const watchRange = resolveRange(params.watch, today, periods, year) ?? resolveRange('w7', today, periods, year)!;
+  const timed = timer(`tableau de bord ${ctx.school.slug}`);
 
-  const [overview, dayRes, topRes, gradingRes, watchRes] = await Promise.all([
-    include.overview ? loadOverview(ctx, supabase, today, nowIso) : Promise.resolve(NO_OVERVIEW),
-    canDay ? callRpc<DayOverview>(supabase, 'dashboard_day_overview', { p_school: schoolId, p_day: today, p_now: nowIso }) : Promise.resolve(null),
+  // Seuls « les plus manqués » et « classes à surveiller » dépendent des
+  // périodes (leur plage) : le reste part sans les attendre.
+  const periodsP = timed('periodes', loadPeriods(supabase, ctx));
+  const afterPeriods = <T,>(fn: (p: Awaited<typeof periodsP>) => PromiseLike<T>) => periodsP.then(fn);
+
+  const [{ periods, year }, overview, dayRes, topRes, gradingRes, watchRes] = await Promise.all([
+    periodsP,
+    include.overview ? loadOverview(ctx, supabase, today, nowIso, timed) : Promise.resolve(NO_OVERVIEW),
+    canDay ? timed('jour', callRpc<DayOverview>(supabase, 'dashboard_day_overview', { p_school: schoolId, p_day: today, p_now: nowIso })) : Promise.resolve(null),
     canDay
-      ? callRpc<TopMissed[]>(supabase, 'dashboard_top_missed_calls', { p_school: schoolId, p_from: topRange.from, p_to: topRange.to, p_now: nowIso, p_limit: 5 })
+      ? timed(
+          'plus manques',
+          afterPeriods(({ periods, year }) => {
+            const topRange = resolveRange(params.top, today, periods, year) ?? { from: today, to: today };
+            return callRpc<TopMissed[]>(supabase, 'dashboard_top_missed_calls', { p_school: schoolId, p_from: topRange.from, p_to: topRange.to, p_now: nowIso, p_limit: 5 });
+          }),
+        )
       : Promise.resolve(null),
     canGrading
-      ? callRpc<GradingOverview | null>(supabase, 'dashboard_grading_overview', { p_school: schoolId, p_year: yearId, p_today: today, p_pending_limit: 5 })
+      ? timed('notes', callRpc<GradingOverview | null>(supabase, 'dashboard_grading_overview', { p_school: schoolId, p_year: yearId, p_today: today, p_pending_limit: 5 }))
       : Promise.resolve(null),
     canWatch
-      ? callRpc<LowClass[]>(supabase, 'dashboard_low_attendance_classes', { p_school: schoolId, p_from: watchRange.from, p_to: watchRange.to, p_now: nowIso, p_limit: 6 })
+      ? timed(
+          'a surveiller',
+          afterPeriods(({ periods, year }) => {
+            const watchRange = resolveRange(params.watch, today, periods, year) ?? resolveRange('w7', today, periods, year)!;
+            return callRpc<LowClass[]>(supabase, 'dashboard_low_attendance_classes', { p_school: schoolId, p_from: watchRange.from, p_to: watchRange.to, p_now: nowIso, p_limit: 6 });
+          }),
+        )
       : Promise.resolve(null),
   ]);
+  timed.done();
 
   // « Voir plus » : liste complete des enseignants sans moyennes terminees
   let pendingAll: GradingPendingRow[] | null = null;

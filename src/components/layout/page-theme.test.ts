@@ -17,7 +17,9 @@ describe('pageTheme : la couleur d’une page vient de son adresse', () => {
     expect(rooms.key).toBe('parametres-pedagogie');
     expect(rooms.eyebrow).toBe('Paramètres · Pédagogie');
     expect(pageTheme(`${base}/academic-years/abc`).key).toBe('parametres-etablissement');
-    expect(pageTheme(`${base}/facturation`).key).toBe('parametres-compte');
+    expect(pageTheme(`${base}/roles`).key).toBe('parametres-compte');
+    // Depuis le 2026-10-28, l'Abonnement a son entrée et sa couleur dans le menu (partie Comptes).
+    expect(pageTheme(`${base}/facturation`).key).toBe('abonnement');
   });
 
   it('le tableau de bord et les modules gris gardent le bouton indigo', () => {

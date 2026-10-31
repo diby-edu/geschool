@@ -50,7 +50,7 @@ export async function listMySessionsOn(ctx: TenantContext, teacherId: string, da
   const { data } = await supabase
     .from('session_occurrences')
     .select(
-      'id, starts_at, ends_at, override_starts_at, override_ends_at, ' +
+      'id, starts_at, ends_at, override_starts_at, override_ends_at, attendance_registers(status), ' +
         `schedule_sessions(subjects(name), ${TARGETS_SELECT})`,
     )
     .eq('school_id', ctx.school.id)
@@ -64,6 +64,7 @@ export async function listMySessionsOn(ctx: TenantContext, teacherId: string, da
     ends_at: string;
     override_starts_at: string | null;
     override_ends_at: string | null;
+    attendance_registers: { status: string } | null;
     schedule_sessions: {
       subjects: { name: string } | null;
       schedule_session_targets: SessionTarget[];
@@ -71,12 +72,6 @@ export async function listMySessionsOn(ctx: TenantContext, teacherId: string, da
   }[];
   if (rows.length === 0) return [];
 
-  const { data: regs } = await supabase
-    .from('attendance_registers')
-    .select('session_occurrence_id, status')
-    .eq('school_id', ctx.school.id)
-    .in('session_occurrence_id', rows.map((r) => r.id));
-  const statusByOcc = new Map((regs ?? []).map((r) => [r.session_occurrence_id, r.status]));
 
   const tz = ctx.school.timezone;
   return rows
@@ -93,7 +88,7 @@ export async function listMySessionsOn(ctx: TenantContext, teacherId: string, da
         endsIso,
         startsAt: clock(startsIso, tz),
         endsAt: clock(endsIso, tz),
-        registerStatus: statusByOcc.get(r.id) ?? null,
+        registerStatus: r.attendance_registers?.status ?? null,
       };
     })
     .sort((a, b) => a.startsIso.localeCompare(b.startsIso));

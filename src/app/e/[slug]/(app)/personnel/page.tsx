@@ -17,7 +17,6 @@ import { Button } from '@/components/ui/button';
 import { ConfirmSubmit } from '@/components/ui/confirm-submit';
 import { FilterPill, FilterTile } from '@/components/ui/filters';
 import { SimpleSubmit } from '@/components/ui/simple-submit';
-import { BackToSettings } from '@/features/settings/components/BackToSettings';
 
 export const metadata: Metadata = { title: 'Personnel' };
 
@@ -166,7 +165,6 @@ export default async function StaffPage({
         description="Comptes et fonctions du personnel administratif. Les enseignants se gèrent dans Enseignants."
         action={
           <div className="flex items-center gap-3">
-            <BackToSettings ctx={ctx} />
             {<div className="flex flex-wrap justify-end gap-2">
             <Link href={`/e/${slug}/import?type=staff`}>
               <Button variant="secondary">Importer / exporter</Button>

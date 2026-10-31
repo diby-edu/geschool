@@ -231,6 +231,14 @@ export async function restoreSchool(input: {
         }
       }
 
+      // Les totaux par appel (0160) sont tenus par des déclencheurs, coupés pendant
+      // la remise : on les recalcule pour l'école. Absente avant 0160 : sans objet.
+      if (!input.dryRun && modeOf.has('attendance_records')) {
+        await db.query(`set local session_replication_role = origin`);
+        const fn = await db.query<{ ok: boolean }>(`select to_regprocedure('app.recount_school_registers(uuid)') is not null as ok`);
+        if (fn.rows[0]?.ok) await db.query(`select app.recount_school_registers($1)`, [input.schoolId]);
+      }
+
       await db.query(input.dryRun ? 'rollback' : 'commit');
 
       const sum = (m: Map<string, number>, c: BackupCategory) => c.tables.reduce((n, t) => n + (m.get(t) ?? 0), 0);

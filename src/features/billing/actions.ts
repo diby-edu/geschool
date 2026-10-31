@@ -10,7 +10,7 @@ import { planSchema, subscriptionSchema, paymentSchema } from './schemas';
 import { assertPlatformAdmin, savePlan, deletePlan, assignSubscription, settleDeclaredPayment } from './platform';
 import { deleteModule, saveModule } from './modules';
 import { getAuthenticatedUser } from '@/lib/supabase/server';
-import { UnauthenticatedError } from '@/lib/errors';
+import { UnauthenticatedError, ValidationError } from '@/lib/errors';
 import { recordPayment } from './school';
 
 // --- Plateforme (Super Admin) ------------------------------------------------
@@ -147,6 +147,28 @@ export async function savePaymentSettingsAction(_p: FormState, fd: FormData): Pr
       instructions: String(fd.get('instructions') ?? '').trim().slice(0, 600),
       graceDays: graceDaysOf(fd.get('graceDays')),
     });
+    redirect('/admin/paiements?enregistre=1');
+  });
+}
+
+/** Paiement en ligne (0157) : frais payés par l'école et packs de SMS (Super Admin). */
+export async function saveOnlineSettingsAction(_p: FormState, fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const admin = await requireAdmin();
+    const pct = Number(String(fd.get('onlineFeePct') ?? '').replace(',', '.'));
+    if (!Number.isFinite(pct) || pct < 0 || pct > 20) throw new ValidationError('Les frais vont de 0 à 20 %.');
+    let packs: { quantity: number; price: number }[] = [];
+    try {
+      packs = (JSON.parse(String(fd.get('smsPacks') ?? '[]')) as { quantity: unknown; price: unknown }[]).map((p) => ({
+        quantity: Math.round(Number(p.quantity)),
+        price: Math.round(Number(p.price)),
+      }));
+    } catch {
+      throw new ValidationError('Liste des packs illisible.');
+    }
+    if (packs.some((p) => !(p.quantity >= 1 && p.quantity <= 100000) || !(p.price >= 1))) throw new ValidationError('Chaque pack a un nombre de SMS (1 à 100 000) et un prix.');
+    if (new Set(packs.map((p) => p.quantity)).size !== packs.length) throw new ValidationError('Deux packs ont le même nombre de SMS.');
+    await writePaymentSettings(admin.userId, { onlineFeePct: Math.round(pct * 10) / 10, smsPacks: packs.sort((a, b) => a.quantity - b.quantity) });
     redirect('/admin/paiements?enregistre=1');
   });
 }

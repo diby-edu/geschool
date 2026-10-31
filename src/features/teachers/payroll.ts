@@ -46,6 +46,9 @@ export type PayrollRow = {
   /** Taux propre à l'enseignant (sinon celui de l'école). */
   ownRate: boolean;
   result: PayResult;
+  /** Heures de cours du mois (faites ou non). */
+  monthHours: number;
+  /** Détail cours par cours : seulement pour l'enseignant demandé (`detailFor`). */
   courses: (Course & { className: string | null; subject: string })[];
 };
 
@@ -56,16 +59,20 @@ export function monthBounds(month: string): { from: string; to: string } {
   return { from: `${month}-01`, to: `${month}-${String(last).padStart(2, '0')}` };
 }
 
-export async function buildPayroll(ctx: TenantContext, month: string): Promise<PayrollRow[]> {
+/**
+ * Paie du mois de chaque enseignant. Une seule lecture compacte (0159) : un total
+ * par jour et par enseignant, qui suffit au calcul ; le détail cours par cours
+ * n'est lu que pour `detailFor` (l'enseignant ouvert sur la page).
+ */
+export async function buildPayroll(ctx: TenantContext, month: string, detailFor?: string): Promise<PayrollRow[]> {
   const { from, to } = monthBounds(month);
   // Depuis le lundi de la première semaine : le quota d'une semaine à cheval
   // sur deux mois compte aussi les heures de la fin du mois précédent.
   const since = weekStart(from);
   const supabase = await createClient();
+  const detail = detailFor && /^[0-9a-f-]{36}$/i.test(detailFor) ? detailFor : null;
   const [{ data: rows, error }, { data: teachers }, rates, defaults] = await Promise.all([
-    // Une ligne par enseignant (0129) : par cours, la réponse était coupée à
-    // 1 000 lignes par PostgREST et la paie d'un grand établissement était fausse.
-    supabase.rpc('teacher_course_hours_by_teacher' as never, { p_school: ctx.school.id, p_from: since, p_to: to } as never),
+    supabase.rpc('teacher_payroll_courses' as never, { p_school: ctx.school.id, p_from: since, p_to: to, p_detail: detail } as never),
     supabase
       .from('teachers')
       .select('id, first_name, last_name, employment_type, weekly_minutes_max, hourly_rate')
@@ -77,15 +84,27 @@ export async function buildPayroll(ctx: TenantContext, month: string): Promise<P
   ]);
   if (error) throw error;
 
-  const byTeacher = new Map<string, PayrollRow['courses']>();
+  const byTeacher = new Map<string, { days: Course[]; courses: PayrollRow['courses'] }>();
   for (const t of (rows ?? []) as {
     teacher_id: string;
-    courses: { occurs_on: string; starts_at: string; hours: number; done: boolean; class_name: string | null; subject: string }[];
+    days: [string, number, number][];
+    courses: [string, string, number, boolean, string | null, string | null][] | null;
   }[]) {
-    byTeacher.set(
-      t.teacher_id,
-      t.courses.map((r) => ({ date: r.occurs_on, startsAt: r.starts_at, hours: r.hours, done: r.done, className: r.class_name, subject: r.subject })),
-    );
+    // Un jour = deux « cours » : ses heures faites, puis ses heures sans appel.
+    const days: Course[] = [];
+    for (const [date, done, undone] of t.days) {
+      if (done > 0) days.push({ date, startsAt: date, hours: done, done: true });
+      if (undone > 0) days.push({ date, startsAt: date, hours: undone, done: false });
+    }
+    const courses = (t.courses ?? []).map(([date, startsAt, hours, done, className, subject]) => ({
+      date,
+      startsAt,
+      hours,
+      done,
+      className,
+      subject: subject ?? 'Cours',
+    }));
+    byTeacher.set(t.teacher_id, { days, courses });
   }
 
   return ((teachers ?? []) as {
@@ -107,7 +126,8 @@ export async function buildPayroll(ctx: TenantContext, month: string): Promise<P
           : null;
       const ownRate = t.hourly_rate !== null && t.hourly_rate !== '';
       const rate = ownRate ? Number(t.hourly_rate) : kind === 'HOURLY' ? rates.vacationRate : rates.overtimeRate;
-      const courses = (byTeacher.get(t.id) ?? []).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+      const own = byTeacher.get(t.id);
+      const days = own?.days ?? [];
       return {
         teacherId: t.id,
         name: `${t.last_name.toUpperCase()} ${t.first_name}`,
@@ -115,9 +135,10 @@ export async function buildPayroll(ctx: TenantContext, month: string): Promise<P
         quota,
         rate,
         ownRate,
-        result: computePay(courses, kind, quota, rate, from, to),
-        courses: courses.filter((c) => c.date >= from && c.date <= to),
+        result: computePay(days, kind, quota, rate, from, to),
+        monthHours: days.filter((c) => c.date >= from && c.date <= to).reduce((n, c) => n + c.hours, 0),
+        courses: (own?.courses ?? []).filter((c) => c.date >= from && c.date <= to),
       };
     })
-    .filter((r) => r.courses.length > 0);
+    .filter((r) => r.monthHours > 0);
 }

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Paiement en ligne</title>
+<style>
+  :root { --brand:#4a44e0; --ink:#141433; --muted:#6b6b8a; --page:#f4f4fb; --card:#fff; --line:#e4e4f0; --ok:#0a7d55; --warn:#d98a00; --bad:#c8245a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--ink); font:14px/1.5 -apple-system,"Segoe UI",Roboto,system-ui,sans-serif; }
+  .wrap { max-width:1000px; margin:0 auto; padding:24px 16px 80px; }
+  h1 { font-size:24px; margin:0 0 4px; } .sub { color:var(--muted); margin:0 0 14px; max-width:90ch; }
+  .note { font-size:12.5px; color:var(--muted); background:#fff; border:1px dashed #c9c9df; border-radius:10px; padding:8px 12px; margin:0 0 18px; }
+  .sect { margin:28px 0 10px; font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--brand); border-bottom:2px solid var(--brand); padding-bottom:4px; }
+  .grid { display:grid; gap:12px; } .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  @media (max-width:760px){ .g2{grid-template-columns:1fr} }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; min-width:0; }
+  .muted { color:var(--muted); font-size:12.5px; }
+  .btn { display:inline-block; font-size:14px; font-weight:700; border-radius:10px; padding:10px 16px; border:1px solid var(--line); background:#fff; color:var(--ink); }
+  .btn.p { background:var(--brand); color:#fff; border-color:var(--brand); }
+  .big { font-size:26px; font-weight:800; }
+  .ops { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; } .op { border:1px solid var(--line); border-radius:8px; padding:4px 10px; font-size:12px; font-weight:700; }
+  .pill { font-size:11px; font-weight:700; border-radius:99px; padding:2px 9px; white-space:nowrap; } .ok{background:#e3f5ee;color:var(--ok)} .warn{background:#fff3dc;color:#9a6200} .bad{background:#fde6ee;color:var(--bad)} .grey{background:#eeeef6;color:var(--muted)}
+  .alert { border-radius:12px; padding:12px 14px; font-size:13.5px; } .a-ok { background:#e3f5ee; border:1px solid #b5e3cf; } .a-warn { background:#fff3dc; border:1px solid #f3d79a; } .a-bad { background:#fde6ee; border:1px solid #f5bccf; }
+  table { width:100%; border-collapse:collapse; font-size:13px; } th { text-align:left; font-size:11px; color:var(--muted); font-weight:700; padding:6px; border-bottom:1px solid var(--line); } td { padding:7px 6px; border-bottom:1px solid var(--line); }
+  .step { display:flex; gap:10px; align-items:flex-start; margin:6px 0; } .n { background:var(--brand); color:#fff; border-radius:99px; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; flex:none; }
+  .paydunya { border:2px dashed #c9c9df; border-radius:14px; padding:16px; background:#fafaff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Paiement en ligne avec PayDunya — maquette</h1>
+  <p class="sub">Une école paie son abonnement (un module) par Mobile Money ou carte, sans attendre que le Super Admin confirme. Le chemin manuel actuel (verser puis donner la référence) reste possible en secours.</p>
+
+  <div class="sect">Écran 1 · Côté école : « Payer » (Facturation → Renouveler ou Souscrire)</div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;align-items:baseline">
+      <div><b>Notes et bulletins</b><div class="muted">Échéance actuelle : 31/12/2026 · renouvellement pour un an</div></div>
+      <div class="big">150 000 F</div>
+    </div>
+    <hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
+    <b>Payer en ligne</b>
+    <div class="ops"><span class="op">Orange Money</span><span class="op">MTN MoMo</span><span class="op">Moov Money</span><span class="op">Wave</span><span class="op">Carte bancaire</span></div>
+    <span class="btn p">Payer 150 000 F en ligne</span>
+    <p class="muted" style="margin-top:8px">Vous passez sur la page sécurisée de PayDunya, vous choisissez votre moyen de paiement, puis vous revenez ici. Le module est prolongé dès que le paiement est confirmé, et votre reçu est prêt.</p>
+    <details style="margin-top:10px"><summary class="muted">Autre moyen : verser sur le numéro de la plateforme puis donner la référence (confirmation sous 24 h)</summary><p class="muted">— le formulaire actuel, inchangé.</p></details>
+  </div>
+
+  <div class="sect">Écran 2 · Chez PayDunya (hors de l’application)</div>
+  <div class="paydunya">
+    <div class="step"><span class="n">1</span><span>La page PayDunya affiche « GESCHOOL — Notes et bulletins, renouvellement — 150 000 F ».</span></div>
+    <div class="step"><span class="n">2</span><span>L’école choisit Orange Money, MTN, Moov, Wave ou la carte, et valide sur son téléphone.</span></div>
+    <div class="step"><span class="n">3</span><span>PayDunya renvoie vers l’application et, en parallèle, la prévient (« IPN ») que le paiement est confirmé.</span></div>
+  </div>
+
+  <div class="sect">Écran 3 · Retour dans l’application</div>
+  <div class="grid g2">
+    <div class="card">
+      <div class="alert a-warn"><b>Paiement en cours de confirmation…</b><br>Cela prend en général moins d’une minute. Cette page se met à jour toute seule ; vous pouvez aussi la fermer, le module sera prolongé quand même.</div>
+    </div>
+    <div class="card">
+      <div class="alert a-ok"><b>Paiement reçu : 150 000 F</b><br>« Notes et bulletins » est prolongé jusqu’au <b>31/12/2027</b>.<br>Reçu n° <b>R-2026-0042</b> · <u>Télécharger le reçu</u> · <u>Reçu PayDunya</u></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div class="alert a-bad"><b>Paiement annulé ou refusé</b> (« solde insuffisant »). Rien n’a été prélevé. <span class="btn" style="padding:4px 10px;font-size:12px">Réessayer</span></div>
+  </div>
+  <p class="note" style="margin-top:10px">Si l’abonnement est déjà coupé, la page « Abonnement expiré » montre aussi le bouton <b>« Payer en ligne »</b> : l’école se débloque seule, sans attendre.</p>
+
+  <div class="sect">Écran 4 · Côté Super Admin (Paiements)</div>
+  <div class="card">
+    <table><thead><tr><th>Quand</th><th>École</th><th>Module</th><th>Montant</th><th>Moyen</th><th>État</th></tr></thead><tbody>
+      <tr><td>28/10 21:14</td><td>Lycée Exemple de Cocody</td><td>Notes et bulletins</td><td>150 000 F</td><td>En ligne · Orange Money</td><td><span class="pill ok">confirmé automatiquement</span></td></tr>
+      <tr><td>28/10 20:50</td><td>Groupe Scolaire Exemple</td><td>Emploi du temps</td><td>90 000 F</td><td>En ligne · Wave</td><td><span class="pill grey">abandonné</span></td></tr>
+      <tr><td>27/10 10:02</td><td>Collège Exemple</td><td>Présences</td><td>60 000 F</td><td>Versement manuel</td><td><span class="pill warn">à confirmer</span></td></tr>
+    </tbody></table>
+    <p class="muted" style="margin-top:8px">Un paiement en ligne confirmé n’a plus besoin de vous. Les versements manuels restent à confirmer comme aujourd’hui.</p>
+  </div>
+
+  <div class="sect">Comment on est sûr que l’argent est arrivé</div>
+  <div class="card">
+    <div class="step"><span class="n">1</span><span>Le retour sur le site <b>ne suffit jamais</b> : n’importe qui peut taper l’adresse de retour.</span></div>
+    <div class="step"><span class="n">2</span><span>Quand PayDunya prévient l’application, celle-ci vérifie la signature du message, puis <b>redemande elle-même à PayDunya</b> le statut et le montant de ce paiement.</span></div>
+    <div class="step"><span class="n">3</span><span>Seulement si PayDunya répond « payé » <b>et</b> que le montant correspond exactement : le paiement est noté, le module prolongé, le reçu émis. Un même paiement n’est jamais compté deux fois.</span></div>
+    <div class="step"><span class="n">4</span><span>Filet de sécurité : si le message de PayDunya se perd, une tâche du worker revérifie les paiements en attente toutes les 15 minutes.</span></div>
+  </div>
+</div>
+</body>
+</html>

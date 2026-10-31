@@ -91,12 +91,20 @@ export async function readPaymentSettingsForAdmin(): Promise<PaymentSettings> {
   };
 }
 
-export async function writePaymentSettings(userId: string, patch: Partial<PaymentSettings>): Promise<void> {
+/**
+ * Écrit une partie des réglages « billing » SANS effacer les autres clés (frais
+ * et packs de SMS du paiement en ligne, 0157, sont réglés par un autre formulaire).
+ */
+export async function writePaymentSettings(userId: string, patch: Partial<PaymentSettings> & Partial<OnlineSettings>): Promise<void> {
   const supabase = await createClient();
-  const current = await readPaymentSettingsForAdmin();
+  const { data } = await supabase.from('platform_settings').select('settings').eq('namespace', 'billing').maybeSingle();
+  const raw = (data?.settings && typeof data.settings === 'object' ? data.settings : {}) as Record<string, unknown>;
   const { error } = await supabase.from('platform_settings').upsert(
-    { namespace: 'billing', settings: { ...current, ...patch } as never, updated_by: userId },
+    { namespace: 'billing', settings: { ...raw, ...patch } as never, updated_by: userId },
     { onConflict: 'namespace' },
   );
   if (error) throw error;
 }
+
+/** Paiement en ligne (0157) : frais payés en plus par l'école, et packs de SMS proposés. */
+export type OnlineSettings = { onlineFeePct: number; smsPacks: { quantity: number; price: number }[] };

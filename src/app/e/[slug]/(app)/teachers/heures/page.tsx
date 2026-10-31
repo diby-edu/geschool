@@ -12,6 +12,9 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
+import { ListFilters } from '@/components/data-table/ListFilters';
+import { mergeQuery } from '@/lib/query/list';
+
 export const metadata: Metadata = { title: 'Heures faites et paie' };
 
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
@@ -42,9 +45,39 @@ export default async function PayrollPage({
   if (!hasPermission(ctx, 'teachers.payroll')) notFound();
 
   const month = typeof sp.mois === 'string' && /^\d{4}-\d{2}$/.test(sp.mois) ? sp.mois : new Date().toISOString().slice(0, 7);
-  const [rows, rates] = await Promise.all([buildPayroll(ctx, month), readPayrollRates(ctx)]);
+  const opened = typeof sp.enseignant === 'string' ? sp.enseignant : undefined;
+  const [rows, rates] = await Promise.all([buildPayroll(ctx, month, opened), readPayrollRates(ctx)]);
   const base = `/e/${slug}/teachers/heures`;
-  const detail = typeof sp.enseignant === 'string' ? rows.find((r) => r.teacherId === sp.enseignant) : undefined;
+  const detail = opened ? rows.find((r) => r.teacherId === opened) : undefined;
+
+  // Filtre (vacataire / permanent, nom) et tri par colonne : la liste reste celle
+  // du mois, les totaux du haut aussi.
+  const pickS = (v: string | string[] | undefined) => (typeof v === 'string' ? v : '');
+  const typeFilter = pickS(sp.type) === 'HOURLY' || pickS(sp.type) === 'PERMANENT' ? pickS(sp.type) : '';
+  const q = pickS(sp.q).trim().toLowerCase();
+  const SORTS = { nom: 'Enseignant', faites: 'Faites', sansappel: 'Sans appel', montant: 'Montant' } as const;
+  type SortKey = keyof typeof SORTS;
+  const sort: SortKey = (Object.keys(SORTS) as string[]).includes(pickS(sp.tri)) ? (pickS(sp.tri) as SortKey) : 'nom';
+  const listed = rows
+    .filter((r) => (!typeFilter || r.kind === typeFilter) && (!q || r.name.toLowerCase().includes(q)))
+    .sort((a, b) =>
+      sort === 'faites'
+        ? b.result.doneHours - a.result.doneHours
+        : sort === 'sansappel'
+          ? b.result.unattestedHours - a.result.unattestedHours
+          : sort === 'montant'
+            ? b.result.amount - a.result.amount
+            : a.name.localeCompare(b.name, 'fr'),
+    );
+  const nav = Object.fromEntries(Object.entries(sp).filter(([k]) => ['mois', 'type', 'q', 'tri'].includes(k)));
+  const sortHead = (key: SortKey, right = false) => (
+    <Link href={`${base}${mergeQuery(nav, { tri: key === 'nom' ? null : key })}`} scroll={false} className={`inline-flex items-center gap-1 hover:underline ${right ? 'justify-end' : ''}`}>
+      {SORTS[key]}
+      <span aria-hidden style={{ opacity: sort === key ? 1 : 0.35, color: sort === key ? 'var(--color-brand)' : undefined }}>
+        {sort === key ? (key === 'nom' ? '↑' : '↓') : '↕'}
+      </span>
+    </Link>
+  );
   const total = rows.reduce((a, r) => a + r.result.amount, 0);
   const doneTotal = rows.reduce((a, r) => a + r.result.doneHours, 0);
   const missingQuota = rows.filter((r) => r.result.missingQuota).length;
@@ -119,25 +152,47 @@ export default async function PayrollPage({
           <p className="text-sm">
             <b>{doneTotal.toLocaleString('fr-FR')} h</b> faites ce mois · <b>{formatFcfa(total)}</b> à payer à l’heure.
           </p>
+          <ListFilters
+            basePath={base}
+            keep={{ mois: month, tri: pickS(sp.tri) }}
+            fields={[
+              {
+                name: 'type',
+                label: 'Type',
+                allLabel: 'Tous',
+                value: typeFilter,
+                options: [
+                  { value: 'HOURLY', label: 'Vacataires' },
+                  { value: 'PERMANENT', label: 'Permanents' },
+                ],
+              },
+            ]}
+            search={{ value: pickS(sp.q), placeholder: 'Nom de l’enseignant…' }}
+          />
+          {listed.length !== rows.length ? (
+            <p className="px-1 text-xs text-[color:var(--muted-foreground)]">
+              {listed.length} enseignant{listed.length > 1 ? 's' : ''} sur {rows.length}
+            </p>
+          ) : null}
           <div className="overflow-x-auto rounded-[--radius-card] border" style={{ borderColor: 'var(--border)' }}>
             <table className="w-full text-sm">
               <thead className="bg-[color:var(--muted)] text-left text-xs uppercase tracking-wide text-[color:var(--muted-foreground)]">
                 <tr>
-                  <th className="px-3 py-2">Enseignant</th>
+                  <th className="px-3 py-2">{sortHead('nom')}</th>
                   <th className="px-3 py-2">Type</th>
-                  <th className="px-3 py-2 text-right">Faites</th>
-                  <th className="px-3 py-2 text-right">Sans appel</th>
+                  <th className="px-3 py-2 text-right">{sortHead('faites', true)}</th>
+                  <th className="px-3 py-2 text-right">{sortHead('sansappel', true)}</th>
                   <th className="px-3 py-2 text-right">Quota / sem.</th>
                   <th className="px-3 py-2 text-right">Payées</th>
                   <th className="px-3 py-2 text-right">Taux</th>
-                  <th className="px-3 py-2 text-right">Montant</th>
+                  <th className="px-3 py-2 text-right">{sortHead('montant', true)}</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {listed.map((r) => (
                   <tr key={r.teacherId} className="border-t">
                     <td className="px-3 py-1.5">
-                      <Link href={`${base}?mois=${month}&enseignant=${r.teacherId}`} className="font-medium underline-offset-2 hover:underline">
+                      <Link href={`${base}${mergeQuery(nav, { enseignant: r.teacherId })}#detail`} className="font-medium underline-offset-2 hover:underline">
                         {r.name}
                       </Link>
                     </td>

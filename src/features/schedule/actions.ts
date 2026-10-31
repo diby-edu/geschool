@@ -11,11 +11,19 @@ import { createVersion, publishVersion, deleteVersion,
   reopenVersion,
 } from './versions';
 import { addSession, deleteSession } from './sessions';
-import { syncRequirementsFromAssignments, updateRequirement, deleteRequirement } from './requirements';
+import {
+  syncRequirementsFromAssignments,
+  updateRequirement,
+  deleteRequirement,
+  updateRequirementBlocks,
+  applyBlocksToLevel,
+  alignWithProgramme,
+} from './requirements';
 import { setSessionLock } from './constraints/locks';
 import { moveSession } from './constraints/moves';
 import { generateVariants, generateSchedule } from './generation';
 import { isAppError, ValidationError } from '@/lib/errors';
+import { parseBlocks } from './blocks';
 
 const BREAK_KEYS = ['break1', 'break2'] as const;
 
@@ -143,6 +151,55 @@ export async function syncRequirementsAction(slug: string, _p: FormState, _fd: F
   });
 }
 
+/**
+ * Retour sur la page Générer avec les mêmes filtres (« back » : la requête de la
+ * page, ex. « ?niveau=…&page=2 ») et un message. Seule une requête simple est
+ * acceptée : jamais une autre adresse.
+ */
+function generateBack(slug: string, fd: FormData, flag: string): string {
+  const raw = String(fd.get('back') ?? '');
+  const params = new URLSearchParams(/^\?[\w%=&.+-]*$/.test(raw) ? raw : '');
+  for (const k of ['updated', 'reqdeleted', 'decoupe', 'ignores', 'aligne', 'synced', 'kept']) params.delete(k);
+  for (const [k, v] of new URLSearchParams(flag)) params.set(k, v);
+  return `/e/${slug}/schedule/generate?${params.toString()}`;
+}
+
+/** Découpage d'une ligne, modifié directement dans le tableau. */
+export async function updateBlocksAction(slug: string, id: string, _p: FormState, fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    const parsed = parseBlocks(String(fd.get('blocks') ?? ''));
+    if (!parsed.ok) throw new ValidationError(parsed.error);
+    await updateRequirementBlocks(ctx, id, parsed.blocks);
+    redirect(generateBack(slug, fd, 'updated=1'));
+  });
+}
+
+/** « Découper en une fois » : une matière, un niveau, un découpage. */
+export async function applyBlocksAction(slug: string, _p: FormState, fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    if (!ctx.academicYear) throw new ValidationError("Activez une année scolaire d'abord.");
+    const subjectId = String(fd.get('subject') ?? '');
+    const levelId = String(fd.get('level') ?? '');
+    if (!subjectId || !levelId) throw new ValidationError('Choisissez la matière et le niveau.');
+    const parsed = parseBlocks(String(fd.get('blocks') ?? ''));
+    if (!parsed.ok) throw new ValidationError(parsed.error);
+    const r = await applyBlocksToLevel(ctx, ctx.academicYear.id, subjectId, levelId, parsed.blocks);
+    redirect(generateBack(slug, fd, `decoupe=${r.changed}&ignores=${r.skipped}`));
+  }).then((s) => (s.error ? { ...s, values: formValues(fd) } : s));
+}
+
+/** Remet au volume du programme les enseignements qui ne le suivent plus. */
+export async function alignProgrammeAction(slug: string, _p: FormState, fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const ctx = await getTenantContext(slug);
+    if (!ctx.academicYear) throw new ValidationError("Activez une année scolaire d'abord.");
+    const n = await alignWithProgramme(ctx, ctx.academicYear.id);
+    redirect(generateBack(slug, fd, `aligne=${n}`));
+  });
+}
+
 export async function updateRequirementAction(slug: string, id: string, _p: FormState, fd: FormData): Promise<FormState> {
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
@@ -154,15 +211,15 @@ export async function updateRequirementAction(slug: string, id: string, _p: Form
       minCapacity: fd.get('minCapacity') === null || fd.get('minCapacity') === '' ? undefined : fd.get('minCapacity'),
       requiredFeatures: fd.getAll('requiredFeatures').map(String),
     }));
-    redirect(`/e/${slug}/schedule/generate?updated=1`);
+    redirect(generateBack(slug, fd, 'updated=1'));
   }).then((s) => (s.error || s.fieldErrors ? { ...s, values: formValues(fd) } : s));
 }
 
-export async function deleteRequirementAction(slug: string, id: string, _p: FormState, _fd: FormData): Promise<FormState> {
+export async function deleteRequirementAction(slug: string, id: string, _p: FormState, fd: FormData): Promise<FormState> {
   return runFormAction(async () => {
     const ctx = await getTenantContext(slug);
     await deleteRequirement(ctx, id);
-    redirect(`/e/${slug}/schedule/generate?reqdeleted=1`);
+    redirect(generateBack(slug, fd, 'reqdeleted=1'));
   });
 }
 

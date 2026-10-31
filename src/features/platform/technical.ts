@@ -22,6 +22,7 @@ export const TASKS = [
   { name: 'attendance-alerts', label: 'Alertes d’absence', when: 'chaque matin à 6 h' },
   { name: 'sms-delivery-reports', label: 'Accusés de réception SMS', when: 'chaque matin à 6 h 15' },
   { name: 'platform-metrics', label: 'Relevé de surveillance', when: 'toutes les 5 minutes' },
+  { name: 'online-payments-check', label: 'Paiements en ligne en attente', when: 'toutes les 15 minutes' },
 ] as const;
 export type TaskName = (typeof TASKS)[number]['name'];
 

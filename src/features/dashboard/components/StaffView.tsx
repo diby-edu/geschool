@@ -21,7 +21,8 @@ type Sp = Record<string, string | string[] | undefined>;
 /** Tableau de bord de la direction (espace « school ») — voir docs/RBAC.md pour les droits de chaque section. */
 export async function StaffView({ ctx, sp }: { ctx: TenantContext; sp: Sp }) {
   const params = parseDashParams(sp);
-  const data = await loadStaffDashboard(ctx, params);
+  // La liste « démarrage » part avec le reste, et non après (0,15 s de gagnés).
+  const [data, demarrage] = await Promise.all([loadStaffDashboard(ctx, params), readChecklist(ctx)]);
   const base = `/e/${ctx.school.slug}`;
   const dash = `${base}/dashboard`;
   const o = data.overview;
@@ -41,15 +42,13 @@ export async function StaffView({ ctx, sp }: { ctx: TenantContext; sp: Sp }) {
   if (hasAnyPermission(ctx, ['attendance.view', 'attendance.view_all'])) actions.push({ label: 'Présences', href: `${base}/attendance`, Icon: ClipboardCheck, group: 'module' });
   if (hasPermission(ctx, 'reports.view')) actions.push({ label: 'Bulletins', href: `${base}/bulletins`, Icon: FileText, group: 'module' });
 
-  // Tant que l'essentiel manque, le tableau de bord mesure du vide : on dit
-  // d'abord par ou commencer.
-  const demarrage = await readChecklist(ctx);
 
   return (
     <div className="mx-auto max-w-6xl space-y-7">
       {/* Le total des appels attendus change à chaque fin de créneau : relecture chaque minute (les données, elles, arrivent en direct). */}
       <TimedRefresh />
 
+      {/* Tant que l'essentiel manque, le tableau de bord mesure du vide : on dit d'abord par où commencer. */}
       {demarrage.ready ? null : (
         <StartupBanner slug={ctx.school.slug} done={demarrage.done} total={demarrage.total} steps={demarrage.steps} />
       )}

@@ -62,7 +62,8 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
       .select('id, action, module, created_at, schools(name)')
       .order('created_at', { ascending: false })
       .limit(10),
-    supabase.from('payments').select('amount, currency').eq('status', 'PENDING'),
+    // Un paiement en ligne en cours chez PayDunya n'est pas « à confirmer » (0157).
+    supabase.from('payments').select('amount, currency').eq('status', 'PENDING').or('provider.is.null,provider.neq.paydunya'),
     supabase
       .from('subscriptions')
       .select('id', { count: 'exact', head: true })

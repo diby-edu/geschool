@@ -5,6 +5,8 @@ import { requirePageAccess } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
 import { getAssignmentGrid, listGridLevels } from '@/features/assignments/grid';
 import { listAssignments } from '@/features/assignments/queries';
+import { ListFilters } from '@/components/data-table/ListFilters';
+import { mergeQuery } from '@/lib/query/list';
 import { AssignmentGrid } from '@/features/assignments/components/AssignmentGrid';
 import { LevelChooser } from '@/features/assignments/components/LevelChooser';
 import { carryOverAction, saveGridAction, deleteAssignmentAction } from '@/features/assignments/actions';
@@ -69,6 +71,24 @@ export default async function AssignmentsPage({
     tab === 'liste' ? listAssignments(ctx, ctx.academicYear.id) : Promise.resolve([]),
   ]);
   const level = levels.find((l) => l.id === levelId);
+
+  // Vue liste : mêmes filtres que les autres pages, 50 lignes par page.
+  const pickS = (v: string | string[] | undefined) => (typeof v === 'string' ? v : '');
+  const lf = { classe: pickS(sp.classe), matiere: pickS(sp.matiere), prof: pickS(sp.prof), q: pickS(sp.q).trim().toLowerCase() };
+  const filteredRows = listRows.filter(
+    (r) =>
+      (!levelId || r.level_id === levelId) &&
+      (!lf.classe || r.class_id === lf.classe) &&
+      (!lf.matiere || r.subject_id === lf.matiere) &&
+      (!lf.prof || r.teacher_id === lf.prof) &&
+      (!lf.q || `${r.klass} ${r.subject} ${r.teacher}`.toLowerCase().includes(lf.q)),
+  );
+  const LIST_PAGE = 50;
+  const listPages = Math.max(1, Math.ceil(filteredRows.length / LIST_PAGE));
+  const listPage = Math.min(listPages, Math.max(1, Number.parseInt(pickS(sp.page), 10) || 1));
+  const shownRows = filteredRows.slice((listPage - 1) * LIST_PAGE, listPage * LIST_PAGE);
+  const uniq = (pairs: [string, string][]) => [...new Map(pairs).entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, 'fr', { numeric: true }));
+  const listNav = Object.fromEntries(Object.entries(sp).filter(([k]) => ['onglet', 'niveau', 'classe', 'matiere', 'prof', 'q', 'page'].includes(k)));
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
@@ -147,6 +167,41 @@ export default async function AssignmentsPage({
       ) : listRows.length === 0 ? (
         <EmptyState title="Aucune affectation" hint="Remplissez la grille, niveau par niveau." />
       ) : (
+        <>
+        <ListFilters
+          basePath={base}
+          keep={{ onglet: 'liste' }}
+          fields={[
+            { name: 'niveau', label: 'Niveau', allLabel: 'Tous les niveaux', value: levelId, options: levels.map((l) => ({ value: l.id, label: l.name })) },
+            {
+              name: 'classe',
+              label: 'Classe',
+              allLabel: 'Toutes les classes',
+              value: lf.classe,
+              dependsOn: 'niveau',
+              options: [...new Map(listRows.filter((r) => r.class_id).map((r) => [r.class_id!, { value: r.class_id!, label: r.klass, parent: r.level_id ?? '' }])).values()],
+            },
+            { name: 'matiere', label: 'Matière', allLabel: 'Toutes les matières', value: lf.matiere, options: uniq(listRows.map((r) => [r.subject_id, r.subject])) },
+            {
+              name: 'prof',
+              label: 'Enseignant',
+              allLabel: 'Tous les enseignants',
+              value: lf.prof,
+              // Deux homonymes : le matricule les distingue.
+              options: uniq(
+                listRows.map((r) => [
+                  r.teacher_id,
+                  listRows.some((o) => o.teacher === r.teacher && o.teacher_id !== r.teacher_id) && r.teacher_number ? `${r.teacher} · ${r.teacher_number}` : r.teacher,
+                ]),
+              ),
+            },
+          ]}
+          search={{ value: pickS(sp.q), placeholder: 'Classe, matière ou professeur…' }}
+        />
+        <p className="px-1 text-xs text-[color:var(--muted-foreground)]">
+          {filteredRows.length} affectation{filteredRows.length > 1 ? 's' : ''}
+          {filteredRows.length !== listRows.length ? ` sur ${listRows.length}` : ''} · triées par classe
+        </p>
         <Card>
           <CardContent className="overflow-x-auto p-0">
             <table className="w-full text-sm">
@@ -160,7 +215,7 @@ export default async function AssignmentsPage({
                 </tr>
               </thead>
               <tbody>
-                {listRows.map((r) => (
+                {shownRows.map((r) => (
                   <tr key={r.id} className="border-b last:border-0">
                     <td className="px-4 py-2 font-medium">{r.klass}</td>
                     <td className="px-4 py-2">{r.subject}</td>
@@ -182,6 +237,26 @@ export default async function AssignmentsPage({
             </table>
           </CardContent>
         </Card>
+        {listPages > 1 ? (
+          <nav className="flex items-center justify-between px-1 text-sm" aria-label="Pages">
+            <span className="text-xs text-[color:var(--muted-foreground)]">
+              Page {listPage} / {listPages}
+            </span>
+            <span className="flex gap-2">
+              {listPage > 1 ? (
+                <Link href={`${base}${mergeQuery(listNav, { page: listPage - 1 === 1 ? null : listPage - 1 })}`} className="rounded-xl border px-3 py-1.5 font-semibold" style={{ borderColor: 'var(--border)' }}>
+                  ‹ Précédent
+                </Link>
+              ) : null}
+              {listPage < listPages ? (
+                <Link href={`${base}${mergeQuery(listNav, { page: listPage + 1 })}`} className="rounded-xl border px-3 py-1.5 font-semibold" style={{ borderColor: 'var(--border)' }}>
+                  Suivant ›
+                </Link>
+              ) : null}
+            </span>
+          </nav>
+        ) : null}
+        </>
       )}
     </div>
   );

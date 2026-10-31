@@ -101,11 +101,20 @@ export type RoleDashboard = {
 
 /**
  * Moyennes par classe : 175 000 notes relues par calcul sur un grand établissement
- * (2 à 4 s), alors qu'elles ne changent qu'à la publication d'une évaluation. Gardées
- * 2 minutes par personne : les rechargements automatiques du tableau de bord ne les
- * recalculent plus à chaque fois.
+ * (2,5 à 5 s). Gardées avec le numéro de version des notes de l'école (0160), que
+ * la base augmente à toute écriture qui peut les changer : tant qu'il est le même,
+ * le résultat gardé est exact, et partagé entre ceux qui ont le droit de les voir.
+ * Sans ce numéro (migration absente), 2 minutes par personne comme avant.
  */
-const classAveragesMemo = createShortMemo<RpcResult<ClassAverage[]>>(2 * 60_000);
+const classAveragesMemo = createShortMemo<RpcResult<ClassAverage[]>>(30 * 60_000);
+const classAveragesShortMemo = createShortMemo<RpcResult<ClassAverage[]>>(2 * 60_000);
+
+async function classAveragesKey(supabase: Supabase, ctx: TenantContext, periodId: string) {
+  const v = hasPermission(ctx, 'grades.view_all') ? await callRpc<number | null>(supabase, 'school_grade_version', { p_school: ctx.school.id }) : null;
+  return v && v.data !== null
+    ? { key: `${ctx.school.id}:${periodId}:v${v.data}`, memo: classAveragesMemo }
+    : { key: `${ctx.user.id}:${ctx.school.id}:${periodId}`, memo: classAveragesShortMemo };
+}
 /** Paie du mois (une lecture de tous les cours du mois) : même raison, même durée. */
 const payrollMemo = createShortMemo<Awaited<ReturnType<typeof buildPayroll>>>(2 * 60_000);
 
@@ -193,12 +202,16 @@ export async function loadRoleDashboard(ctx: TenantContext, plan: DashboardPlan,
       ? callRpc<LowClass[]>(supabase, 'dashboard_low_attendance_classes', { p_school: schoolId, p_from: addDays(today, -6), p_to: today, p_now: nowIso, p_limit: 500 })
       : Promise.resolve(null),
     any('schoolAverage', 'classesBelow', 'classAverages') && period
-      ? classAveragesMemo(`${ctx.user.id}:${schoolId}:${period.id}`, async () => {
-          const r = await callRpc<ClassAverage[]>(supabase, 'dashboard_class_averages', { p_school: schoolId, p_period: period.id });
-          // Rien de gardé quand le calcul n'a rien rendu (délai dépassé, droit refusé).
-          if (r.data === null) throw r;
-          return r;
-        }).catch((r: unknown) => {
+      ? classAveragesKey(supabase, ctx, period.id)
+          .then(({ key, memo }) =>
+            memo(key, async () => {
+              const r = await callRpc<ClassAverage[]>(supabase, 'dashboard_class_averages', { p_school: schoolId, p_period: period.id });
+              // Rien de gardé quand le calcul n'a rien rendu (délai dépassé, droit refusé).
+              if (r.data === null) throw r;
+              return r;
+            }),
+          )
+          .catch((r: unknown) => {
           if (r && typeof r === 'object' && 'missing' in r) return r as RpcResult<ClassAverage[]>;
           throw r;
         })
