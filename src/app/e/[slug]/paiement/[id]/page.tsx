@@ -28,20 +28,34 @@ export default async function PaymentReturnPage({
   const { slug, id } = await params;
   const sp = await searchParams;
   const ctx = await getTenantContext(slug);
-  if (!hasPermission(ctx, 'billing.view') && !hasPermission(ctx, 'billing.manage') && !ctx.isPlatformAdmin) notFound();
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
+  const school = hasPermission(ctx, 'billing.view') || hasPermission(ctx, 'billing.manage') || ctx.isPlatformAdmin;
 
-  const supabase = await createClient();
-  const { data } = await supabase.from('payments').select('id, school_id, amount, fee_amount, purpose, sms_quantity, notes, checkout_url').eq('id', id).maybeSingle();
-  const p = data as unknown as {
-    id: string; school_id: string; amount: number; fee_amount: number; purpose: string; sms_quantity: number | null; notes: string | null; checkout_url: string | null;
-  } | null;
+  // L'école voit ses paiements ; un parent voit celui qu'il a fait lui-même
+  // (Espace Parent, 0172) — et aucun autre.
+  type Row = { id: string; school_id: string; amount: number; fee_amount: number; purpose: string; sms_quantity: number | null; notes: string | null; checkout_url: string | null; student_ids: string[] | null };
+  let p: Row | null = null;
+  if (school) {
+    const supabase = await createClient();
+    const { data } = await supabase.from('payments').select('id, school_id, amount, fee_amount, purpose, sms_quantity, notes, checkout_url, student_ids').eq('id', id).maybeSingle();
+    p = data as unknown as Row | null;
+  } else {
+    const { paymentOfPayer } = await import('@/services/online-payments');
+    p = (await paymentOfPayer(id, ctx.user.id)) as Row | null;
+  }
   if (!p || p.school_id !== ctx.school.id) notFound();
+  const parent = p.purpose === 'PARENT_ACCESS';
 
   const { checkOnlinePayment } = await import('@/services/online-payments');
   const state = await checkOnlinePayment(id).catch(() => null);
   const total = Number(p.amount) + Number(p.fee_amount);
-  const what = p.purpose === 'SMS_PACK' ? `Pack de ${p.sms_quantity} SMS` : (p.notes?.split(' — abonnement : ')[1] ?? 'Abonnement');
+  const n = p.student_ids?.length ?? 0;
+  const what =
+    p.purpose === 'SMS_PACK'
+      ? `Pack de ${p.sms_quantity} SMS`
+      : parent
+        ? `Espace Parent — ${n} enfant${n > 1 ? 's' : ''}`
+        : (p.notes?.split(' — abonnement : ')[1] ?? 'Abonnement');
   const base = `/e/${slug}`;
 
   return (
@@ -75,7 +89,11 @@ export default async function PaymentReturnPage({
         <Alert tone="success">
           <b>Paiement reçu : {money(total)}.</b>
           <br />
-          {p.purpose === 'SMS_PACK' ? `${p.sms_quantity} SMS ont été ajoutés à votre crédit du mois.` : 'Votre abonnement est prolongé jusqu’au 31 août et l’accès est rétabli.'}
+          {p.purpose === 'SMS_PACK'
+            ? `${p.sms_quantity} SMS ont été ajoutés à votre crédit du mois.`
+            : parent
+              ? `L’Espace Parent est ouvert jusqu’au 31 août pour ${n > 1 ? 'ces enfants' : 'cet enfant'}, pour tous ses tuteurs.`
+              : 'Votre abonnement est prolongé jusqu’au 31 août et l’accès est rétabli.'}
           {state.receipt ? (
             <>
               <br />
@@ -90,9 +108,15 @@ export default async function PaymentReturnPage({
       )}
 
       <div className="flex flex-wrap gap-2">
-        <Link href={`${base}/facturation`}>
-          <Button>{state?.status === 'PAID' ? 'Voir mon abonnement et mes reçus' : 'Retour à la facturation'}</Button>
-        </Link>
+        {parent ? (
+          <Link href={`${base}/dashboard`}>
+            <Button>{state?.status === 'PAID' ? 'Voir mes enfants' : 'Retour'}</Button>
+          </Link>
+        ) : (
+          <Link href={`${base}/facturation`}>
+            <Button>{state?.status === 'PAID' ? 'Voir mon abonnement et mes reçus' : 'Retour à la facturation'}</Button>
+          </Link>
+        )}
         <Link href={`${base}/dashboard`}>
           <Button variant="ghost">Tableau de bord</Button>
         </Link>

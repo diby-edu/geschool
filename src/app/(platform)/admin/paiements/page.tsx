@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { listPayments } from '@/features/platform/admin';
-import { settlePaymentAction, savePaymentSettingsAction, saveOnlineSettingsAction } from '@/features/billing/actions';
+import { settlePaymentAction, saveGraceDaysAction, saveOnlineSettingsAction } from '@/features/billing/actions';
 import { OnlineSettingsForm } from '@/features/billing/components/OnlineSettingsForm';
 import { readPaymentSettingsForAdmin } from '@/features/billing/payment-settings';
-import { PaymentSettingsForm } from '@/features/billing/components/PaymentSettingsForm';
+import { GraceDaysForm } from '@/features/billing/components/GraceDaysForm';
 import { Alert } from '@/components/ui/alert';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
@@ -75,13 +75,12 @@ export default async function PlatformPaymentsPage({
       <Card>
         <CardContent className="space-y-3">
           <div>
-            <h2 className="text-sm font-semibold">Comment les écoles paient</h2>
+            <h2 className="text-sm font-semibold">Abonnement expiré</h2>
             <p className="text-sm text-[color:var(--muted-foreground)]">
-              Ce que voit une école quand elle clique sur « Payer ». Sans passerelle, elle verse sur votre numéro et
-              signale la référence&nbsp;; vous confirmez ci-dessous, et son reçu s’émet.
+              Les écoles paient en ligne par PayDunya. Une école dont l’abonnement a expiré garde l’accès pendant ce délai, avec un message à la direction.
             </p>
           </div>
-          <PaymentSettingsForm action={savePaymentSettingsAction} settings={paymentSettings} />
+          <GraceDaysForm action={saveGraceDaysAction} graceDays={paymentSettings.graceDays} />
         </CardContent>
       </Card>
 
@@ -117,9 +116,15 @@ export default async function PlatformPaymentsPage({
                         {p.schoolName}
                       </Link>
                     </p>
+                    <p className="text-sm">
+                      {p.purpose === 'PARENT_ACCESS' ? '👨‍👩‍👧 Espace Parent' : p.purpose === 'SMS_PACK' ? `✉️ Pack de ${p.smsQuantity} SMS` : '💳 Abonnement'}
+                      {p.payer ? <> · payé par <b>{p.payer}</b></> : null}
+                      {p.students.length > 0 ? <> · pour {p.students.map((s) => `${s.name}${s.className ? ` (${s.className})` : ''}`).join(', ')}</> : null}
+                    </p>
                     <p className="text-xs text-[color:var(--muted-foreground)]">
-                      {p.purpose === 'SMS_PACK' ? `Pack de ${p.smsQuantity} SMS · ` : ''}
-                      {p.online ? `En ligne · PayDunya${p.fee ? ` (+ ${money(p.fee, p.currency)} de frais payés par l’école)` : ''}` : (METHOD_LABEL[p.method] ?? p.method)}
+                      {p.online
+                        ? `En ligne · PayDunya${p.fee ? ` (+ ${money(p.fee, p.currency)} de frais payés par ${p.purpose === 'PARENT_ACCESS' ? 'le parent' : 'l’école'})` : ''}`
+                        : (METHOD_LABEL[p.method] ?? p.method)}
                       {p.reference ? ` · réf. ${p.reference}` : ''} ·{' '}
                       {new Date(p.createdAt).toLocaleDateString('fr-FR')} ·{' '}
                       {p.online && p.status === 'PAID'

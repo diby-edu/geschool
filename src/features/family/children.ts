@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
+import { cache } from 'react';
 
 /**
  * Les eleves dont l'utilisateur courant est le responsable, dans cet
@@ -34,7 +35,24 @@ export type Child = {
   matricule: string;
   className: string | null;
   classId: string | null;
+  /** Espace Parent payé pour cet enfant (0172) : sans cela, aucune information. */
+  unlocked: boolean;
+  validUntil: string | null;
+  paidBy: string | null;
+  paidAt: string | null;
 };
+
+/** Prix d'un enfant et état de chacun (0172), lu une fois par requête. Sans la migration : tout ouvert, comme avant. */
+export const parentPortal = cache(async (ctx: TenantContext): Promise<{ price: number; byId: Map<string, Pick<Child, 'unlocked' | 'validUntil' | 'paidBy' | 'paidAt'>> }> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('parent_portal_children' as never, { p_school: ctx.school.id } as never);
+  if (error || !data) return { price: 0, byId: new Map() };
+  const j = data as unknown as { price: number; children: { id: string; unlocked: boolean; validUntil: string | null; paidBy: string | null; paidAt: string | null }[] };
+  return {
+    price: Number(j.price ?? 0),
+    byId: new Map((j.children ?? []).map((c) => [c.id, { unlocked: c.unlocked, validUntil: c.validUntil, paidBy: c.paidBy, paidAt: c.paidAt }])),
+  };
+});
 
 /**
  * Les memes enfants, avec de quoi les afficher et retrouver leur classe —
@@ -49,7 +67,7 @@ export async function myChildren(ctx: TenantContext): Promise<Child[]> {
   const supabase = await createClient();
   const yearId = ctx.academicYear?.id ?? null;
 
-  const [{ data: students }, { data: enrollments }] = await Promise.all([
+  const [{ data: students }, { data: enrollments }, portal] = await Promise.all([
     supabase
       .from('students')
       .select('id, first_name, last_name, matricule')
@@ -66,6 +84,7 @@ export async function myChildren(ctx: TenantContext): Promise<Child[]> {
           .eq('status', 'ENROLLED')
           .in('student_id', ids)
       : Promise.resolve({ data: [] as unknown[] }),
+    parentPortal(ctx),
   ]);
 
   const byStudent = new Map(
@@ -82,6 +101,11 @@ export async function myChildren(ctx: TenantContext): Promise<Child[]> {
       matricule: s.matricule,
       className: e?.classes?.name ?? null,
       classId: e?.class_id ?? null,
+      // Sans réponse de la base (migration absente) : ouvert, comme avant.
+      unlocked: portal.byId.get(s.id)?.unlocked ?? portal.byId.size === 0,
+      validUntil: portal.byId.get(s.id)?.validUntil ?? null,
+      paidBy: portal.byId.get(s.id)?.paidBy ?? null,
+      paidAt: portal.byId.get(s.id)?.paidAt ?? null,
     };
   });
 }

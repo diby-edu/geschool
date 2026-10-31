@@ -106,6 +106,12 @@ const serverSchema = z.object({
   // Paiement en ligne PayDunya (0157). Vides = paiement en ligne fermé (le
   // versement manuel reste). Les clés se déposent sur le VPS avec
   // scripts/paydunya-cles.ps1 — jamais dans le code ni dans une conversation.
+  // Notifications sur téléphone (Web Push, 0171). Clés « VAPID » générées et
+  // déposées sur le serveur par scripts/notifications-cles.ps1. Vides = pas
+  // d'envoi sur téléphone (la cloche marche quand même).
+  VAPID_PUBLIC_KEY: z.string().default(''),
+  VAPID_PRIVATE_KEY: z.string().default(''),
+  VAPID_SUBJECT: z.string().default('mailto:support@hebergementci.com'),
   PAYDUNYA_MASTER_KEY: z.string().default(''),
   PAYDUNYA_PRIVATE_KEY: z.string().default(''),
   PAYDUNYA_PUBLIC_KEY: z.string().default(''),

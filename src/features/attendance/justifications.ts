@@ -6,6 +6,7 @@ import { requireWritable, hasPermission } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/errors';
 import type { JustificationInput } from './schemas';
+import { notifyPermission } from '@/services/notifications';
 
 export type JustificationRow = {
   id: string;
@@ -98,6 +99,17 @@ export async function submitJustification(ctx: TenantContext, input: Justificati
   });
   if (error) throw error;
   await audit(ctx, { action: 'attendance.justify_submit', module: 'attendance', entityType: 'absence_justification', after: { student: input.studentId } });
+
+  // Prévenir qui peut justifier (droit coché = messages reçus, 0171), sauf l'auteur.
+  const { data: eleve } = await supabase.from('students').select('first_name, last_name').eq('id', input.studentId).maybeSingle();
+  const nom = eleve ? `${eleve.last_name.toUpperCase()} ${eleve.first_name}` : 'Un élève';
+  const jour = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('fr-FR');
+  await notifyPermission(ctx.school.id, ['attendance.justify'], {
+    type: 'justification.submitted',
+    title: 'Justificatif déposé',
+    body: `${nom} — ${input.coversFrom === input.coversTo ? `absence du ${jour(input.coversFrom)}` : `du ${jour(input.coversFrom)} au ${jour(input.coversTo)}`}.`,
+    entityType: 'absence_justification',
+  }, ctx.user.id);
 }
 
 /**

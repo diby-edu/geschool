@@ -95,6 +95,9 @@ export type MissingCall = {
   reason: string | null;
   note: string | null;
   reviewedAt: string | null;
+  /** Cours de plusieurs heures (0170) : ses heures, et celles restées sans appel. */
+  courseHours?: number;
+  missingHours?: number;
 };
 
 export type TeacherGapSummary = {

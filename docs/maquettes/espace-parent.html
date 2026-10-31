@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Espace Parent payant</title>
+<style>
+  :root { --brand:#4a44e0; --ink:#141433; --muted:#6b6b8a; --page:#f4f4fb; --card:#fff; --line:#e4e4f0; --ok:#0a7d55; --warn:#b26b00; --bad:#c8245a; --or:#f2711b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--page); color:var(--ink); font:14px/1.5 -apple-system,"Segoe UI",Roboto,system-ui,sans-serif; }
+  .wrap { max-width:1080px; margin:0 auto; padding:24px 16px 80px; }
+  h1 { font-size:24px; margin:0 0 4px; } h2 { font-size:18px; margin:34px 0 6px; } .sub { color:var(--muted); margin:0 0 14px; max-width:92ch; }
+  .note { font-size:12.5px; color:var(--muted); background:#fff; border:1px dashed #c9c9df; border-radius:10px; padding:8px 12px; margin:0 0 16px; }
+  .rules { background:#fff; border:2px solid var(--or); border-radius:14px; padding:12px 16px; margin:0 0 18px } .rules ol { margin:6px 0 0; padding-left:20px } .rules li { margin:4px 0 }
+  .q { background:#fff7e0; border:1px solid #f1d58a; border-radius:12px; padding:10px 14px; margin:12px 0 0; font-size:13px } .q ol { margin:6px 0 0; padding-left:20px } .q li { margin:4px 0 }
+  .phones { display:flex; gap:22px; flex-wrap:wrap; justify-content:center } .phones > div { max-width:100%; min-width:0 }
+  .ph { width:300px; max-width:100%; border-radius:30px; border:9px solid #1d1d2e; background:#fff; overflow:hidden }
+  .cap { text-align:center; font-size:12.5px; color:var(--muted); margin-top:8px; max-width:300px }
+  .top { background:linear-gradient(135deg,#f2a71b,#f2711b); color:#fff; padding:14px 14px 12px } .top small { opacity:.9 } .top h3 { margin:2px 0 0; font-size:17px }
+  .top.grey { background:linear-gradient(135deg,#6b6b8a,#3d3d5c) }
+  .in { padding:12px; display:flex; flex-direction:column; gap:10px; font-size:13px }
+  .kid { border:1px solid var(--line); border-radius:14px; padding:10px 12px; display:flex; gap:10px; align-items:flex-start }
+  .kid.on { border:2px solid var(--or); background:#fff8f2 } .kid.done { background:#f1faf6; border-color:#bfe6d5 }
+  .kid .t { flex:1; min-width:0 } .kid b { font-size:14px } .kid small { color:var(--muted); display:block }
+  .box { width:20px; height:20px; border-radius:6px; border:2px solid #b9b9d0; flex:none; margin-top:2px; display:grid; place-items:center; font-size:13px; color:#fff }
+  .box.c { background:var(--or); border-color:var(--or) } .box.ok { background:var(--ok); border-color:var(--ok) }
+  .price { font-weight:800; white-space:nowrap }
+  .sum { border-top:1px dashed var(--line); padding-top:8px; display:flex; justify-content:space-between; font-size:13.5px } .sum b { font-size:17px }
+  .btn { display:block; text-align:center; font-weight:800; border-radius:12px; padding:10px 12px; background:var(--or); color:#fff }
+  .btn.s { background:#fff; color:var(--ink); border:1px solid var(--line); font-weight:700 }
+  .lockall { text-align:center; padding:18px 8px; color:var(--muted) } .lockall .i { font-size:34px }
+  .mini { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:6px }
+  .mini div { background:#f7f7fc; border-radius:10px; padding:6px 7px; text-align:center } .mini .v { font-weight:800; font-size:15px } .mini .l { font-size:10.5px; color:var(--muted) }
+  .muted { color:var(--muted) }
+  .card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:14px 16px }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:16px } @media (max-width:860px){ .two{grid-template-columns:1fr} }
+  table { width:100%; border-collapse:collapse; font-size:13px } @media (max-width:760px){ table{display:block;overflow-x:auto} }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line) } th { color:var(--muted); font-size:12px; font-weight:600 }
+  .pill { font-size:11px; font-weight:700; border-radius:99px; padding:2px 9px; white-space:nowrap } .pok{background:#e3f5ee;color:var(--ok)} .pw{background:#fff3dc;color:var(--warn)} .pg{background:#eeeef6;color:var(--muted)}
+  .tiles { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:12px } @media (max-width:760px){ .tiles{grid-template-columns:repeat(2,1fr)} }
+  .tile { border:1px solid var(--line); border-radius:14px; padding:10px 12px; background:#fff } .tile .v { font-size:22px; font-weight:800 } .tile .l { color:var(--muted); font-size:12px }
+  .field { display:flex; flex-direction:column; gap:4px; font-size:12.5px; color:var(--muted); margin:10px 0 } .field input, .field select { font:inherit; color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:8px 10px; width:200px; max-width:100% }
+  .admin { border:1px solid var(--line); border-radius:16px; overflow:hidden; background:#fff } .admin .hd { background:#15153a; color:#fff; padding:10px 16px; font-weight:700 } .admin .bd { padding:14px 16px }
+  .chips { display:flex; gap:6px; flex-wrap:wrap } .chips span { border:1px solid var(--line); border-radius:99px; padding:3px 11px; font-size:12px; font-weight:700 } .chips .on { background:var(--or); border-color:var(--or); color:#fff } .chips .off { color:var(--muted) }
+  .blk { border:1px solid var(--line); border-radius:14px; padding:9px 11px } .bh { font-weight:800; margin-bottom:4px }
+  .nt { display:table; font-size:12px; overflow:visible } .nt td { padding:4px 4px; border-bottom:1px solid #f0f0f6 } .nt .g { color:var(--muted); white-space:nowrap } .nt .m { font-weight:800; text-align:right } .nt .tot td { border-bottom:0; font-weight:800; padding-top:6px }
+  .lnk { display:block; margin-top:6px; color:var(--brand); font-weight:700; font-size:12px }
+  .bul { display:flex; justify-content:space-between; gap:6px; font-size:12.5px; padding:4px 0 } .bul.off { color:var(--muted) }
+  .nf { display:block; padding:3px 0; font-size:12px }
+  .app { display:flex; flex-direction:column; height:560px } .app .sc { flex:1; overflow:hidden }
+  .kids { display:flex; gap:6px; padding:12px 12px 8px; background:linear-gradient(135deg,#f2a71b,#f2711b) } .kids span { border-radius:99px; padding:4px 12px; font-size:12.5px; font-weight:800; background:rgba(255,255,255,.25); color:#fff } .kids .on { background:#fff; color:var(--or) } .kids .off { opacity:.75 }
+  .nav { display:grid; grid-template-columns:repeat(5,1fr); border-top:1px solid var(--line); background:#fff } .nav span { text-align:center; font-size:10px; padding:6px 0 8px; color:var(--muted); position:relative } .nav i { display:block; font-style:normal; font-size:17px } .nav .on { color:var(--or); font-weight:800 } .nav b { position:absolute; top:3px; right:12px; background:var(--bad); color:#fff; border-radius:99px; font-size:9.5px; padding:0 5px }
+  .h { font-weight:800; font-size:15px } .sub2 { font-size:12.5px; color:var(--muted) } .sub2 b { color:var(--ink) }
+  .ln { border-bottom:1px solid #f0f0f6; padding:5px 0; display:grid; font-size:12.5px } .ln em { font-style:normal; font-size:11.5px; color:var(--muted) } .ln em.r { color:var(--bad); font-weight:700 } .ln em.g { color:var(--ok); font-weight:700 } .ln.new { background:#fff8f2; border-radius:8px; padding:5px 6px }
+  .mt { border:1px solid var(--line); border-radius:10px; padding:6px 9px } .mh { display:flex; justify-content:space-between } .mh span { font-weight:800 } .mt.open { border-color:var(--or) } .md { font-size:11.5px; color:var(--muted); margin-top:3px }
+  .bc { border:1px solid var(--line); border-radius:12px; padding:8px 10px; display:flex; flex-direction:column; gap:5px; font-size:12.5px } .bc.off { color:var(--muted) }
+  .days { display:flex; gap:4px } .days span { flex:1; text-align:center; border:1px solid var(--line); border-radius:8px; padding:3px 0; font-size:11.5px; font-weight:700 } .days .on { background:var(--ink); color:#fff; border-color:var(--ink) }
+  .red { border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin:6px 0 12px; display:flex; flex-direction:column; gap:6px; font-size:13px } .rr input { width:58px; font:inherit; border:1px solid var(--line); border-radius:8px; padding:3px 6px; text-align:center }
+  .prov { background:#fff3dc; color:#7a4b00; border-radius:10px; padding:6px 9px; font-size:11.5px }
+  .hint { font-size:11.5px; color:var(--brand); font-weight:700 }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Espace Parent — payé par les parents, par enfant</h1>
+  <p class="sub">Version 2, avec tes règles. Les SMS d’identifiants partent à tous les tuteurs comme aujourd’hui ; mais en se connectant, un tuteur ne voit <b>aucune information</b> sur un enfant tant que cet enfant n’est pas payé.</p>
+
+  <div class="rules"><b>Les règles, telles que je les comprends :</b>
+    <ol>
+      <li><b>Rien n’est gratuit.</b> Enfant non payé = aucune information : ni notes, ni absences, ni bulletins, ni emploi du temps, ni annonces.</li>
+      <li><b>Aucun SMS aux parents</b>, sauf leurs identifiants. Tout le reste (absence, note, bulletin) arrive en <b>notification dans l’application</b>, pour les enfants payés.</li>
+      <li><b>On paie par enfant</b>, pour l’année scolaire (jusqu’au 31 août).</li>
+      <li><b>Le prix ne dépend que du nombre d’enfants</b>, pas du nombre de tuteurs : 2 enfants = 2 × le tarif, que l’enfant ait 1 ou 3 tuteurs.</li>
+      <li><b>Tous les tuteurs</b> renseignés pour l’enfant y ont accès, et <b>n’importe lequel peut payer</b>. Dès qu’un tuteur a payé pour un enfant, les autres tuteurs de cet enfant y ont accès aussi, sans repayer.</li>
+      <li><b>Le tarif se règle dans ton tableau de bord Super Admin</b> : un prix pour toutes les écoles, et un prix différent possible par école.</li>
+    </ol>
+  </div>
+
+  <h2>1. Le parent se connecte : il coche ses enfants, le total s’affiche, il paie</h2>
+  <p class="sub">C’est ton idée, et je la garde : c’est la plus claire. Mes ajouts : tous les enfants sont <b>déjà cochés</b> (le parent n’a qu’à décocher), et un enfant déjà payé par un autre tuteur apparaît comme payé, sans case.</p>
+  <div class="phones">
+    <div>
+      <div class="ph">
+        <div class="top grey"><small>GS Les Cocotiers</small><h3>Bonjour M. Koné</h3></div>
+        <div class="in">
+          <div class="lockall"><div class="i">🔒</div><b style="color:var(--ink)">L’Espace Parent n’est pas encore activé</b><br>Activez-le pour suivre vos enfants : notes, absences, bulletins, emploi du temps.</div>
+          <div class="kid on"><span class="box c">✓</span><div class="t"><b>KONÉ Awa</b><small>4ème 3</small></div><span class="price">1 500 F</span></div>
+          <div class="kid on"><span class="box c">✓</span><div class="t"><b>KONÉ Ibrahim</b><small>6ème 2</small></div><span class="price">1 500 F</span></div>
+          <div class="kid"><span class="box"></span><div class="t"><b>KONÉ Salif</b><small>Tle C1</small></div><span class="price">1 500 F</span></div>
+          <div class="sum"><span>2 enfants · jusqu’au 31 août 2027</span><b>3 000 F</b></div>
+          <a class="btn">Payer 3 000 F</a>
+          <span class="muted" style="font-size:11.5px;text-align:center">Orange Money, MTN, Moov, Wave ou carte · page sécurisée PayDunya</span>
+        </div>
+      </div>
+      <div class="cap">A. Première connexion. Le prix par enfant vient de ton réglage (ici 1 500 F, exemple).</div>
+    </div>
+
+    <div>
+      <div class="ph">
+        <div class="top"><small>GS Les Cocotiers</small><h3>Bonjour Mme Koné</h3></div>
+        <div class="in">
+          <div class="kid done"><span class="box ok">✓</span><div class="t"><b>KONÉ Awa</b><small>4ème 3 · payé par M. Koné le 31/10</small></div></div>
+          <div class="kid done"><span class="box ok">✓</span><div class="t"><b>KONÉ Ibrahim</b><small>6ème 2 · payé par M. Koné le 31/10</small></div></div>
+          <div class="kid on"><span class="box c">✓</span><div class="t"><b>KONÉ Salif</b><small>Tle C1</small></div><span class="price">1 500 F</span></div>
+          <div class="sum"><span>1 enfant</span><b>1 500 F</b></div>
+          <a class="btn">Payer 1 500 F</a>
+        </div>
+      </div>
+      <div class="cap">B. La mère, autre tutrice : elle voit déjà Awa et Ibrahim (payés par le père) et peut payer Salif.</div>
+    </div>
+  </div>
+
+  <h2>2. Une fois activé : les enfants en haut, les rubriques en bas</h2>
+  <p class="sub">En haut, un onglet par enfant (Salif 🔒 n’est pas payé : le toucher ouvre le paiement). En bas, cinq onglets pour l’enfant choisi.</p>
+  <div class="phones">
+    <div>
+      <div class="ph app">
+        <div class="kids"><span class="on">Awa</span><span>Ibrahim</span><span class="off">Salif 🔒</span></div>
+        <div class="in sc">
+          <div class="h">Absences · 1er trimestre</div>
+          <div class="mini"><div><div class="v">9 h</div><div class="l">Total</div></div><div><div class="v" style="color:var(--ok)">5 h</div><div class="l">Justifiées</div></div><div><div class="v" style="color:var(--bad)">4 h</div><div class="l">Non justifiées</div></div></div>
+          <div class="ln"><b>Lun. 27/10</b><span>Maths · 8 h–10 h</span><em class="r">2 h · non justifiée</em></div>
+          <div class="ln"><b>Jeu. 16/10</b><span>Anglais · 10 h–11 h</span><em class="g">1 h · justifiée (maladie)</em></div>
+          <div class="ln"><b>Mar. 07/10</b><span>Toute la journée</span><em class="g">4 h · justifiée</em></div>
+          <div class="ln"><b>Ven. 03/10</b><span>SVT · 14 h–16 h</span><em class="r">2 h · non justifiée</em></div>
+        </div>
+        <div class="nav"><span class="on"><i>📋</i>Absences</span><span class=""><i>📝</i>Moyennes</span><span class=""><i>📄</i>Bulletins</span><span class=""><i>📅</i>Emploi du t.</span><span class=""><i>🔔</i>Notifs<b>2</b></span></div>
+      </div>
+      <div class="cap">1. Absences : le total du trimestre, puis chaque absence, justifiée ou non.</div>
+    </div>
+    <div>
+      <div class="ph app">
+        <div class="kids"><span class="on">Awa</span><span>Ibrahim</span><span class="off">Salif 🔒</span></div>
+        <div class="in sc">
+          <div class="h">Moyennes · 1er trimestre</div>
+          <div class="prov">⏳ Moyennes provisoires : elles changent à chaque nouvelle note. Elles ne sont définitives qu’à la fin du trimestre, sur le bulletin.</div>
+          <div class="sub2">Moyenne générale provisoire <b>13,4</b></div>
+          <div class="hint">👆 Touchez une matière pour voir ses notes</div>
+          <div class="mt open"><div class="mh"><b>Français</b><span>12,3</span></div><div class="md">Dictée 12 · Rédaction 14 · Interro 11</div></div>
+          <div class="mt"><div class="mh"><b>Mathématiques</b><span>11,0</span></div></div>
+          <div class="mt"><div class="mh"><b>Anglais</b><span>15,5</span></div></div>
+          <div class="mt"><div class="mh"><b>SVT</b><span>14,0</span></div></div>
+          <div class="mt"><div class="mh"><b>Histoire-Géographie</b><span>11,0</span></div></div>
+          <div class="mt"><div class="mh"><b>EPS</b><span>16,0</span></div></div>
+        </div>
+        <div class="nav"><span class=""><i>📋</i>Absences</span><span class="on"><i>📝</i>Notes</span><span class=""><i>📄</i>Bulletins</span><span class=""><i>📅</i>Emploi du t.</span><span class=""><i>🔔</i>Notifs<b>2</b></span></div>
+      </div>
+      <div class="cap">2. Moyennes : provisoires, calculées au fil des notes ; on touche une matière pour voir ses notes. Pas de rang ici : le rang n’apparaît que sur le bulletin.</div>
+    </div>
+    <div>
+      <div class="ph app">
+        <div class="kids"><span class="on">Awa</span><span>Ibrahim</span><span class="off">Salif 🔒</span></div>
+        <div class="in sc">
+          <div class="h">Bulletins</div>
+          <div class="bc"><b>1er trimestre</b><span>Publié le 20/12 par l’administration, après le conseil de classe</span><a class="btn s">Ouvrir le bulletin (PDF)</a></div>
+          <div class="bc off"><b>2ᵉ trimestre</b><span>Pas encore publié. Il apparaîtra ici après le conseil de classe.</span></div>
+          <div class="bc off"><b>3ᵉ trimestre</b><span>Pas encore publié</span></div>
+        </div>
+        <div class="nav"><span class=""><i>📋</i>Absences</span><span class=""><i>📝</i>Notes</span><span class="on"><i>📄</i>Bulletins</span><span class=""><i>📅</i>Emploi du t.</span><span class=""><i>🔔</i>Notifs<b>2</b></span></div>
+      </div>
+      <div class="cap">3. Bulletins : le document officiel, tel que l’administration l’a publié après le conseil de classe. Rien n’y est recalculé.</div>
+    </div>
+    <div>
+      <div class="ph app">
+        <div class="kids"><span class="on">Awa</span><span>Ibrahim</span><span class="off">Salif 🔒</span></div>
+        <div class="in sc">
+          <div class="h">Emploi du temps · cette semaine</div>
+          <div class="days"><span>Lun</span><span class="on">Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span></div>
+          <div class="ln"><b>8 h–10 h</b><span>Mathématiques · Salle 12</span><em>M. TRAORÉ</em></div>
+          <div class="ln"><b>10 h–11 h</b><span>Anglais · Salle 12</span><em>Mme KOUASSI</em></div>
+          <div class="ln"><b>11 h–12 h</b><span>Français · Salle 12</span><em>M. YAO</em></div>
+          <div class="ln"><b>14 h–16 h</b><span>EPS · Terrain</span><em>M. DIABATÉ</em></div>
+        </div>
+        <div class="nav"><span class=""><i>📋</i>Absences</span><span class=""><i>📝</i>Notes</span><span class=""><i>📄</i>Bulletins</span><span class="on"><i>📅</i>Emploi du t.</span><span class=""><i>🔔</i>Notifs<b>2</b></span></div>
+      </div>
+      <div class="cap">4. Emploi du temps de la semaine, jour par jour.</div>
+    </div>
+    <div>
+      <div class="ph app">
+        <div class="kids"><span class="on">Awa</span><span>Ibrahim</span><span class="off">Salif 🔒</span></div>
+        <div class="in sc">
+          <div class="h">Notifications</div>
+          <div class="ln new"><b>🔴 Absente</b><span>Maths, lun. 27/10, 8 h–10 h</span><em>il y a 2 h</em></div>
+          <div class="ln new"><b>📝 Nouvelle note</b><span>Anglais : 16/20 (Interro)</span><em>hier</em></div>
+          <div class="ln"><b>📄 Bulletin disponible</b><span>1er trimestre</span><em>20/10</em></div>
+          <div class="ln"><b>📣 Annonce</b><span>Réunion des parents samedi 8 h</span><em>15/10</em></div>
+        </div>
+        <div class="nav"><span class=""><i>📋</i>Absences</span><span class=""><i>📝</i>Notes</span><span class=""><i>📄</i>Bulletins</span><span class=""><i>📅</i>Emploi du t.</span><span class="on"><i>🔔</i>Notifs<b>2</b></span></div>
+      </div>
+      <div class="cap">5. Notifications : elles arrivent aussi sur le téléphone, jamais par SMS.</div>
+    </div>
+  </div>
+
+  <h2>3. Tes réglages : tarif et réduction (Super Admin)</h2>
+  <div class="two">
+    <div class="admin">
+      <div class="hd">Réglages → Espace Parent</div>
+      <div class="bd">
+        <div class="field">Prix par enfant et par année scolaire<input value="1 500 F" readonly /></div>
+        <div class="field">Fin de validité<select><option>31 août (fin de l’année scolaire)</option></select></div>
+        <p class="muted" style="font-size:12.5px;margin:4px 0 10px">Un nouveau prix vaut pour les paiements suivants ; ce qui est déjà payé reste valable jusqu’au 31 août.</p>
+        <div class="red"><b>Réduction pour l’école</b><span class="muted">sur son prochain abonnement</span>
+          <div class="rr">Si au moins <input value="30 %" readonly /> des élèves sont activés → <input value="10 %" readonly /> de réduction</div>
+          <div class="rr">Si au moins <input value="60 %" readonly /> des élèves sont activés → <input value="20 %" readonly /> de réduction <span class="muted">(palier facultatif)</span></div>
+        </div>
+        <table>
+          <tr><th>Règle différente pour une école</th><th>Prix / enfant · réduction</th></tr>
+          <tr><td>Toutes les écoles</td><td><b>1 500 F</b> · 30 % → 10 %</td></tr>
+          <tr><td>GS Les Cocotiers</td><td>1 000 F · 25 % → 15 % <span class="muted">(négocié)</span></td></tr>
+          <tr><td colspan="2"><span class="muted">+ Ajouter une école</span></td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <b>Côté Super Admin, aussi</b>
+      <div class="tiles" style="margin-top:10px;grid-template-columns:repeat(2,1fr)">
+        <div class="tile"><div class="l">Enfants activés</div><div class="v">612</div></div>
+        <div class="tile"><div class="l">Encaissé (parents)</div><div class="v">918 000 F</div></div>
+      </div>
+      <table>
+        <tr><th>École</th><th>Enfants activés</th><th>Encaissé</th></tr>
+        <tr><td>GS Les Cocotiers</td><td>412 / 4 000</td><td>412 000 F</td></tr>
+        <tr><td>Collège Saint-Paul</td><td>200 / 650</td><td>300 000 F</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h2>4. Ce que voit l’école</h2>
+  <div class="card">
+    <div class="tiles">
+      <div class="tile"><div class="l">Élèves</div><div class="v">4 000</div></div>
+      <div class="tile"><div class="l">Activés par les parents</div><div class="v">412</div></div>
+      <div class="tile"><div class="l">Cette semaine</div><div class="v">+38</div></div>
+      <div class="tile"><div class="l">Coût pour l’école</div><div class="v">0 F</div></div>
+    </div>
+    <table>
+      <tr><th>Élève</th><th>Classe</th><th>Espace Parent</th><th>Payé par</th></tr>
+      <tr><td>KONÉ Awa</td><td>4ème 3</td><td><span class="pill pok">Activé</span></td><td>M. Koné · 31/10</td></tr>
+      <tr><td>KONÉ Salif</td><td>Tle C1</td><td><span class="pill pg">Non activé</span></td><td>—</td></tr>
+      <tr><td>TRAORÉ Fatou</td><td>Tle A1</td><td><span class="pill pg">Non activé</span></td><td>—</td></tr>
+    </table>
+    <p class="muted" style="font-size:12.5px;margin:10px 0 0">Filtre par classe et « non activés », pour que l’école relance les familles si elle le souhaite. L’école ne paie rien. Elle voit où elle en est de sa réduction : « 412 élèves activés sur 4 000 (10 %) — encore 788 pour atteindre 30 % et 10 % de réduction sur votre prochain abonnement ».</p>
+  </div>
+
+  <div class="q"><b>Encore à préciser :</b>
+    <ol>
+      <li>Ta phrase « pour les absences… » s’est arrêtée : que voulais-tu ajouter ?</li>
+      <li>La réduction se calcule au moment où l’école paie son prochain abonnement, sur le pourcentage d’élèves activés ce jour-là. D’accord ?</li>
+    </ol>
+  </div>
+</div>
+</body>
+</html>

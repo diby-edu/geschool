@@ -5,7 +5,7 @@ import { hasPermission } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
 import { AuthorizationError, NotFoundError, ValidationError } from '@/lib/errors';
 import type { TenantContext } from '@/lib/tenant/context';
-import { notifyUsers } from './notifications';
+import { notifyPlatform, notifyUsers } from './notifications';
 
 /**
  * « Contacter la plateforme » (lot 5, 0148, décidé le 2026-10-26) : une école
@@ -41,6 +41,7 @@ export async function createRequest(ctx: TenantContext, subjectRaw: unknown, bod
   const id = (data as { id: string }).id;
   await admin.from('platform_request_messages' as never).insert({ request_id: id, author_id: ctx.user.id, body } as never);
   await audit(ctx, { action: 'support.request', module: 'support', entityType: 'platform_request', entityId: id, after: { subject } });
+  await notifyPlatform({ type: 'platform.request', title: 'Nouveau message d’une école', body: `${ctx.school.name} — ${subject}`, href: `/admin/demandes/${id}`, schoolId: ctx.school.id, entityType: 'platform_request', entityId: id });
   return id;
 }
 
@@ -58,6 +59,7 @@ export async function replyFromSchool(ctx: TenantContext, id: string, bodyRaw: u
   if (request.school_id !== ctx.school.id) throw new NotFoundError('Demande introuvable.');
   await admin.from('platform_request_messages' as never).insert({ request_id: id, author_id: ctx.user.id, body } as never);
   await admin.from('platform_requests' as never).update({ status: 'OPEN', updated_at: new Date().toISOString() } as never).eq('id', id);
+  await notifyPlatform({ type: 'platform.request', title: 'Réponse d’une école', body: `${ctx.school.name} — ${request.subject}`, href: `/admin/demandes/${id}`, schoolId: ctx.school.id, entityType: 'platform_request', entityId: id });
 }
 
 /** La réponse de la plateforme : elle revient dans la cloche de l'auteur de la demande. L'appelant est Super Admin. */

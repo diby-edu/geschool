@@ -161,6 +161,10 @@ export type DeclaredPayment = {
   purpose: string;
   smsQuantity: number | null;
   fee: number;
+  /** Qui a payé (compte qui a lancé le paiement). */
+  payer: string | null;
+  /** Espace Parent (0172) : les élèves payés, avec leur classe. */
+  students: { name: string; className: string | null }[];
 };
 
 /** Les paiements déclarés par les écoles, en attente de confirmation (0058). */
@@ -169,11 +173,37 @@ export async function listPayments(status: 'PENDING' | 'ALL' = 'PENDING'): Promi
   const supabase = await createClient();
   let q = supabase
     .from('payments')
-    .select('id, school_id, amount, currency, method, provider, provider_reference, status, created_at, purpose, sms_quantity, fee_amount, schools(name)')
+    .select('id, school_id, amount, currency, method, provider, provider_reference, status, created_at, purpose, sms_quantity, fee_amount, recorded_by, student_ids, schools(name)')
     .order('created_at', { ascending: false })
     .limit(200);
   if (status === 'PENDING') q = q.eq('status', 'PENDING');
   const { data } = await q;
+  const rows = (data ?? []) as unknown as { recorded_by: string | null; student_ids: string[] | null }[];
+
+  // Qui a payé, et pour quels élèves (Espace Parent) : lus en une fois pour toute la liste.
+  const userIds = [...new Set(rows.map((r) => r.recorded_by).filter((x): x is string => Boolean(x)))];
+  const studentIds = [...new Set(rows.flatMap((r) => r.student_ids ?? []))];
+  const [{ data: users }, { data: kids }] = await Promise.all([
+    userIds.length ? supabase.from('users').select('id, first_name, last_name, display_name').in('id', userIds) : Promise.resolve({ data: [] }),
+    studentIds.length
+      ? supabase.from('students').select('id, first_name, last_name, student_enrollments(status, classes(name))').in('id', studentIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+  const payerName = new Map(
+    ((users ?? []) as { id: string; first_name: string | null; last_name: string | null; display_name: string | null }[]).map((u) => [
+      u.id,
+      [u.first_name, u.last_name?.toUpperCase()].filter(Boolean).join(' ') || u.display_name || null,
+    ]),
+  );
+  const student = new Map(
+    ((kids ?? []) as unknown as { id: string; first_name: string; last_name: string; student_enrollments: { status: string; classes: { name: string } | null }[] }[]).map((k) => [
+      k.id,
+      {
+        name: `${k.last_name.toUpperCase()} ${k.first_name}`,
+        className: k.student_enrollments.find((e) => e.status === 'ENROLLED')?.classes?.name ?? null,
+      },
+    ]),
+  );
 
   return ((data ?? []) as unknown as {
     id: string;
@@ -188,8 +218,12 @@ export async function listPayments(status: 'PENDING' | 'ALL' = 'PENDING'): Promi
     purpose: string | null;
     sms_quantity: number | null;
     fee_amount: number | null;
+    recorded_by: string | null;
+    student_ids: string[] | null;
     schools: { name: string } | null;
   }[]).map((p) => ({
+    payer: p.recorded_by ? (payerName.get(p.recorded_by) ?? null) : null,
+    students: (p.student_ids ?? []).map((id) => student.get(id)).filter((x): x is { name: string; className: string | null } => Boolean(x)),
     online: p.provider === 'paydunya',
     purpose: p.purpose ?? 'SUBSCRIPTION',
     smsQuantity: p.sms_quantity,

@@ -7,6 +7,7 @@ import { signAvatarUrls } from '@/lib/storage/avatars';
 import { unreadCount } from '@/features/communication/inbox';
 import { HUB_PERMISSIONS } from '@/features/settings/hub';
 import type { TopBarData } from '@/components/layout/TopBar';
+import { loadSchoolAlerts } from '@/features/notifications/school-alerts';
 
 /** Droits qui ouvrent la recherche : on ne cherche que ce qu'on a le droit de voir. */
 export const SEARCH_PERMISSIONS = ['students.view', 'teachers.view', 'users.view'] as const;
@@ -14,10 +15,12 @@ export const SEARCH_PERMISSIONS = ['students.view', 'teachers.view', 'users.view
 /** Données de la barre du haut : école, jour, années scolaires, recherche, notifications, photo. */
 export async function loadTopBar(ctx: TenantContext, roleLabel: string): Promise<TopBarData> {
   const supabase = await createClient();
-  const [{ data: years }, unread, photo] = await Promise.all([
+  const [{ data: years }, unread, photo, alerts] = await Promise.all([
     supabase.from('academic_years').select('id, name, is_current').eq('school_id', ctx.school.id).order('starts_on', { ascending: false }),
     unreadCount(ctx),
     loadOwnPhoto(ctx),
+    // Alertes en cours selon les droits (0171), gardées 5 min en mémoire.
+    loadSchoolAlerts(ctx),
   ]);
 
   const dateLabel = new Intl.DateTimeFormat('fr-FR', {
@@ -37,6 +40,7 @@ export async function loadTopBar(ctx: TenantContext, roleLabel: string): Promise
     yearIsCurrent: ctx.academicYear?.isCurrent !== false,
     canSearch: hasAnyPermission(ctx, [...SEARCH_PERMISSIONS]),
     unreadNotifications: unread,
+    alerts: alerts.length,
     settingsHref: hasAnyPermission(ctx, HUB_PERMISSIONS) ? `/e/${ctx.school.slug}/parametres` : null,
     yearsHref: hasAnyPermission(ctx, ['academic_years.view']) ? `/e/${ctx.school.slug}/academic-years` : null,
     user: { displayName: ctx.user.displayName, roleLabel, photoUrl: photo },

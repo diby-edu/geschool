@@ -8,6 +8,7 @@ import { loadAppel } from '@/features/attendance/registers';
 import { getCurrentCoursesForTeacher } from '@/features/attendance/current';
 import { submitRegisterAction, validateRegisterAction } from '@/features/attendance/actions';
 import { AppelGrid } from '@/features/attendance/components/AppelGrid';
+import { CurrentAppelCard } from '@/features/attendance/components/CurrentAppelCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Flash } from '@/components/ui/flash';
 import { Alert } from '@/components/ui/alert';
@@ -79,8 +80,24 @@ export default async function AppelPage({
           {appel.registerStatus ? 'Consultation : l’appel est fait par l’enseignant, pendant son cours.' : 'L’enseignant n’a pas encore fait l’appel de ce cours.'}
         </Alert>
       )}
-      {canTake || appel.registerStatus ? (
-        <AppelGrid slug={slug} occurrenceId={occurrenceId} editable={canTake && appel.editable} students={appel.students} />
+      {canTake ? (
+        <CurrentAppelCard
+          // Une heure = un appel : l'écran repart de zéro à chaque heure du cours.
+          key={`${occurrenceId}-${appel.currentHour ?? 0}`}
+          slug={slug}
+          occurrenceId={occurrenceId}
+          klass={appel.klass}
+          subject={appel.subject}
+          dateLabel={appel.when.slice(0, 10)}
+          timeLabel={appel.when.slice(13)}
+          timezone={ctx.school.timezone}
+          editable={appel.editable}
+          hours={appel.hours}
+          currentHour={appel.currentHour}
+          students={appel.students}
+        />
+      ) : appel.registerStatus ? (
+        <AppelGrid students={appel.students} hours={appel.hours} timezone={ctx.school.timezone} />
       ) : null}
     </div>
   );

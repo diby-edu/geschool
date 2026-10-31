@@ -1,74 +1,45 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { StudentAvatar } from '@/components/ui/student-avatar';
-import type { AppelStudent } from '@/features/attendance/registers';
+import type { AppelHour, AppelStudent } from '@/features/attendance/registers';
 import { submitOrQueue } from '@/features/attendance/offline-queue';
 import { serverNow } from '@/features/attendance/server-clock';
 
-type Status = 'PRESENT' | 'ABSENT' | 'LATE';
+type Status = 'PRESENT' | 'ABSENT';
 
-const NEXT_STATUS: Record<Status, Status> = { PRESENT: 'ABSENT', ABSENT: 'LATE', LATE: 'PRESENT' };
-const BADGE_COLOR: Record<'ABSENT' | 'LATE', string> = {
-  ABSENT: 'var(--color-danger)',
-  LATE: 'var(--color-warning)',
-};
-const BADGE_LABEL: Record<'ABSENT' | 'LATE', string> = { ABSENT: 'ABS', LATE: 'RET' };
-
-// Present : un simple point vert, sans texte (etat par defaut, le moins
-// bruyant). Absent/Retard : badge plein colore, pour attirer l'oeil sur les
-// exceptions — reprend la maquette fournie par l'etablissement (image 2).
-function StatusIndicator({ status }: { status: Status }) {
-  if (status === 'PRESENT') {
-    return (
-      <span
-        aria-label="Présent"
-        title="Présent"
-        className="size-2.5 shrink-0 rounded-full"
-        style={{ backgroundColor: 'var(--color-success)' }}
-      />
-    );
+/** « 15 h » ou « 15 h 30 », dans le fuseau de l'établissement. */
+function hourLabel(iso: string, timezone: string): string {
+  try {
+    const [h, m] = new Intl.DateTimeFormat('fr-FR', { timeZone: timezone, hour: '2-digit', minute: '2-digit' }).format(new Date(iso)).split(':');
+    return m === '00' ? `${Number(h)} h` : `${Number(h)} h ${m}`;
+  } catch {
+    return iso.slice(11, 16);
   }
-  const color = BADGE_COLOR[status];
-  return (
-    <span
-      className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold"
-      style={{ backgroundColor: `color-mix(in oklch, ${color} 15%, transparent)`, color }}
-    >
-      {BADGE_LABEL[status]}
-    </span>
-  );
 }
 
 /**
- * Le retard n'est pas saisi : il se DEDUIT de l'heure du creneau.
+ * L'appel heure par heure (maquette docs/maquettes/appel-par-heure.html, 0170).
  *
- * Un cours de 7h a 9h, un eleve marque en retard a 8h30 : le retard vaut
- * 1 h 30. Aucune duree en dur, aucune saisie — l'enseignant clique, l'heure
- * fait le reste.
+ * Deux états : présent (point vert) ou absent (badge rouge) ; un toucher
+ * bascule. Dans un cours de plusieurs heures, chaque heure a son appel, fait
+ * pendant cette heure ; la liste de l'heure suivante reprend les absents de la
+ * précédente, en tête : l'enseignant ne touche que ceux qui sont arrivés.
  */
-function minutesDepuisLeDebut(startsAtIso: string, instant: number): number {
-  const debut = new Date(startsAtIso).getTime();
-  if (!Number.isFinite(debut)) return 0;
-  return Math.max(0, Math.round((instant - debut) / 60000));
-}
-
-function normalize(status: string): Status {
-  return status === 'ABSENT' || status === 'LATE' ? status : 'PRESENT';
-}
-
 export function CurrentAppelCard({
   slug,
   occurrenceId,
   klass,
   subject,
   dateLabel,
-  startsAt,
   timeLabel,
+  timezone,
   editable,
+  hours,
+  currentHour,
   students: initialStudents,
 }: {
   slug: string;
@@ -76,41 +47,53 @@ export function CurrentAppelCard({
   klass: string;
   subject: string;
   dateLabel: string;
-  /** Debut du creneau, en ISO : sert a calculer la duree du retard. */
-  startsAt: string;
   timeLabel: string;
+  timezone: string;
   editable: boolean;
+  hours: AppelHour[];
+  currentHour: number | null;
   students: AppelStudent[];
 }) {
   const router = useRouter();
-  const [students, setStudents] = useState(() => initialStudents.map((s) => ({ ...s, status: normalize(s.status) })));
+  const hour = hours.find((h) => h.hour === currentHour) ?? null;
+  const multi = hours.length > 1;
+  const carried = hour !== null && hour.hour > 1 && !hour.taken;
+  // Ceux qui étaient absents à l'heure d'avant passent en tête de liste.
+  const wasAbsent = (s: AppelStudent) => hour !== null && hour.hour > 1 && s.absentHours.includes(hour.hour - 1);
+
+  const [students, setStudents] = useState(() =>
+    [...initialStudents]
+      .map((s) => ({ ...s, status: (s.status === 'ABSENT' ? 'ABSENT' : 'PRESENT') as Status }))
+      .sort((a, b) => Number(wasAbsent(b)) - Number(wasAbsent(a))),
+  );
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: 'error' | 'success' | 'info'; text: string } | null>(null);
-  // Un appel validé reste modifiable TANT QUE LE CRÉNEAU EST EN COURS : un
-  // enseignant qui valide en début d'heure doit pouvoir corriger l'élève qui
-  // arrive en retard. Le verrou, c'est la fin du créneau, pas la validation.
-  const [validated, setValidated] = useState(false);
-  const locked = !editable;
+  // L'appel d'une heure validé reste modifiable TANT QUE CETTE HEURE DURE.
+  const [validated, setValidated] = useState(hour?.taken ?? false);
+  const locked = !editable || hour === null;
 
   const total = students.length;
   const absences = students.filter((s) => s.status === 'ABSENT').length;
-  const lates = students.filter((s) => s.status === 'LATE').length;
+  const span = hour ? `${hourLabel(hour.startsIso, timezone)} – ${hourLabel(hour.endsIso, timezone)}` : '';
+  const startLabel = hour ? hourLabel(hour.startsIso, timezone) : '';
+  const previousLabel = useMemo(() => {
+    const prev = hour ? hours.find((h) => h.hour === hour.hour - 1) : undefined;
+    return prev ? hourLabel(prev.startsIso, timezone) : '';
+  }, [hour, hours, timezone]);
 
-  // Quand un eleve passe « en retard », on retient L'INSTANT DU CLIC. Le
-  // recalculer a l'enregistrement ferait grossir le retard des eleves deja
-  // marques chaque fois que l'enseignant corrige quelqu'un d'autre.
-  const [lateAt, setLateAt] = useState<Record<string, number>>({});
+  // À la fin de l'heure, l'écran passe tout seul à l'appel de l'heure suivante
+  // (la page remonte l'écran pour chaque heure : voir sa clé).
+  useEffect(() => {
+    if (!hour) return;
+    const wait = Date.parse(hour.endsIso) - serverNow() + 1500;
+    if (!(wait > 0) || wait > 4 * 3_600_000) return;
+    const t = window.setTimeout(() => router.refresh(), wait);
+    return () => window.clearTimeout(t);
+  }, [hour, router]);
 
-  function cycle(studentId: string) {
+  function toggle(studentId: string) {
     if (locked || busy) return;
-    setStudents((prev) =>
-      prev.map((s) => {
-        if (s.studentId !== studentId) return s;
-        const next = NEXT_STATUS[normalize(s.status)];
-        if (next === 'LATE') setLateAt((m) => ({ ...m, [studentId]: serverNow() }));
-        return { ...s, status: next };
-      }),
-    );
+    setStudents((prev) => prev.map((s) => (s.studentId === studentId ? { ...s, status: s.status === 'ABSENT' ? 'PRESENT' : 'ABSENT' } : s)));
   }
 
   async function validate() {
@@ -123,16 +106,11 @@ export function CurrentAppelCard({
       clientOperationId: crypto.randomUUID(),
       occurrenceId,
       alsoSubmit: true,
-      // L'heure du clic voyage avec l'appel : reçu après la fin du cours, il
-      // est jugé à cet instant-là (appel fait hors ligne, jamais perdu).
+      // L'heure du clic voyage avec l'appel : reçu après coup, il est jugé à cet
+      // instant-là — et c'est lui qui dit de quelle heure du cours c'est l'appel.
       takenAt: new Date(serverNow()).toISOString(),
-      label: `${klass} — ${subject}, ${dateLabel} ${timeLabel}`,
-      entries: students.map((s) => ({
-        studentId: s.studentId,
-        status: s.status,
-        minutesLate: s.status === 'LATE' ? minutesDepuisLeDebut(startsAt, lateAt[s.studentId] ?? serverNow()) : 0,
-        comment: '',
-      })),
+      label: `${klass} — ${subject}, ${dateLabel} ${multi ? span : timeLabel}`,
+      entries: students.map((s) => ({ studentId: s.studentId, status: s.status, minutesLate: 0, comment: '' })),
     });
 
     // Valide dans les deux cas : confirme et synchronise tout de suite, ou
@@ -142,7 +120,9 @@ export function CurrentAppelCard({
       setValidated(true);
       setMessage({
         tone: 'success',
-        text: 'Appel validé. Vous pouvez encore le corriger tant que le cours n’est pas terminé.',
+        text: multi
+          ? `Appel de ${startLabel} validé. Vous pouvez encore le corriger jusqu’à la fin de cette heure.`
+          : 'Appel validé. Vous pouvez encore le corriger tant que le cours n’est pas terminé.',
       });
       router.refresh();
     } else if (outcome.refused) {
@@ -167,14 +147,50 @@ export function CurrentAppelCard({
         </p>
         <p className="text-sm text-[color:var(--muted-foreground)]">
           {dateLabel} — {timeLabel}
+          {multi && hour ? <> · <strong className="text-[color:var(--foreground)]">appel de {span}</strong></> : null}
         </p>
+
+        {multi ? (
+          <div className="mt-3 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${hours.length}, minmax(0, 1fr))` }}>
+            {hours.map((h) => {
+              const now = h.hour === currentHour;
+              const past = currentHour !== null ? h.hour < currentHour : true;
+              return (
+                <div
+                  key={h.hour}
+                  className="rounded-xl border px-1.5 py-1 text-center text-[11px] leading-tight"
+                  style={
+                    now
+                      ? { borderColor: 'var(--color-brand)', borderWidth: 2, background: 'var(--color-brand-muted)' }
+                      : h.taken
+                        ? { borderColor: 'color-mix(in srgb, var(--color-success) 35%, transparent)', background: 'color-mix(in srgb, var(--color-success) 10%, transparent)' }
+                        : { borderColor: 'var(--border)' }
+                  }
+                >
+                  <span className="block text-xs font-bold">
+                    {hourLabel(h.startsIso, timezone)} – {hourLabel(h.endsIso, timezone)}
+                  </span>
+                  <span className="text-[color:var(--muted-foreground)]">
+                    {now ? 'en cours' : h.taken ? `✓ ${h.absents} absent${h.absents > 1 ? 's' : ''}` : past ? 'pas d’appel' : 'à venir'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
         <div className="mt-3 flex gap-5 text-sm font-medium">
           <span>{total} Effectif</span>
-          <span style={{ color: 'var(--color-danger)' }}>{String(absences).padStart(2, '0')} Absences</span>
-          <span style={{ color: 'var(--color-warning)' }}>{String(lates).padStart(2, '0')} Retard</span>
+          <span style={{ color: 'var(--color-success)' }}>{total - absences} Présents</span>
+          <span style={{ color: 'var(--color-danger)' }}>{String(absences).padStart(2, '0')} Absents</span>
         </div>
       </div>
 
+      {carried && !locked && !validated ? (
+        <Alert tone="info">
+          La liste reprend les absents de {previousLabel}. Touchez ceux qui sont arrivés.
+        </Alert>
+      ) : null}
       {message ? <Alert tone={message.tone}>{message.text}</Alert> : null}
 
       {students.length === 0 ? (
@@ -182,20 +198,35 @@ export function CurrentAppelCard({
       ) : (
         <ul className="divide-y overflow-hidden rounded-[--radius-card] border" style={{ borderColor: 'var(--border)' }}>
           {students.map((s) => {
+            const arrived = carried && wasAbsent(s) && s.status === 'PRESENT';
             return (
               <li key={s.studentId}>
                 <button
                   type="button"
-                  onClick={() => cycle(s.studentId)}
+                  onClick={() => toggle(s.studentId)}
                   disabled={locked || busy}
                   className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition disabled:cursor-default hover:not-disabled:bg-[color:var(--color-brand-muted)]"
+                  style={s.status === 'ABSENT' ? { background: 'color-mix(in srgb, var(--color-danger) 6%, transparent)' } : undefined}
                 >
                   <StudentAvatar name={s.name} photoUrl={s.photoUrl} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{s.name}</span>
                     <span className="block truncate font-mono text-xs text-[color:var(--muted-foreground)]">{s.matricule}</span>
                   </span>
-                  <StatusIndicator status={normalize(s.status)} />
+                  {s.status === 'ABSENT' ? (
+                    <span
+                      className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold"
+                      style={{ backgroundColor: 'color-mix(in oklch, var(--color-danger) 15%, transparent)', color: 'var(--color-danger)' }}
+                    >
+                      ABS
+                    </span>
+                  ) : arrived ? (
+                    <span className="shrink-0 text-xs font-bold" style={{ color: 'var(--color-success)' }}>
+                      ARRIVÉ
+                    </span>
+                  ) : (
+                    <span aria-label="Présent" title="Présent" className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: 'var(--color-success)' }} />
+                  )}
                 </button>
               </li>
             );
@@ -205,16 +236,16 @@ export function CurrentAppelCard({
 
       {locked ? (
         <p className="text-sm text-[color:var(--muted-foreground)]">
-          Le cours est terminé : l’appel est clos et ne peut plus être modifié.
+          {hour === null ? 'Le cours est terminé : l’appel est clos et ne peut plus être modifié.' : 'Appel en lecture seule.'}
         </p>
       ) : (
         <div className="flex flex-wrap items-center gap-3">
           <Button type="button" onClick={validate} disabled={busy || students.length === 0} className="w-full sm:w-auto">
-            {busy ? 'Validation…' : validated ? 'Enregistrer les corrections' : "Valider l'appel"}
+            {busy ? 'Validation…' : validated ? 'Enregistrer les corrections' : multi ? `Valider l’appel de ${startLabel}` : "Valider l'appel"}
           </Button>
           {validated ? (
             <span className="text-sm text-[color:var(--muted-foreground)]">
-              Appel validé — corrigez et enregistrez à nouveau si besoin.
+              {multi ? `Appel de ${startLabel} validé — modifiable jusqu’à la fin de cette heure.` : 'Appel validé — corrigez et enregistrez à nouveau si besoin.'}
             </span>
           ) : null}
         </div>

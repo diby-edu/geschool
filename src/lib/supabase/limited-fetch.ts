@@ -174,7 +174,9 @@ export function createLimitedFetch(
 function configuredLimit(): number {
   const raw = Number(process.env.SUPABASE_MAX_CONCURRENT_REQUESTS);
   // Sur le VPS, bien relié : 8 à la fois faisait patienter le tableau de bord (≈ 25 lectures).
-  const serverDefault = process.env.NODE_ENV === 'production' && process.platform === 'linux' ? 24 : DEFAULT_LIMIT;
+  // 32 depuis le 2026-10-31 : avec la liste « démarrage », il en lance 26 ; à 24,
+  // les deux dernières attendaient qu'une place se libère.
+  const serverDefault = process.env.NODE_ENV === 'production' && process.platform === 'linux' ? 32 : DEFAULT_LIMIT;
   return Number.isInteger(raw) && raw >= 1 ? raw : serverDefault;
 }
 

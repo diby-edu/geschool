@@ -83,6 +83,10 @@ async function dispatch(s: AlertSettings, c: { urgent: boolean }, subject: strin
   if (s.email && s.emailTo) {
     if ((await sendEmail(s.emailTo, subject, `${text}\n\n${publicEnv.NEXT_PUBLIC_APP_URL}/admin/technique`)).ok) sent.push('E-mail');
   }
+  // Toujours dans la cloche du Super Admin et sur ses téléphones (0171).
+  const { notifyPlatform } = await import('./notifications');
+  await notifyPlatform({ type: 'platform.alert', title: subject.replace(`[${SHORT}] `, ''), body: text.replace(`[${SHORT}] `, ''), href: '/admin/technique' });
+  sent.push('Application');
   return sent;
 }
 

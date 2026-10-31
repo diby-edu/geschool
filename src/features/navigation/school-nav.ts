@@ -65,15 +65,17 @@ export function buildSchoolNav(ctx: TenantContext, space: Space, extra: { headTe
   // autre role que la personne pourrait cumuler.
   if (space === 'parent') {
     const portail = featureEnabled(ctx.disabledFeatures, 'parent_portal');
-    if (portail && featureEnabled(ctx.disabledFeatures, 'grades')) {
-      nav.push({ href: `${base}/mes-notes`, label: 'Mes notes', icon: 'notes' });
-    }
+    // Mêmes rubriques que les onglets du bas sur téléphone (maquette espace-parent v3).
     if (portail && featureEnabled(ctx.disabledFeatures, 'attendance')) {
-      nav.push({ href: `${base}/mes-absences`, label: 'Absences et retards', icon: 'presences' });
+      nav.push({ href: `${base}/mes-absences`, label: 'Absences', icon: 'presences' });
+    }
+    if (portail && featureEnabled(ctx.disabledFeatures, 'grades')) {
+      nav.push({ href: `${base}/mes-notes`, label: 'Moyennes', icon: 'notes' });
     }
     if (portail && featureEnabled(ctx.disabledFeatures, 'bulletins')) {
-      nav.push({ href: `${base}/mes-bulletins`, label: 'Mes bulletins', icon: 'bulletins' });
+      nav.push({ href: `${base}/mes-bulletins`, label: 'Bulletins', icon: 'bulletins' });
     }
+    if (portail) nav.push({ href: `${base}/mon-emploi-du-temps`, label: 'Emploi du temps', icon: 'edt' });
     return nav;
   }
 

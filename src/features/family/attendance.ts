@@ -5,6 +5,7 @@ import type { TenantContext } from '@/lib/tenant/context';
 import { getYear } from '@/features/academic-years/queries';
 import { debutFenetre, isJustified, summarize, type AttendanceSummary, type Cover, type Fenetre } from './attendance-rules';
 import type { Child } from './children';
+import { courseHours } from '@/features/attendance/course-hours';
 
 /**
  * Les absences et les retards d'un enfant, pour ses parents.
@@ -27,6 +28,12 @@ export type AbsenceLine = {
   minutesLate: number;
   comment: string | null;
   justified: boolean;
+  /** Heures manquées (appel par heure, 0170) : 1 h par heure de cours absente. */
+  hours: number;
+  /** « 14 h – 16 h » : les heures manquées, dans le fuseau de l'école (0173). */
+  span: string | null;
+  /** Le professeur du cours (0173). */
+  teacher: string | null;
 };
 
 export type ChildAttendance = {
@@ -55,7 +62,7 @@ export async function loadChildAttendance(
     supabase
       .from('attendance_records')
       .select(
-        'id, status, minutes_late, comment, recorded_at, ' +
+        'id, status, minutes_late, comment, recorded_at, absent_hours, ' +
           'attendance_registers(session_occurrences(occurs_on, schedule_sessions(subjects(name))))',
       )
       .eq('school_id', ctx.school.id)
@@ -84,6 +91,7 @@ export async function loadChildAttendance(
     minutes_late: number;
     comment: string | null;
     recorded_at: string;
+    absent_hours: number[] | null;
     attendance_registers: {
       session_occurrences: { occurs_on: string; schedule_sessions: { subjects: { name: string } | null } | null } | null;
     } | null;
@@ -102,10 +110,31 @@ export async function loadChildAttendance(
         minutesLate: r.minutes_late,
         comment: r.comment,
         justified: isJustified(date, r.status, covers),
+        hours: r.status === 'LATE' ? 0 : Math.max(1, r.absent_hours?.length ?? 0),
+        span: null as string | null,
+        teacher: null as string | null,
       };
     })
     .filter((r) => r.date >= since && r.date <= today)
     .sort((a, b) => b.date.localeCompare(a.date));
+
+  // L'heure et le professeur de chaque absence (0173) : un parent ne lit pas la
+  // fiche des enseignants, la base lui donne seulement le nom.
+  const { data: details } = await supabase.rpc('child_absence_details' as never, {
+    p_school: ctx.school.id,
+    p_student: child.id,
+    p_from: since,
+    p_to: today,
+  } as never);
+  const byRecord = new Map(
+    ((details ?? []) as { record_id: string; starts_at: string; ends_at: string; course_hours: number; absent_hours: number[] | null; teacher: string | null }[]).map((d) => [d.record_id, d]),
+  );
+  for (const l of lines) {
+    const d = byRecord.get(l.id);
+    if (!d) continue;
+    l.teacher = d.teacher;
+    l.span = absentSpan(d.starts_at, d.ends_at, d.course_hours, d.absent_hours ?? [], ctx.school.timezone);
+  }
 
   return {
     lines,
@@ -115,4 +144,25 @@ export async function loadChildAttendance(
     ),
     since,
   };
+}
+
+/** « 14 h – 16 h », ou « 8 h – 9 h, 10 h – 11 h » : les heures manquées, regroupées quand elles se suivent. */
+function absentSpan(startsIso: string, endsIso: string, count: number, absent: number[], tz: string): string {
+  const fmt = (iso: string) => {
+    const [h, m] = new Intl.DateTimeFormat('fr-FR', { timeZone: tz, hour: '2-digit', minute: '2-digit' }).format(new Date(iso)).split(':');
+    return m === '00' ? `${Number(h)} h` : `${Number(h)} h ${m}`;
+  };
+  const hours = courseHours(startsIso, endsIso, count);
+  const wanted = absent.length > 0 ? [...absent].sort((a, b) => a - b) : hours.map((h) => h.hour);
+  const parts: string[] = [];
+  let i = 0;
+  while (i < wanted.length) {
+    let j = i;
+    while (j + 1 < wanted.length && wanted[j + 1] === wanted[j]! + 1) j++;
+    const a = hours[wanted[i]! - 1];
+    const b = hours[wanted[j]! - 1];
+    if (a && b) parts.push(`${fmt(a.startsIso)} – ${fmt(b.endsIso)}`);
+    i = j + 1;
+  }
+  return parts.join(', ');
 }

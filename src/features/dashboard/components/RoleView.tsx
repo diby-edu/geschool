@@ -31,6 +31,7 @@ import { AbsenteesCard, AnnouncementsCard, AssessmentActivityCard, ClassAverages
 import { TimedRefresh } from './TimedRefresh';
 import { TodoPanel } from './TodoPanel';
 import { BlocHead, Card } from './ui';
+import { NotificationsModule } from '@/features/notifications/components/NotificationsModule';
 
 type Sp = Record<string, string | string[] | undefined>;
 
@@ -151,6 +152,9 @@ export async function RoleView({
           </Link>
         </Alert>
       ) : null}
+
+      {/* Alertes et notifications (0171) — pas dans l'aperçu d'une fonction : ce sont celles de la personne. */}
+      {preview ? null : <NotificationsModule ctx={ctx} />}
 
       <Hero
         name={preview ? preview.label : ctx.user.displayName}

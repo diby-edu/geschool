@@ -5,6 +5,7 @@ import type { TenantContext } from '@/lib/tenant/context';
 import { requireWritable } from '@/lib/permissions';
 import { audit } from '@/lib/audit';
 import { ConflictError, ValidationError } from '@/lib/errors';
+import { notifyPermission } from '@/services/notifications';
 
 /**
  * Transitions groupées des bulletins d'une classe pour une période.
@@ -17,7 +18,22 @@ import { ConflictError, ValidationError } from '@/lib/errors';
 
 export async function validateBulletins(ctx: TenantContext, classId: string, periodId: string): Promise<number> {
   requireWritable(ctx, 'reports.validate');
-  return transition(ctx, classId, periodId, ['GENERATED'], 'VALIDATED', 'reports.validate_batch');
+  const count = await transition(ctx, classId, periodId, ['GENERATED'], 'VALIDATED', 'reports.validate_batch');
+  if (count > 0) {
+    // Conseil validé : ceux qui signent et publient sont prévenus (0171).
+    const supabase = await createClient();
+    const [{ data: klass }, { data: period }] = await Promise.all([
+      supabase.from('classes').select('name').eq('id', classId).maybeSingle(),
+      supabase.from('academic_periods').select('name').eq('id', periodId).maybeSingle(),
+    ]);
+    await notifyPermission(ctx.school.id, ['reports.sign', 'reports.publish'], {
+      type: 'reports.ready',
+      title: 'Bulletins prêts',
+      body: `${klass?.name ?? 'Une classe'} — ${period?.name ?? 'trimestre'} : ${count} bulletin${count > 1 ? 's' : ''} validé${count > 1 ? 's' : ''} par le conseil, à signer et publier.`,
+      href: `/bulletins?classe=${classId}&periode=${periodId}`,
+    }, ctx.user.id);
+  }
+  return count;
 }
 
 /** Signature (par defaut le directeur) des bulletins valides de la classe. */
@@ -46,6 +62,8 @@ export async function publishBulletins(ctx: TenantContext, classId: string, peri
   if (count === 0) {
     throw new ConflictError('Aucun bulletin signé à publier : faites d’abord signer les bulletins validés.');
   }
+  // Les familles sont prévenues, sans faire attendre l'écran (0171).
+  void import('@/services/family-notifications').then((m) => m.notifyBulletinsPublished(ctx.school.id, classId, periodId));
   return count;
 }
 

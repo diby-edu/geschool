@@ -9,7 +9,7 @@ import type { TablesInsert } from '@/types/database';
 import { getAppliedSyncResult, recordAppliedSyncOperation } from '@/services/sync-ledger';
 import { canActOnOccurrence, loadRoster, submitRegister } from './registers';
 import { getOccurrence } from './occurrences';
-import { clampLateMinutes } from './targets';
+import { courseHours as courseHourList, hourAt, mergeAbsentHours } from './course-hours';
 import type { AttendanceEntry } from './schemas';
 
 export type SaveResult = {
@@ -130,33 +130,61 @@ export async function applyAttendanceSave(
     }
   }
 
-  // 4. Enregistrements par élève (upsert), avec validation serveur. Seuls
+  // 4. L'heure dont c'est l'appel (0170) : celle qui couvre l'instant où il a
+  // été fait. Un cours d'1 h n'en a qu'une ; dans un cours de 3 h, l'appel de
+  // 15 h ne touche que la 2e heure, jamais celles déjà passées.
+  const takenAt = replayAt ?? new Date().toISOString();
+  const { data: count } = await supabase.rpc('occurrence_course_hours' as never, {
+    p_school: ctx.school.id,
+    p_occurrence: input.occurrenceId,
+  } as never);
+  const courseHours = typeof count === 'number' && count > 0 ? count : 1;
+  const hour = hourAt(occ.starts_iso, occ.ends_iso, courseHours, Date.parse(takenAt));
+  if (hour === null) {
+    throw new ConflictError("Le cours n'est pas en cours : son appel ne peut plus être fait.");
+  }
+
+  // 5. Enregistrements par élève (upsert), avec validation serveur. Seuls
   // les élèves attendus à ce cours sont retenus : une requête forgée ne peut
   // pas marquer absent un élève d'une autre classe. Un élève sorti du cours
   // entre l'appel hors ligne et son envoi est écarté, sans perdre les autres.
+  // Deux états seulement : présent ou absent (le retard a disparu, 0170).
   const expected = new Set((await loadRoster(ctx, occ)).map((r) => r.studentId));
   const kept = input.entries.filter((e) => expected.has(e.studentId));
   const ignoredCount = input.entries.length - kept.length;
-  const takenAt = replayAt ?? new Date().toISOString();
-  const rows: TablesInsert<'attendance_records'>[] = kept.map((e) => ({
-    school_id: ctx.school.id,
-    register_id: registerId,
-    student_id: e.studentId,
-    status: e.status,
-    // Le retard se déduit de l'heure du clic ; il ne dépasse jamais le cours.
-    minutes_late: e.status === 'LATE' ? clampLateMinutes(e.minutesLate, occ.starts_iso, occ.ends_iso) : 0,
-    comment: e.comment || null,
-    recorded_by: ctx.user.id,
-    taken_at: takenAt,
-  }));
+  const { data: previousRows } = await supabase
+    .from('attendance_records')
+    .select('student_id, status, absent_hours')
+    .eq('school_id', ctx.school.id)
+    .eq('register_id', registerId);
+  const previous = new Map(
+    ((previousRows ?? []) as unknown as { student_id: string; status: string; absent_hours: number[] | null }[]).map((r) => [r.student_id, r]),
+  );
+  const rows: TablesInsert<'attendance_records'>[] = kept.map((e) => {
+    const before = previous.get(e.studentId);
+    const absentHours = mergeAbsentHours(before?.absent_hours ?? [], hour, e.status === 'ABSENT');
+    // Une absence déjà justifiée le reste tant qu'il reste une heure d'absence.
+    const status = absentHours.length === 0 ? 'PRESENT' : before?.status === 'EXCUSED' ? 'EXCUSED' : 'ABSENT';
+    return {
+      school_id: ctx.school.id,
+      register_id: registerId,
+      student_id: e.studentId,
+      status,
+      minutes_late: 0,
+      absent_hours: absentHours,
+      comment: e.comment || null,
+      recorded_by: ctx.user.id,
+      taken_at: takenAt,
+    } as TablesInsert<'attendance_records'>;
+  });
   if (rows.length > 0) {
     const { error } = await supabase.from('attendance_records').upsert(rows, { onConflict: 'register_id,student_id' });
     if (error) throw error;
   }
 
-  // 5. Verrouillage enchaine (« Valider l'appel » du tableau de bord
-  // enseignant) : deja soumis/valide entre-temps (ex. rejeu apres une
-  // premiere tentative interrompue) -> rien a refaire, ce n'est pas une erreur.
+  // 6. « Valider l'appel de 15 h » : l'heure est faite (0170). Validé par la
+  // vie scolaire entre-temps -> rien a refaire, ce n'est pas une erreur. Le
+  // même instant que les lignes : la base retrouve la même heure.
   let submitted = false;
   if (input.alsoSubmit) {
     const { data: reg } = await supabase
@@ -165,13 +193,36 @@ export async function applyAttendanceSave(
       .eq('school_id', ctx.school.id)
       .eq('id', registerId)
       .maybeSingle();
-    if (reg?.status === 'OPEN') {
-      await submitRegister(ctx, registerId, replayAt ?? undefined);
+    if (reg?.status !== 'VALIDATED') {
+      await submitRegister(ctx, registerId, takenAt);
     }
     submitted = true;
   }
 
-  // 6. Journaliser l'opération dans le registre d'idempotence (service_role).
+  // Les familles des élèves absents À CETTE HEURE (et pas déjà notés absents à
+  // cette heure) sont prévenues : une notification par heure d'absence (0171).
+  if (submitted) {
+    const nouveaux = rows
+      .filter((r) => ((r as { absent_hours?: number[] }).absent_hours ?? []).includes(hour) && !previous.get(r.student_id)?.absent_hours?.includes(hour))
+      .map((r) => r.student_id);
+    if (nouveaux.length > 0) {
+      const h = courseHourList(occ.starts_iso, occ.ends_iso, courseHours)[hour - 1];
+      const tz = ctx.school.timezone;
+      const fmt = (iso: string) => {
+        const [hh, mm] = new Intl.DateTimeFormat('fr-FR', { timeZone: tz, hour: '2-digit', minute: '2-digit' }).format(new Date(iso)).split(':');
+        return mm === '00' ? `${Number(hh)} h` : `${Number(hh)} h ${mm}`;
+      };
+      const dayLabel = new Intl.DateTimeFormat('fr-FR', { timeZone: tz, weekday: 'short', day: '2-digit', month: '2-digit' }).format(new Date(occ.starts_iso));
+      void import('@/services/family-notifications').then((m) => m.notifyAbsences(ctx.school.id, nouveaux, {
+        subject: occ.subject,
+        dayLabel,
+        span: h ? `${fmt(h.startsIso)} – ${fmt(h.endsIso)}` : '',
+        occurrenceId: input.occurrenceId,
+      }));
+    }
+  }
+
+  // 7. Journaliser l'opération dans le registre d'idempotence (service_role).
   await recordAppliedSyncOperation({
     schoolId: ctx.school.id,
     userId: ctx.user.id,
@@ -179,6 +230,7 @@ export async function applyAttendanceSave(
     operationType: 'attendance.save',
     payload: {
       occurrenceId: input.occurrenceId,
+      hour,
       count: rows.length,
       alsoSubmit: input.alsoSubmit ?? false,
       ...(replayAt ? { takenAt: replayAt } : {}),
@@ -194,6 +246,7 @@ export async function applyAttendanceSave(
     // Un appel reçu après coup reste reconnaissable : la vie scolaire voit
     // l'heure où il a été fait et l'heure où il est arrivé.
     after: {
+      hour,
       count: rows.length,
       source: input.source,
       submitted,

@@ -207,6 +207,15 @@ export async function registerSchool(input: RegisterSchoolInput): Promise<Regist
       after: { slug, name: input.school.name, modules: input.modules, parentPortalEnabled: true },
     });
 
+    const { notifyPlatform } = await import('./notifications');
+    await notifyPlatform({
+      type: 'platform.school',
+      title: 'Nouvelle école inscrite',
+      body: `${input.school.name} vient de s’inscrire.`,
+      href: `/admin/etablissements/${schoolId}`,
+      schoolId,
+    });
+
     return { schoolId, slug, userId };
   } catch (error) {
     // Nettoyage best-effort : ne jamais laisser un compte Auth ou une ecole

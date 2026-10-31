@@ -56,6 +56,24 @@ export type BillingOverview = {
   counts: { total: number; full: number; demo: number; expired: number };
 };
 
+/**
+ * Fin de l'année payée aujourd'hui : 31 août, de septembre à août ; un paiement
+ * d'août vaut pour l'année qui commence. Même règle que la base (0143, 0158).
+ */
+export function paidYearEnd(today = new Date()): string {
+  const y = today.getUTCFullYear() + (today.getUTCMonth() >= 7 ? 1 : 0);
+  return `${y}-08-31`;
+}
+
+/**
+ * Module déjà payé pour toute l'année en cours : le payer de nouveau ne
+ * prolongerait rien (la base garde la même échéance) et encaisserait pour rien.
+ * Constaté le 2026-10-31 : juste après un paiement, la page le proposait encore.
+ */
+export function alreadyPaid(m: { mode: 'FULL' | 'DEMO'; endsOn: string | null; expired: boolean }, today = new Date()): boolean {
+  return m.mode === 'FULL' && !m.expired && m.endsOn !== null && m.endsOn >= paidYearEnd(today);
+}
+
 /** Jours entre aujourd'hui et une echeance, en jours pleins. */
 export function daysUntil(endsOn: string | null, today = new Date()): number | null {
   if (!endsOn) return null;

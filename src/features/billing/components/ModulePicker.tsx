@@ -26,6 +26,8 @@ export type PickerModule = {
   endsOn: string | null;
   expired: boolean;
   demo: boolean;
+  /** Payé pour toute l'année en cours : rien à cocher (repayer ne prolongerait rien). */
+  paid: boolean;
 };
 
 const money = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} F`;
@@ -52,6 +54,7 @@ export function ModulePicker({
   feePct,
   manualHref,
   action,
+  parent,
 }: {
   modules: PickerModule[];
   canPay: boolean;
@@ -59,11 +62,16 @@ export function ModulePicker({
   feePct: number;
   manualHref: string;
   action: (p: FormState, fd: FormData) => Promise<FormState>;
+  /** Espace Parent (0172) : payé par les parents ; la réduction qu'il vaut à l'école. */
+  parent?: { price: number; students: number; activated: number; discountPct: number; next: { missing: number; minPct: number; discountPct: number } | null; href: string } | null;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
-  const [chosen, setChosen] = useState<string[]>(modules.filter((m) => m.subscribed).map((m) => m.code));
+  const [chosen, setChosen] = useState<string[]>(modules.filter((m) => m.subscribed && !m.paid).map((m) => m.code));
   const picked = modules.filter((m) => chosen.includes(m.code));
-  const amount = picked.reduce((n, m) => n + m.price, 0);
+  const discountPct = parent?.discountPct ?? 0;
+  const full = picked.reduce((n, m) => n + m.price, 0);
+  // Même calcul que le serveur : la réduction s'applique module par module, au franc.
+  const amount = picked.reduce((n, m) => n + Math.round((m.price * (100 - discountPct)) / 100), 0);
   const fee = Math.ceil((amount * feePct) / 100);
   const toggle = (code: string) => setChosen((c) => (c.includes(code) ? c.filter((x) => x !== code) : [...c, code]));
 
@@ -117,7 +125,9 @@ export function ModulePicker({
                         ? `En démonstration${m.endsOn ? ` · jusqu’au ${jour(m.endsOn)}` : ''}`
                         : `Souscrit${m.endsOn ? ` · jusqu’au ${jour(m.endsOn)}` : ''}`}
                 </span>
-                {canPay ? (
+                {m.paid ? (
+                  <span className="text-sm font-bold text-[color:var(--color-success)]">Payé ✓</span>
+                ) : canPay ? (
                   <label className="flex cursor-pointer items-center gap-2 text-sm font-bold">
                     <input type="checkbox" name="module" value={m.code} checked={on} onChange={() => toggle(m.code)} className="size-4" />
                     {m.subscribed ? 'Renouveler' : 'Souscrire'}
@@ -134,17 +144,37 @@ export function ModulePicker({
               👨‍👩‍👧
             </div>
             <h3 className="mt-1 text-lg font-extrabold">Espace Parent</h3>
-            <p className="text-sm opacity-90">Chaque famille suit la scolarité de son enfant : notes, présences, bulletins.</p>
+            <p className="text-sm opacity-90">Chaque parent suit son enfant : absences, moyennes, bulletins, emploi du temps, notifications.</p>
           </div>
           <div className="flex-1 p-4">
-            <ul className="list-disc space-y-1 pl-5 text-sm">
-              <li>Notification dès qu’une absence est enregistrée</li>
-              <li>Identifiants reçus par SMS</li>
-            </ul>
-            <p className="mt-3 text-2xl font-extrabold">
+            <p className="text-2xl font-extrabold">
               0 F <span className="text-sm font-normal text-[color:var(--muted-foreground)]">pour l’école</span>
             </p>
-            <p className="text-xs text-[color:var(--muted-foreground)]">Payé par les familles : 2 000 F par an et par famille (bientôt).</p>
+            <p className="text-xs text-[color:var(--muted-foreground)]">
+              Payé par les parents : {parent ? money(parent.price) : '—'} par enfant et par an. Sans paiement, le parent ne voit aucune information.
+            </p>
+            {parent && parent.students > 0 ? (
+              <div className="mt-3 space-y-1.5 text-sm">
+                <p>
+                  <b>{parent.activated.toLocaleString('fr-FR')}</b> élève{parent.activated > 1 ? 's' : ''} activé{parent.activated > 1 ? 's' : ''} sur {parent.students.toLocaleString('fr-FR')}
+                  {' '}({Math.round((parent.activated * 100) / parent.students)} %)
+                </p>
+                <div className="h-2 overflow-hidden rounded-full" style={{ background: 'var(--border)' }}>
+                  <div className="h-full" style={{ width: `${Math.min(100, (parent.activated * 100) / parent.students)}%`, background: '#f2711b' }} />
+                </div>
+                <p className="text-xs font-semibold" style={{ color: parent.discountPct > 0 ? 'var(--color-success)' : 'var(--muted-foreground)' }}>
+                  {parent.discountPct > 0 ? `✓ Réduction atteinte : ${parent.discountPct} % sur votre prochain abonnement. ` : ''}
+                  {parent.next
+                    ? `Encore ${parent.next.missing.toLocaleString('fr-FR')} élève${parent.next.missing > 1 ? 's' : ''} pour atteindre ${parent.next.minPct} % et ${parent.next.discountPct} % de réduction.`
+                    : parent.discountPct > 0
+                      ? ''
+                      : 'Pas de réduction prévue pour le moment.'}
+                </p>
+                <Link href={parent.href} className="text-xs font-bold text-[color:var(--color-brand)] hover:underline">
+                  Voir les élèves activés →
+                </Link>
+              </div>
+            ) : null}
           </div>
           <div className="flex items-center justify-between border-t px-4 py-3 text-sm" style={{ borderColor: 'var(--border)' }}>
             <span className="rounded-full px-2.5 py-0.5 text-xs font-bold" style={{ background: 'color-mix(in srgb, var(--color-success) 15%, transparent)', color: 'var(--color-success)' }}>
@@ -162,7 +192,9 @@ export function ModulePicker({
               {picked.length === 0 ? 'Cochez les modules à payer' : `${picked.length} module(s) · année scolaire, jusqu’au 31 août`}
             </div>
             <div className="text-xl font-extrabold tabular-nums">
+              {discountPct > 0 && amount !== full ? <span className="mr-2 text-sm font-normal line-through opacity-60">{money(full)}</span> : null}
               {money(amount)}
+              {discountPct > 0 && amount !== full ? <span className="ml-2 text-xs font-normal opacity-80">réduction Espace Parent −{discountPct} %</span> : null}
               {online && fee > 0 ? (
                 <span className="ml-2 text-xs font-normal opacity-80">
                   + {money(fee)} de frais de paiement en ligne ({feePct.toLocaleString('fr-FR')} %)

@@ -85,14 +85,18 @@ export default async function AttendancePage({
       <div className="mx-auto max-w-2xl space-y-6">
         <PageHeader title="Présences" />
         <CurrentAppelCard
+          // Une heure = un appel : l'écran repart de zéro à chaque heure du cours.
+          key={`${chosen.occurrenceId}-${appel.currentHour ?? 0}`}
           slug={slug}
           occurrenceId={chosen.occurrenceId}
           klass={chosen.klass}
           subject={chosen.subject}
           dateLabel={TODAY_LABEL}
-          startsAt={chosen.startsIso}
           timeLabel={`${chosen.startsAt}–${chosen.endsAt}`}
+          timezone={ctx.school.timezone}
           editable={appel.editable}
+          hours={appel.hours}
+          currentHour={appel.currentHour}
           students={appel.students}
         />
       </div>

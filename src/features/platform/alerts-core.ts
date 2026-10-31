@@ -150,5 +150,10 @@ export function evaluateAlerts(input: AlertInput, s: AlertSettings): AlertCondit
 /** Nuit à Abidjan (UTC) : de 22 h à 6 h. */
 export const isNight = (d: Date) => d.getUTCHours() >= 22 || d.getUTCHours() < 6;
 
-/** Ce SMS peut-il partir maintenant ? (l'e-mail part toujours) */
-export const smsAllowedNow = (s: AlertSettings, c: { urgent: boolean }, now: Date) => s.sms && (!s.quietNight || c.urgent || !isNight(now));
+/**
+ * Ce SMS peut-il partir maintenant ? Depuis le 2026-10-31 (0171), le SMS ne sert
+ * qu'aux URGENCES (site injoignable, worker arrêté, attaque) : le reste arrive
+ * dans la cloche et sur le téléphone, gratuitement. `now` reste pour la nuit
+ * calme, qui ne coupe jamais une urgence.
+ */
+export const smsAllowedNow = (s: AlertSettings, c: { urgent: boolean }, _now: Date) => s.sms && c.urgent;

@@ -106,4 +106,14 @@ export async function recordPayment(ctx: TenantContext, input: PaymentInput): Pr
     entityType: 'payment',
     after: { amount: input.amount, method: input.method, status, reference: input.reference || null },
   });
+  if (status === 'PENDING') {
+    const { notifyPlatform } = await import('@/services/notifications');
+    await notifyPlatform({
+      type: 'platform.payment',
+      title: 'Paiement déclaré, à vérifier',
+      body: `${ctx.school.name} — ${Math.round(input.amount).toLocaleString('fr-FR')} ${input.currency.toUpperCase() === 'XOF' ? 'F' : input.currency.toUpperCase()}${input.reference ? ` · réf. ${input.reference}` : ''}.`,
+      href: `/admin/facturation/${ctx.school.id}`,
+      schoolId: ctx.school.id,
+    });
+  }
 }

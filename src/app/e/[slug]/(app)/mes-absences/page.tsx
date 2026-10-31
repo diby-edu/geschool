@@ -2,14 +2,16 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
 import { requireFeature } from '@/lib/permissions/guard';
-import { myChildren, pickChild } from '@/features/family/children';
+import { myChildren, parentPortal, pickChild } from '@/features/family/children';
+import { ParentChrome } from '@/features/family/components/ParentChrome';
+import { unreadCount } from '@/features/communication/inbox';
 import { loadChildAttendance } from '@/features/family/attendance';
 import { FENETRES, FENETRE_LABEL, parseFenetre } from '@/features/family/attendance-rules';
 import { formatDate } from '@/features/academic-years/labels';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 
-export const metadata: Metadata = { title: 'Absences et retards' };
+export const metadata: Metadata = { title: 'Absences' };
 export const dynamic = 'force-dynamic';
 
 const premier = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -70,13 +72,13 @@ export default async function MesAbsencesPage({
   requireFeature(ctx, 'attendance');
 
   const base = `/e/${slug}/mes-absences`;
-  const children = await myChildren(ctx);
+  const [children, portal, unread] = await Promise.all([myChildren(ctx), parentPortal(ctx), unreadCount(ctx)]);
   const child = pickChild(children, premier(sp.enfant));
 
   if (!child) {
     return (
       <div className="mx-auto max-w-3xl space-y-6">
-        <PageHeader title="Absences et retards" description={ctx.school.name} />
+        <PageHeader title="Absences" description={ctx.school.name} />
         <EmptyState
           title="Aucun dossier accessible"
           hint="L’établissement doit rattacher votre compte à votre enfant."
@@ -85,10 +87,22 @@ export default async function MesAbsencesPage({
     );
   }
 
+  // Enfant non payé : l'écran de paiement, sans rien lire (0172).
+  if (!child.unlocked) {
+    return (
+      <ParentChrome slug={slug} kids={children} current={child} path="mes-absences" price={portal.price} unread={unread}>
+        {null}
+      </ParentChrome>
+    );
+  }
+
   const fenetre = parseFenetre(sp.fenetre);
-  const { lines, totals, justifications, since } = await loadChildAttendance(ctx, child, fenetre);
+  const { lines, justifications, since } = await loadChildAttendance(ctx, child, fenetre);
   const absences = lines.filter((l) => l.status !== 'LATE');
-  const retards = lines.filter((l) => l.status === 'LATE');
+  // En heures (appel par heure) : total, justifiées, non justifiées.
+  const heures = absences.reduce((n, l) => n + l.hours, 0);
+  const justifiees = absences.filter((l) => l.justified).reduce((n, l) => n + l.hours, 0);
+  // Plus de retards depuis l'appel par heure (0170) : ceux déjà saisis comptaient l'élève présent.
 
   const lien = (p: { enfant?: string; fenetre?: string }) => {
     const q = new URLSearchParams();
@@ -98,19 +112,8 @@ export default async function MesAbsencesPage({
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <PageHeader
-        title="Absences et retards"
-        description={`${child.name}${child.className ? ` · ${child.className}` : ''}`}
-      />
-
-      {children.length > 1 ? (
-        <div className="flex flex-wrap items-center gap-2">
-          {children.map((c) => (
-            <Choix key={c.id} href={lien({ enfant: c.id })} label={c.name} active={c.id === child.id} />
-          ))}
-        </div>
-      ) : null}
+    <ParentChrome slug={slug} kids={children} current={child} path="mes-absences" price={portal.price} unread={unread}>
+      <PageHeader title="Absences" description={`${child.name}${child.className ? ` · ${child.className}` : ''}`} />
 
       <div className="flex flex-wrap items-center gap-2">
         {FENETRES.map((f) => (
@@ -118,22 +121,10 @@ export default async function MesAbsencesPage({
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Chiffre
-          label="Absences"
-          value={String(totals.absences)}
-          hint={`Depuis le ${formatDate(since)}`}
-        />
-        <Chiffre
-          label="Dont justifiées"
-          value={String(totals.justifiees)}
-          hint={totals.absences > 0 ? `${totals.absences - totals.justifiees} sans justificatif` : 'Rien à justifier'}
-        />
-        <Chiffre
-          label="Retards"
-          value={String(totals.retards)}
-          {...(totals.minutesLate > 0 ? { hint: `${totals.minutesLate} minutes au total` } : {})}
-        />
+      <div className="grid grid-cols-3 gap-3">
+        <Chiffre label="Total" value={`${heures} h`} hint={`Depuis le ${formatDate(since)}`} />
+        <Chiffre label="Justifiées" value={`${justifiees} h`} hint={justifiees > 0 ? 'Avec justificatif accepté' : 'Aucune'} />
+        <Chiffre label="Non justifiées" value={`${heures - justifiees} h`} hint={heures - justifiees > 0 ? 'Sans justificatif' : 'Rien à justifier'} />
       </div>
 
       <section className="space-y-3">
@@ -153,7 +144,7 @@ export default async function MesAbsencesPage({
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{formatDate(l.date)}</span>
                       <span className="block truncate text-xs text-[color:var(--muted-foreground)]">
-                        {l.subject}
+                        {[l.span, l.subject, l.teacher].filter(Boolean).join(' · ')}
                         {l.comment ? ` · ${l.comment}` : ''}
                       </span>
                     </span>
@@ -161,7 +152,7 @@ export default async function MesAbsencesPage({
                       className="shrink-0 text-xs font-semibold"
                       style={{ color: l.justified ? 'var(--color-success)' : 'var(--color-danger)' }}
                     >
-                      {l.justified ? 'Justifiée' : 'Non justifiée'}
+                      {l.hours} h · {l.justified ? 'justifiée' : 'non justifiée'}
                     </span>
                   </li>
                 ))}
@@ -171,35 +162,6 @@ export default async function MesAbsencesPage({
         )}
       </section>
 
-      <section id="retards" className="space-y-3 scroll-mt-24">
-        <h2 className="text-sm font-medium uppercase tracking-wide text-[color:var(--muted-foreground)]">Retards</h2>
-        {retards.length === 0 ? (
-          <Card>
-            <CardContent className="py-3">
-              <p className="text-sm text-[color:var(--muted-foreground)]">Aucun retard sur cette période.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardContent className="py-1">
-              <ul className="divide-y" style={{ borderColor: 'var(--border)' }}>
-                {retards.map((l) => (
-                  <li key={l.id} className="flex items-center justify-between gap-3 py-2.5">
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{formatDate(l.date)}</span>
-                      <span className="block truncate text-xs text-[color:var(--muted-foreground)]">
-                        {l.subject}
-                        {l.comment ? ` · ${l.comment}` : ''}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-sm font-bold tabular-nums">{l.minutesLate} min</span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        )}
-      </section>
 
       {justifications.length > 0 ? (
         <section className="space-y-3">
@@ -225,6 +187,6 @@ export default async function MesAbsencesPage({
           </Card>
         </section>
       ) : null}
-    </div>
+    </ParentChrome>
   );
 }

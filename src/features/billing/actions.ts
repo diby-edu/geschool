@@ -1,6 +1,6 @@
 'use server';
 
-import { graceDaysOf, writePaymentSettings } from './payment-settings';
+import { graceDaysOf, readPaymentSettingsForAdmin, writePaymentSettings } from './payment-settings';
 import { requireAdmin } from '@/features/platform/admin';
 
 import { redirect } from 'next/navigation';
@@ -147,6 +147,19 @@ export async function savePaymentSettingsAction(_p: FormState, fd: FormData): Pr
       instructions: String(fd.get('instructions') ?? '').trim().slice(0, 600),
       graceDays: graceDaysOf(fd.get('graceDays')),
     });
+    redirect('/admin/paiements?enregistre=1');
+  });
+}
+
+/**
+ * Délai de grâce seul (2026-10-31) : depuis PayDunya, le versement manuel
+ * (numéro, nom, consignes) n'est plus réglé ici ; ses valeurs restent telles quelles.
+ */
+export async function saveGraceDaysAction(_p: FormState, fd: FormData): Promise<FormState> {
+  return runFormAction(async () => {
+    const admin = await requireAdmin();
+    const current = await readPaymentSettingsForAdmin();
+    await writePaymentSettings(admin.userId, { ...current, graceDays: graceDaysOf(fd.get('graceDays')) });
     redirect('/admin/paiements?enregistre=1');
   });
 }

@@ -3,10 +3,11 @@ import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
 import { requirePageAccess } from '@/lib/permissions/guard';
 import { hasPermission } from '@/lib/permissions';
-import { readBilling } from '@/features/billing/subscription';
+import { alreadyPaid, readBilling } from '@/features/billing/subscription';
 import { readSmsQuota } from '@/features/sms/quota';
 import { payModulesOnlineAction } from '@/features/billing/online-actions';
 import { ModulePicker, type PickerModule } from '@/features/billing/components/ModulePicker';
+import { nextTier, readParentStats } from '@/features/billing/parent-portal';
 import { MODULES as CATALOGUE } from '@/features/onboarding/catalog';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Alert } from '@/components/ui/alert';
@@ -43,7 +44,12 @@ export default async function FacturationPage({ params, searchParams }: { params
   requirePageAccess(ctx, 'billing.view');
 
   const { readOnlineOffer } = await import('@/services/online-payments');
-  const [billing, offer, quota] = await Promise.all([readBilling(ctx, 10), readOnlineOffer().catch(() => null), readSmsQuota(ctx).catch(() => null)]);
+  const [billing, offer, quota, parentStats] = await Promise.all([
+    readBilling(ctx, 10),
+    readOnlineOffer().catch(() => null),
+    readSmsQuota(ctx).catch(() => null),
+    readParentStats(ctx).catch(() => null),
+  ]);
   const canManage = hasPermission(ctx, 'billing.manage');
   const base = `/e/${slug}`;
 
@@ -60,6 +66,7 @@ export default async function FacturationPage({ params, searchParams }: { params
       endsOn: m.endsOn,
       expired: m.expired,
       demo: m.mode === 'DEMO',
+      paid: alreadyPaid(m),
     })),
     ...billing.available.map((m) => ({
       code: m.code,
@@ -69,6 +76,7 @@ export default async function FacturationPage({ params, searchParams }: { params
       endsOn: null,
       expired: false,
       demo: false,
+      paid: false,
     })),
   ];
 
@@ -97,6 +105,18 @@ export default async function FacturationPage({ params, searchParams }: { params
         feePct={offer?.feePct ?? 0}
         manualHref={`${base}/facturation/payer`}
         action={payModulesOnlineAction.bind(null, slug, null)}
+        parent={
+          parentStats
+            ? {
+                price: parentStats.price,
+                students: parentStats.students,
+                activated: parentStats.activated,
+                discountPct: parentStats.discountPct,
+                next: nextTier(parentStats),
+                href: `${base}/facturation/espace-parent`,
+              }
+            : null
+        }
       />
 
       <div className="grid gap-5 md:grid-cols-2">

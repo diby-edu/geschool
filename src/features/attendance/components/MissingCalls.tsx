@@ -111,7 +111,8 @@ function GapRow({
             {row.klass} — {row.subject}
           </p>
           <p className="text-xs text-[color:var(--muted-foreground)]">
-            {jour} · {row.startsAt}–{row.endsAt} · {row.teacher ?? 'Enseignant non renseigné'}
+            {jour} · {row.startsAt}–{row.endsAt}
+            {row.courseHours && row.courseHours > 1 ? ` (${row.missingHours} h sans appel sur ${row.courseHours})` : ''} · {row.teacher ?? 'Enseignant non renseigné'}
           </p>
         </div>
 

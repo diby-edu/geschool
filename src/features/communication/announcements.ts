@@ -118,7 +118,11 @@ export async function publishAnnouncement(ctx: TenantContext, id: string): Promi
     .eq('id', id);
   if (error) throw error;
 
-  const userIds = await resolveAudienceUserIds(ctx.school.id, a.audience ?? {});
+  const audience = await resolveAudienceUserIds(ctx.school.id, a.audience ?? {});
+  // Un parent sans aucun enfant payé ne reçoit pas les annonces (Espace Parent, 0172).
+  const { parentsWithoutAccess } = await import('@/services/family-notifications');
+  const excluded = await parentsWithoutAccess(ctx.school.id, audience);
+  const userIds = audience.filter((u) => !excluded.has(u));
   const notified = await notifyUsers(ctx.school.id, userIds, {
     type: 'announcement',
     title: a.title,

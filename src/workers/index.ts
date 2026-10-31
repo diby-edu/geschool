@@ -170,13 +170,32 @@ async function enregistrerTaches(boss: PgBoss): Promise<void> {
   });
   await boss.schedule(PAIEMENTS, '*/15 * * * *');
 
+  // Rappels aux enseignants (0171) : appel à faire au début de chaque heure de
+  // cours, et saisie des notes qui ferme dans 3 jours.
+  const RAPPEL_APPEL = 'attendance-reminders';
+  const RAPPEL_NOTES = 'grades-closing-reminders';
+  await boss.createQueue(RAPPEL_APPEL);
+  await boss.createQueue(RAPPEL_NOTES);
+  await boss.work(RAPPEL_APPEL, async () => {
+    const { remindAttendance } = await import('@/services/teacher-reminders');
+    const n = await remindAttendance();
+    if (n > 0) console.warn(`[worker] rappels d'appel : ${n} notification(s)`);
+  });
+  await boss.work(RAPPEL_NOTES, async () => {
+    const { remindGradesClosing } = await import('@/services/teacher-reminders');
+    const n = await remindGradesClosing();
+    if (n > 0) console.warn(`[worker] saisie des notes bientot fermee : ${n} notification(s)`);
+  });
+  await boss.schedule(RAPPEL_APPEL, '*/5 * * * *');
+  await boss.schedule(RAPPEL_NOTES, '0 7 * * *');
+
   await boss.schedule(ABONNEMENTS, '5 0 * * *');
   await boss.schedule(SAUVEGARDE, '0 2 * * *');
   await boss.schedule(RELEVE, '*/5 * * * *');
   await boss.schedule(ALERTES, '0 6 * * *');
   await boss.schedule(ACCUSES, '15 6 * * *');
   console.warn(
-    "[worker] taches enregistrees : abonnements (0 h 05), sauvegarde (2 h), alertes d'absence (6 h), accuses de reception (6 h 15), releve (toutes les 5 min), paiements en ligne (toutes les 15 min).",
+    "[worker] taches enregistrees : abonnements (0 h 05), sauvegarde (2 h), alertes d'absence (6 h), accuses de reception (6 h 15), releve et rappels d'appel (toutes les 5 min), saisie des notes (7 h), paiements en ligne (toutes les 15 min).",
   );
 }
 

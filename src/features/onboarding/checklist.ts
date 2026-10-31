@@ -2,6 +2,8 @@ import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
 import type { TenantContext } from '@/lib/tenant/context';
+import { dashboardCounts } from '@/features/dashboard/counts';
+import { isoDaysAgo } from '@/features/dashboard/queries';
 
 /**
  * Ce qu'il reste a faire pour que l'etablissement fonctionne.
@@ -58,7 +60,13 @@ export async function readChecklist(ctx: TenantContext): Promise<Checklist> {
       .select('id', { count: 'exact', head: true })
       .eq('school_id', ctx.school.id);
 
-  const [levels, classes, subjects, teachers, students, periods, scales, staff, horaires] = await Promise.all([
+  // L'année en cours connue : les neuf comptages viennent de la lecture groupée
+  // du tableau de bord (0167), déjà partie pour l'aperçu. Sinon, un par étape.
+  const groupe = ctx.academicYear?.isCurrent ? (await dashboardCounts(ctx.school.id, yearId, isoDaysAgo(30).slice(0, 10)))?.setup : undefined;
+  const lu = (b: boolean) => ({ count: b ? 1 : 0, error: null });
+  const [levels, classes, subjects, teachers, students, periods, scales, staff, horaires] = groupe
+    ? [lu(groupe.levels), lu(groupe.classes), lu(groupe.subjects), lu(groupe.teachers), lu(groupe.students), lu(groupe.periods), lu(groupe.scales), lu(groupe.staff), lu(groupe.hours)]
+    : await Promise.all([
     compte('levels'),
     yearId
       ? supabase

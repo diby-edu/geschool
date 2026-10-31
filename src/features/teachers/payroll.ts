@@ -88,7 +88,7 @@ export async function buildPayroll(ctx: TenantContext, month: string, detailFor?
   for (const t of (rows ?? []) as {
     teacher_id: string;
     days: [string, number, number][];
-    courses: [string, string, number, boolean, string | null, string | null][] | null;
+    courses: [string, string, number, boolean, string | null, string | null, number?][] | null;
   }[]) {
     // Un jour = deux « cours » : ses heures faites, puis ses heures sans appel.
     const days: Course[] = [];
@@ -96,14 +96,15 @@ export async function buildPayroll(ctx: TenantContext, month: string, detailFor?
       if (done > 0) days.push({ date, startsAt: date, hours: done, done: true });
       if (undone > 0) days.push({ date, startsAt: date, hours: undone, done: false });
     }
-    const courses = (t.courses ?? []).map(([date, startsAt, hours, done, className, subject]) => ({
-      date,
-      startsAt,
-      hours,
-      done,
-      className,
-      subject: subject ?? 'Cours',
-    }));
+    // Un cours de 3 h dont 2 heures ont leur appel (0170) : 2 h faites, 1 h sans appel.
+    const courses = (t.courses ?? []).flatMap(([date, startsAt, hours, done, className, subject, doneHours]) => {
+      const faites = doneHours ?? (done ? hours : 0);
+      const base = { date, startsAt, className, subject: subject ?? 'Cours' };
+      return [
+        ...(faites > 0 ? [{ ...base, hours: faites, done: true }] : []),
+        ...(hours - faites > 0 ? [{ ...base, hours: hours - faites, done: false }] : []),
+      ];
+    });
     byTeacher.set(t.teacher_id, { days, courses });
   }
 

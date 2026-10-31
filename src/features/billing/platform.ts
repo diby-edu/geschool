@@ -166,4 +166,14 @@ export async function settleDeclaredPayment(
     entityId: paymentId,
     after: { amount: row.amount, currency: row.currency, reference: row.provider_reference, status: outcome },
   });
+  if (outcome === 'PAID') {
+    const { notifyPermission } = await import('@/services/notifications');
+    await notifyPermission(schoolId, ['billing.view'], {
+      type: 'billing.payment',
+      title: 'Paiement confirmé',
+      body: `Votre versement de ${Math.round(Number(row.amount)).toLocaleString('fr-FR')} F est confirmé. Le reçu est disponible.`,
+      entityType: 'payment',
+      entityId: paymentId,
+    });
+  }
 }

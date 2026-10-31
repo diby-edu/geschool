@@ -15,6 +15,7 @@ import { TodoPanel } from './TodoPanel';
 import { BlocHead, Card, plural } from './ui';
 import { readChecklist } from '@/features/onboarding/checklist';
 import { StartupBanner } from '@/features/onboarding/components/StartupBanner';
+import { NotificationsModule } from '@/features/notifications/components/NotificationsModule';
 
 type Sp = Record<string, string | string[] | undefined>;
 
@@ -52,6 +53,9 @@ export async function StaffView({ ctx, sp }: { ctx: TenantContext; sp: Sp }) {
       {demarrage.ready ? null : (
         <StartupBanner slug={ctx.school.slug} done={demarrage.done} total={demarrage.total} steps={demarrage.steps} />
       )}
+
+      {/* Alertes et notifications (0171) : ce qui ne va pas, ce qui est nouveau. */}
+      <NotificationsModule ctx={ctx} />
 
       <Hero
         name={ctx.user.displayName}

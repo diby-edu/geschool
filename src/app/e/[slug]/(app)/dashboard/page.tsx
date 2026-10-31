@@ -6,6 +6,8 @@ import { StaffView } from '@/features/dashboard/components/StaffView';
 import { RoleView } from '@/features/dashboard/components/RoleView';
 import { TeacherView } from '@/features/dashboard/components/TeacherView';
 import { FamilyView } from '@/features/dashboard/components/FamilyView';
+import { myChildren, parentPortal, pickChild } from '@/features/family/children';
+import { ParentChrome } from '@/features/family/components/ParentChrome';
 import { usesFullDashboard } from '@/features/dashboard/profiles';
 import { getFunctionPermissionCodes } from '@/features/roles/queries';
 import { hasPermission } from '@/lib/permissions';
@@ -55,5 +57,16 @@ export default async function DashboardPage({
   }
 
   const data = await getDashboardData(ctx, space);
-  return data.kind === 'teacher' ? <TeacherView ctx={ctx} data={data} sp={sp} /> : <FamilyView ctx={ctx} data={data} sp={sp} />;
+  if (data.kind === 'teacher') return <TeacherView ctx={ctx} data={data} sp={sp} />;
+
+  // Espace Parent (0172) : un onglet par enfant en haut ; un enfant non payé
+  // n'ouvre que l'écran de paiement. Sans enfant, le tableau d'avant.
+  const [kids, portal] = await Promise.all([myChildren(ctx), parentPortal(ctx)]);
+  if (kids.length === 0) return <FamilyView ctx={ctx} data={data} sp={sp} />;
+  const child = pickChild(kids, typeof sp.enfant === 'string' ? sp.enfant : undefined);
+  return (
+    <ParentChrome slug={slug} kids={kids} current={child} path="dashboard" price={portal.price} unread={data.unreadNotifications}>
+      <FamilyView ctx={ctx} data={{ ...data, students: data.students.filter((s) => s.id === child?.id) }} sp={sp} />
+    </ParentChrome>
+  );
 }

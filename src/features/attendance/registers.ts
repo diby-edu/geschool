@@ -8,6 +8,7 @@ import { AuthorizationError, ConflictError, NotFoundError } from '@/lib/errors';
 import { signAvatarUrls } from '@/lib/storage/avatars';
 import { getOccurrence, type OccurrenceDetail } from './occurrences';
 import { uniqueStudents } from './targets';
+import { absentAtOpening, courseHours, hourAt } from './course-hours';
 
 /**
  * Un enseignant fait l'appel de SES SEANCES sans porter la permission
@@ -39,10 +40,16 @@ export type AppelStudent = {
   matricule: string;
   name: string;
   photoUrl: string | null;
+  /** État à l'heure en cours (ou, hors du cours, sur l'ensemble du cours). */
   status: string;
   minutesLate: number;
   comment: string;
+  /** Heures du cours où l'élève était absent (0170). */
+  absentHours: number[];
 };
+
+/** Une heure du cours et l'état de son appel. */
+export type AppelHour = { hour: number; startsIso: string; endsIso: string; taken: boolean; absents: number };
 
 export type Appel = {
   occurrenceId: string;
@@ -53,6 +60,10 @@ export type Appel = {
   registerStatus: string | null;
   editable: boolean;
   students: AppelStudent[];
+  /** Les heures du cours (une seule pour un cours d'1 h). */
+  hours: AppelHour[];
+  /** L'heure en cours, celle dont l'appel se fait maintenant ; null hors du cours. */
+  currentHour: number | null;
 };
 
 type RosterEntry = { studentId: string; matricule: string; name: string; photoPath: string | null };
@@ -106,37 +117,63 @@ export async function loadAppel(ctx: TenantContext, occurrenceId: string): Promi
   const occ = await getOccurrence(ctx, occurrenceId);
   if (!occ) throw new NotFoundError('Séance introuvable.');
 
-  const { data: reg } = await supabase
-    .from('attendance_registers')
-    .select('id, status')
-    .eq('school_id', ctx.school.id)
-    .eq('session_occurrence_id', occurrenceId)
-    .maybeSingle();
+  const [{ data: regRow }, { data: count }] = await Promise.all([
+    supabase
+      .from('attendance_registers')
+      .select('id, status, hours_taken')
+      .eq('school_id', ctx.school.id)
+      .eq('session_occurrence_id', occurrenceId)
+      .maybeSingle(),
+    supabase.rpc('occurrence_course_hours' as never, { p_school: ctx.school.id, p_occurrence: occurrenceId } as never),
+  ]);
+  const reg = regRow as { id: string; status: string; hours_taken: (string | null)[] | null } | null;
 
-  const records = new Map<string, { status: string; minutes_late: number; comment: string | null }>();
+  const records = new Map<string, { status: string; minutes_late: number; comment: string | null; absent_hours: number[] | null }>();
   if (reg) {
     const { data: recs } = await supabase
       .from('attendance_records')
-      .select('student_id, status, minutes_late, comment')
+      .select('student_id, status, minutes_late, comment, absent_hours')
       .eq('school_id', ctx.school.id)
       .eq('register_id', reg.id);
-    for (const r of recs ?? []) records.set(r.student_id, r);
+    for (const r of (recs ?? []) as unknown as { student_id: string; status: string; minutes_late: number; comment: string | null; absent_hours: number[] | null }[]) {
+      records.set(r.student_id, r);
+    }
   }
+
+  // Les heures du cours et celle qui se fait maintenant (0170).
+  const n = typeof count === 'number' && count > 0 ? count : 1;
+  const taken = (h: number) => Boolean(reg?.hours_taken?.[h - 1]);
+  const currentHour = hourAt(occ.starts_iso, occ.ends_iso, n, Date.now());
 
   const roster = await loadRoster(ctx, occ);
   const signedByPath = await signAvatarUrls(roster.map((e) => e.photoPath));
   const students: AppelStudent[] = roster.map((e) => {
     const rec = records.get(e.studentId);
+    const absentHours = rec?.absent_hours ?? [];
+    // Pendant le cours : l'état de l'heure en cours (la liste reprend les
+    // absents de l'heure d'avant tant que cette heure n'est pas faite).
+    const status =
+      currentHour !== null
+        ? absentAtOpening(absentHours, currentHour, taken(currentHour))
+          ? 'ABSENT'
+          : 'PRESENT'
+        : (rec?.status ?? 'PRESENT');
     return {
       studentId: e.studentId,
       matricule: e.matricule,
       name: e.name,
       photoUrl: e.photoPath ? (signedByPath.get(e.photoPath) ?? null) : null,
-      status: rec?.status ?? 'PRESENT',
+      status,
       minutesLate: rec?.minutes_late ?? 0,
       comment: rec?.comment ?? '',
+      absentHours,
     };
   });
+  const hours: AppelHour[] = courseHours(occ.starts_iso, occ.ends_iso, n).map((h) => ({
+    ...h,
+    taken: taken(h.hour),
+    absents: students.filter((s) => s.absentHours.includes(h.hour)).length,
+  }));
 
   // Modifiable tant que le creneau dure (OPEN ou deja SUBMITTED) ; ferme des
   // que la vie scolaire a valide, ou des que le cours est termine.
@@ -159,6 +196,8 @@ export async function loadAppel(ctx: TenantContext, occurrenceId: string): Promi
     registerStatus: reg?.status ?? null,
     editable,
     students,
+    hours,
+    currentHour,
   };
 }
 

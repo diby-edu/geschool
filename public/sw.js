@@ -28,7 +28,7 @@
  * incrementer ce numero a chaque deploiement.
  */
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const RUNTIME_CACHE = `geschool-runtime-${CACHE_VERSION}`;
 const OFFLINE_URL = '/hors-ligne';
 const MAX_ENTRIES = 150;
@@ -112,5 +112,46 @@ self.addEventListener('fetch', (event) => {
         throw new Error('offline-and-not-cached');
       }
     })(),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Notifications sur le téléphone (0171). Le serveur envoie { type, title, body,
+// href } ; on l'affiche, et le toucher ouvre l'écran concerné (ou ramène
+// l'application au premier plan si elle est déjà ouverte).
+// ---------------------------------------------------------------------------
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: 'Gestion Scolaire', body: event.data ? event.data.text() : '' };
+  }
+  const title = data.title || 'Gestion Scolaire';
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || '',
+      icon: '/icons/192',
+      badge: '/icons/192',
+      tag: data.type || undefined,
+      renotify: Boolean(data.type),
+      data: { href: data.href || '/' },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const href = (event.notification.data && event.notification.data.href) || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+      for (const w of wins) {
+        if ('focus' in w) {
+          w.navigate(href).catch(() => {});
+          return w.focus();
+        }
+      }
+      return self.clients.openWindow(href);
+    }),
   );
 });

@@ -1,7 +1,7 @@
-import Link from 'next/link';
-import { Bell, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { YearSwitcher } from '@/features/navigation/components/YearSwitcher';
 import { AvatarMenu } from './AvatarMenu';
+import { BellMenu } from './BellMenu';
 
 export type TopBarData = {
   slug: string;
@@ -14,6 +14,8 @@ export type TopBarData = {
   /** Recherche ouverte : élèves, enseignants ou personnel selon les droits. */
   canSearch: boolean;
   unreadNotifications: number;
+  /** Alertes en cours (abonnement, SMS, appels, notes) selon les droits. */
+  alerts?: number;
   settingsHref: string | null;
   /** Page des années scolaires, quand la personne peut les consulter. */
   yearsHref: string | null;
@@ -58,22 +60,7 @@ export function TopBar({ data, live }: { data: TopBarData; live?: React.ReactNod
 
       <div className="ml-auto flex shrink-0 items-center gap-2.5">
         {live}
-        <Link
-          href={`${base}/notifications`}
-          aria-label={data.unreadNotifications > 0 ? `Notifications : ${data.unreadNotifications} non lues` : 'Notifications'}
-          className="relative grid h-9 w-9 place-items-center rounded-full border transition-colors hover:bg-[color:var(--color-brand-muted)]"
-          style={{ backgroundColor: 'var(--surface)' }}
-        >
-          <Bell className="h-4 w-4" aria-hidden />
-          {data.unreadNotifications > 0 ? (
-            <span
-              className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-bold text-white"
-              style={{ backgroundColor: 'var(--color-danger)' }}
-            >
-              {data.unreadNotifications > 9 ? '9+' : data.unreadNotifications}
-            </span>
-          ) : null}
-        </Link>
+        <BellMenu apiHref={`${base}/api/notifications`} pageHref={`${base}/notifications`} count={data.unreadNotifications + (data.alerts ?? 0)} />
         <AvatarMenu
           name={data.user.displayName}
           roleLabel={data.user.roleLabel}

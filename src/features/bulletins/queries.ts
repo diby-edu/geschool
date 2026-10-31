@@ -90,11 +90,11 @@ export async function getBulletin(ctx: TenantContext, id: string): Promise<Bulle
 }
 
 /** Bulletins PUBLIÉS visibles par l'utilisateur courant (portail élève/parent). */
-export async function listMyBulletins(ctx: TenantContext, opts: { childrenOnly?: boolean } = {}): Promise<{ id: string; student: string; klass: string; period: string; average: number | null; rank: number | null }[]> {
+export async function listMyBulletins(ctx: TenantContext, opts: { childrenOnly?: boolean; studentId?: string } = {}): Promise<{ id: string; student: string; klass: string; period: string; average: number | null; rank: number | null; publishedAt: string | null }[]> {
   const supabase = await createClient();
   let query = supabase
     .from('report_cards')
-    .select('id, general_average, rank, status, students(first_name, last_name), classes(name), academic_periods(name, sequence)')
+    .select('id, general_average, rank, status, published_at, students(first_name, last_name), classes(name), academic_periods(name, sequence)')
     .eq('school_id', ctx.school.id)
     .eq('status', 'PUBLISHED');
   // Espace Parent : uniquement les bulletins de SES enfants (une personne qui
@@ -104,11 +104,13 @@ export async function listMyBulletins(ctx: TenantContext, opts: { childrenOnly?:
     if (childIds.length === 0) return [];
     query = query.in('student_id', childIds);
   }
+  if (opts.studentId) query = query.eq('student_id', opts.studentId);
   const { data } = await query;
   return ((data ?? []) as unknown as {
     id: string;
     general_average: number | null;
     rank: number | null;
+    published_at: string | null;
     students: { first_name: string; last_name: string } | null;
     classes: { name: string } | null;
     academic_periods: { name: string; sequence: number } | null;
@@ -120,6 +122,7 @@ export async function listMyBulletins(ctx: TenantContext, opts: { childrenOnly?:
       period: r.academic_periods?.name ?? '—',
       average: r.general_average === null ? null : Number(r.general_average),
       rank: r.rank,
+      publishedAt: r.published_at,
     }));
 }
 

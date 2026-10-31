@@ -58,10 +58,9 @@ export function FamilyView({ ctx, data, sp }: { ctx: TenantContext; data: Family
                 </span>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
                 <Tile module="notes" label="Dernière moyenne" value={s.lastAverage !== null ? score(s.lastAverage) : '—'} unit={s.lastAverage !== null ? '/ 20' : undefined} sub={s.lastAverage !== null ? 'Dernier bulletin publié' : 'Aucun bulletin publié'} href={versNotes ? `${base}/mes-notes?enfant=${s.id}` : undefined} min={120} size={32} />
                 <Tile module="bulletins" label="Absences" value={fr(s.absences30d)} sub="30 derniers jours" href={versPresences ? `${base}/mes-absences?enfant=${s.id}` : undefined} min={120} size={32} />
-                <Tile module="acces" label="Retards" value={fr(s.lates30d)} sub="30 derniers jours" href={versPresences ? `${base}/mes-absences?enfant=${s.id}#retards` : undefined} min={120} size={32} />
                 <Tile module="eleves" label="Bulletins" value={fr(s.bulletins)} sub={plural(s.bulletins, 'bulletin publié', 'bulletins publiés')} href={s.bulletins > 0 ? `${base}/mes-bulletins` : undefined} min={120} size={32} />
               </div>
 

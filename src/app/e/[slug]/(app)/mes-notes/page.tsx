@@ -2,14 +2,16 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getTenantContext } from '@/lib/tenant/context';
 import { requireFeature } from '@/lib/permissions/guard';
-import { myChildren, pickChild } from '@/features/family/children';
+import { myChildren, parentPortal, pickChild } from '@/features/family/children';
+import { ParentChrome } from '@/features/family/components/ParentChrome';
+import { unreadCount } from '@/features/communication/inbox';
 import { loadChildNotes } from '@/features/family/notes';
 import { formatDate } from '@/features/academic-years/labels';
 import { periodScopeLabel } from '@/features/academic-years/periods-by-track';
 import { PageHeader, EmptyState } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 
-export const metadata: Metadata = { title: 'Mes notes' };
+export const metadata: Metadata = { title: 'Moyennes' };
 export const dynamic = 'force-dynamic';
 
 const premier = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -54,18 +56,27 @@ export default async function MesNotesPage({
   requireFeature(ctx, 'grades');
 
   const base = `/e/${slug}/mes-notes`;
-  const children = await myChildren(ctx);
+  const [children, portal, unread] = await Promise.all([myChildren(ctx), parentPortal(ctx), unreadCount(ctx)]);
   const child = pickChild(children, premier(sp.enfant));
 
   if (!child) {
     return (
       <div className="mx-auto max-w-3xl space-y-6">
-        <PageHeader title="Mes notes" description={ctx.school.name} />
+        <PageHeader title="Moyennes" description={ctx.school.name} />
         <EmptyState
           title="Aucun dossier accessible"
           hint="L’établissement doit rattacher votre compte à votre enfant."
         />
       </div>
+    );
+  }
+
+  // Enfant non payé : l'écran de paiement, sans rien lire (0172).
+  if (!child.unlocked) {
+    return (
+      <ParentChrome slug={slug} kids={children} current={child} path="mes-notes" price={portal.price} unread={unread}>
+        {null}
+      </ParentChrome>
     );
   }
 
@@ -79,19 +90,8 @@ export default async function MesNotesPage({
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <PageHeader
-        title="Mes notes"
-        description={`${child.name}${child.className ? ` · ${child.className}` : ''}`}
-      />
-
-      {children.length > 1 ? (
-        <div className="flex flex-wrap items-center gap-2">
-          {children.map((c) => (
-            <Choix key={c.id} href={lien({ enfant: c.id })} label={c.name} active={c.id === child.id} />
-          ))}
-        </div>
-      ) : null}
+    <ParentChrome slug={slug} kids={children} current={child} path="mes-notes" price={portal.price} unread={unread}>
+      <PageHeader title="Moyennes" description={`${child.name}${child.className ? ` · ${child.className}` : ''}`} />
 
       {notes.periods.length > 1 ? (
         <div className="flex flex-wrap items-center gap-2">
@@ -117,12 +117,9 @@ export default async function MesNotesPage({
                     </span>
                   ) : null}
                 </p>
-                <p className="text-xs text-[color:var(--muted-foreground)]">
-                  Calculée sur les notes publiées. Le bulletin, une fois publié, fait foi.
-                </p>
               </div>
               <div className="text-right">
-                <p className="text-xs font-medium text-[color:var(--muted-foreground)]">Moyenne générale</p>
+                <p className="text-xs font-medium text-[color:var(--muted-foreground)]">Moyenne générale provisoire</p>
                 <p className="text-2xl font-bold tabular-nums">
                   {note(notes.periodAverage)}
                   <span className="text-sm font-medium text-[color:var(--muted-foreground)]"> / {notes.scaleMax}</span>
@@ -131,25 +128,34 @@ export default async function MesNotesPage({
             </CardContent>
           </Card>
 
+          {/* Maquette espace-parent v3 : les moyennes bougent à chaque note publiée. */}
+          <p className="rounded-xl px-3 py-2 text-xs" style={{ background: '#fff3dc', color: '#7a4b00' }}>
+            ⏳ Moyennes provisoires : elles changent à chaque nouvelle note. Elles ne sont définitives qu’à la fin du trimestre, sur le bulletin.
+          </p>
+
           {notes.subjects.length === 0 ? (
             <EmptyState
               title="Aucune note publiée pour cette période"
               hint="Les notes apparaissent ici dès que l’enseignant publie son évaluation."
             />
           ) : (
-            <ul className="space-y-3">
+            <>
+            <p className="text-xs font-bold text-[color:var(--color-brand)]">👆 Touchez une matière pour voir ses notes</p>
+            <ul className="space-y-2">
               {notes.subjects.map((s) => (
                 <li key={s.subjectId}>
-                  <Card>
-                    <CardContent className="py-3">
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <h2 className="font-bold">{s.subject}</h2>
-                        <span className="text-sm">
-                          <span className="text-[color:var(--muted-foreground)]">Moyenne </span>
-                          <span className="font-bold tabular-nums">{note(s.average)}</span>
-                          <span className="text-[color:var(--muted-foreground)]"> / {notes.scaleMax}</span>
-                        </span>
-                      </div>
+                  <details className="group rounded-[--radius-card] border" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+                    <summary className="flex cursor-pointer list-none flex-wrap items-baseline justify-between gap-2 px-4 py-3">
+                      <h2 className="font-bold">
+                        <span aria-hidden className="mr-1 inline-block transition group-open:rotate-90">›</span>
+                        {s.subject}
+                      </h2>
+                      <span className="text-sm">
+                        <span className="font-bold tabular-nums">{note(s.average)}</span>
+                        <span className="text-[color:var(--muted-foreground)]"> / {notes.scaleMax}</span>
+                      </span>
+                    </summary>
+                    <div className="px-4 pb-3">
 
                       <ul className="mt-2 divide-y" style={{ borderColor: 'var(--border)' }}>
                         {s.grades.map((g) => (
@@ -178,14 +184,15 @@ export default async function MesNotesPage({
                           </li>
                         ))}
                       </ul>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </details>
                 </li>
               ))}
             </ul>
+            </>
           )}
         </>
       )}
-    </div>
+    </ParentChrome>
   );
 }

@@ -6,10 +6,12 @@ import { createClient } from '@/lib/supabase/server';
 import { callRpc } from '@/lib/supabase/rpc';
 import type { TenantContext } from '@/lib/tenant/context';
 import { hasPermission } from '@/lib/permissions';
+import { isStaffFunction, roleLabel } from '@/lib/permissions/roles';
 import { EMPLOYMENT_OPTIONS } from '@/lib/hr';
 import { getSchoolSubscription } from '@/features/billing/platform';
 import { listStaff } from '@/features/staff/queries';
 import { isoDaysAgo, loadClasses, loadParents } from './queries';
+import { dashboardCounts, type DashboardCounts } from './counts';
 import type { DashParams, TopRange, WatchRange } from './params';
 import { addDays, currentPeriod, mondayOf, periodShortLabel, resolveRange, schoolToday, type PeriodInfo, type RangeKey, type YearInfo } from './time';
 import type {
@@ -105,6 +107,78 @@ export async function loadPeriods(supabase: Supabase, ctx: TenantContext): Promi
   };
 }
 
+/**
+ * Comptages avant la migration 0167 : les lectures d'origine, une par chiffre.
+ * Un comptage qui ECHOUE n'est pas un comptage a zero : PostgREST repond en
+ * HEAD, sans corps ; afficher « 0 eleve » dans une ecole qui en compte huit
+ * cents est pire que de ne rien afficher — le chiffre est alors omis.
+ */
+async function legacyCounts(ctx: TenantContext, supabase: Supabase, since: string): Promise<DashboardCounts> {
+  const schoolId = ctx.school.id;
+  const yearId = ctx.academicYear?.id ?? null;
+  const head = { count: 'exact', head: true } as const;
+  const enrolled = () =>
+    supabase.from('student_enrollments').select('id', head).eq('school_id', schoolId).eq('academic_year_id', yearId ?? '').eq('status', 'ENROLLED');
+  const canStudents = hasPermission(ctx, 'students.view');
+  const [total, fresh, teacherRows, parents, justifs, versions] = await Promise.all([
+    canStudents ? (yearId ? enrolled() : supabase.from('students').select('id', head).eq('school_id', schoolId).is('deleted_at', null)) : null,
+    canStudents && yearId ? enrolled().gte('enrolled_on', since) : null,
+    hasPermission(ctx, 'teachers.view')
+      ? supabase.from('teachers').select('employment_type, user_id').eq('school_id', schoolId).is('deleted_at', null).limit(5000)
+      : null,
+    hasPermission(ctx, 'access_accounts.view') ? loadParents(supabase, schoolId) : null,
+    hasPermission(ctx, 'attendance.justify') || hasPermission(ctx, 'attendance.view_all')
+      ? supabase.from('absence_justifications').select('id', head).eq('school_id', schoolId).eq('status', 'PENDING')
+      : null,
+    hasPermission(ctx, 'schedule.view') && yearId
+      ? supabase.from('schedule_versions').select('id', head).eq('school_id', schoolId).eq('academic_year_id', yearId).eq('status', 'PUBLISHED')
+      : null,
+  ]);
+  const compte = (r: { count: number | null; error: unknown } | null): number | undefined => (r && !r.error ? (r.count ?? 0) : undefined);
+  const out: DashboardCounts = {};
+  const studentsTotal = compte(total);
+  if (studentsTotal !== undefined) {
+    out.students_total = studentsTotal;
+    out.students_new = compte(fresh) ?? 0;
+  }
+  if (teacherRows?.data) {
+    const rows = teacherRows.data as { employment_type: string | null; user_id: string | null }[];
+    const byContract: Record<string, number> = {};
+    for (const r of rows) if (r.employment_type) byContract[r.employment_type] = (byContract[r.employment_type] ?? 0) + 1;
+    out.teachers = { total: rows.length, with_access: rows.filter((r) => r.user_id).length, by_contract: byContract };
+  }
+  if (parents) out.parents = parents;
+  const pending = compte(justifs);
+  if (pending !== undefined) out.pending_justifications = pending;
+  const published = compte(versions);
+  if (published !== undefined) out.schedule_published = published;
+  return out;
+}
+
+/**
+ * Personnel : nombre de personnes et fonctions distinctes. Le tableau de bord
+ * n'a pas besoin de la fiche de chacun : une lecture courte (0166) au lieu de la
+ * liste complète, qui arrivait 0,4 s après tout le reste (relevé du 2026-10-31).
+ * Même tri que la page Personnel : fondateur, fonctions prévues et « F_… ».
+ */
+async function loadPersonnel(ctx: TenantContext, supabase: Supabase): Promise<NonNullable<StaffOverview['personnel']>> {
+  const res = await callRpc<{ user_id: string; code: string; name: string | null }[]>(supabase, 'dashboard_staff_functions', { p_school: ctx.school.id });
+  if (res.missing || !res.data) {
+    const staff = await listStaff(ctx);
+    const labels = new Map<string, string>();
+    for (const row of staff) for (const f of row.functions) labels.set(f.code, f.label);
+    return { total: staff.length, functions: labels.size, labels: Array.from(labels.values()) };
+  }
+  const people = new Set<string>();
+  const labels = new Map<string, string>();
+  for (const r of res.data) {
+    if (r.code !== 'SCHOOL_ADMIN' && !isStaffFunction(r.code)) continue;
+    people.add(r.user_id);
+    labels.set(r.code, roleLabel(r.code, r.name));
+  }
+  return { total: people.size, functions: labels.size, labels: Array.from(labels.values()) };
+}
+
 // ---------------------------------------------------------------------------
 // Statistiques actuelles (bloc 3) et donnees d'appoint
 // ---------------------------------------------------------------------------
@@ -125,59 +199,28 @@ async function loadOverview(
   const canSchedule = hasPermission(ctx, 'schedule.view');
   const canStudents = hasPermission(ctx, 'students.view');
 
-  const studentsCount = (extra?: (q: ReturnType<typeof enrolledQuery>) => ReturnType<typeof enrolledQuery>) => {
-    const q = enrolledQuery();
-    return extra ? extra(q) : q;
-  };
-  function enrolledQuery() {
-    return supabase
-      .from('student_enrollments')
-      .select('id', { count: 'exact', head: true })
-      .eq('school_id', schoolId)
-      .eq('academic_year_id', yearId ?? '')
-      .eq('status', 'ENROLLED');
-  }
-
   const weekFrom = addDays(mondayOf(today), -7 * (SIX_WEEKS - 1));
+  const since = isoDaysAgo(30).slice(0, 10);
 
-  const [studentsTotal, studentsNew, teacherRows, classesLoaded, parents, staff, weeklyRes, pendingJust, scheduleVersion, subscription] =
-    await Promise.all([
-      canStudents
-        ? yearId
-          ? studentsCount()
-          : supabase.from('students').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).is('deleted_at', null)
-        : Promise.resolve(null),
-      canStudents && yearId ? studentsCount((q) => q.gte('enrolled_on', isoDaysAgo(30).slice(0, 10))) : Promise.resolve(null),
-      canTeachers
-        ? supabase.from('teachers').select('employment_type, user_id').eq('school_id', schoolId).is('deleted_at', null).limit(5000)
-        : Promise.resolve(null),
-      canClasses && yearId ? timed('classes', loadClasses(supabase, schoolId, yearId)) : Promise.resolve(null),
-      hasPermission(ctx, 'access_accounts.view') ? timed('parents', loadParents(supabase, schoolId)) : Promise.resolve(null),
-      hasPermission(ctx, 'users.view') ? timed('personnel', listStaff(ctx)) : Promise.resolve(null),
-      canAttendance
-        ? timed(
-            'tendance',
-            callRpc<{ week_start: string; records: number; ok: number }[]>(supabase, 'dashboard_weekly_attendance', {
-              p_school: schoolId,
-              p_from: weekFrom,
-              p_to: today,
-              p_now: nowIso,
-            }),
-          )
-        : Promise.resolve(null),
-      canJustify
-        ? supabase.from('absence_justifications').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).eq('status', 'PENDING')
-        : Promise.resolve(null),
-      canSchedule && yearId
-        ? supabase
-            .from('schedule_versions')
-            .select('id', { count: 'exact', head: true })
-            .eq('school_id', schoolId)
-            .eq('academic_year_id', yearId)
-            .eq('status', 'PUBLISHED')
-        : Promise.resolve(null),
-      hasPermission(ctx, 'billing.view') ? timed('abonnement', getSchoolSubscription(schoolId)) : Promise.resolve(null),
-    ]);
+  const [countsRead, classesLoaded, staff, weeklyRes, subscription] = await Promise.all([
+    // Élèves, enseignants, parents, justificatifs, emploi du temps : une lecture (0167).
+    timed('comptages', dashboardCounts(schoolId, yearId, since)),
+    canClasses && yearId ? timed('classes', loadClasses(supabase, schoolId, yearId)) : Promise.resolve(null),
+    hasPermission(ctx, 'users.view') ? timed('personnel', loadPersonnel(ctx, supabase)) : Promise.resolve(null),
+    canAttendance
+      ? timed(
+          'tendance',
+          callRpc<{ week_start: string; records: number; ok: number }[]>(supabase, 'dashboard_weekly_attendance', {
+            p_school: schoolId,
+            p_from: weekFrom,
+            p_to: today,
+            p_now: nowIso,
+          }),
+        )
+      : Promise.resolve(null),
+    hasPermission(ctx, 'billing.view') ? timed('abonnement', getSchoolSubscription(schoolId)) : Promise.resolve(null),
+  ]);
+  const counts = countsRead ?? (await timed('comptages (sans 0167)', legacyCounts(ctx, supabase, since)));
 
   // Places, niveaux
   let capacity: StaffOverview['capacity'] = null;
@@ -211,22 +254,17 @@ async function loadOverview(
 
   // Enseignants : total, acces crees, types de contrat
   let teachers: StaffOverview['teachers'] = null;
-  if (teacherRows?.data) {
-    const rows = teacherRows.data as { employment_type: string; user_id: string | null }[];
+  if (canTeachers && counts.teachers) {
+    const t = counts.teachers;
     teachers = {
-      total: rows.length,
-      withAccess: rows.filter((r) => r.user_id).length,
-      byContract: EMPLOYMENT_OPTIONS.map((o) => ({ code: o.code, label: o.label, count: rows.filter((r) => r.employment_type === o.code).length })).filter((c) => c.count > 0),
+      total: t.total,
+      withAccess: t.with_access,
+      byContract: EMPLOYMENT_OPTIONS.map((o) => ({ code: o.code, label: o.label, count: t.by_contract[o.code] ?? 0 })).filter((c) => c.count > 0),
     };
   }
 
   // Personnel : personnes et fonctions distinctes
-  let personnel: StaffOverview['personnel'] = null;
-  if (staff) {
-    const labels = new Map<string, string>();
-    for (const row of staff) for (const f of row.functions) labels.set(f.code, f.label);
-    personnel = { total: staff.length, functions: labels.size, labels: Array.from(labels.values()) };
-  }
+  const personnel: StaffOverview['personnel'] = staff;
 
   // Assiduite hebdomadaire : une semaine sans appel = trou (null), jamais 0 %.
   let weekly: StaffOverview['weekly'] = null;
@@ -241,29 +279,19 @@ async function loadOverview(
     if (last) weekly = { rate7d: last.value, ratePrev7d: known[known.length - 2]?.value ?? last.value, series };
   }
 
-  // Un comptage qui ECHOUE n'est pas un comptage a zero. PostgREST repond en
-  // HEAD, donc sans corps : l'erreur arrive sans message, et `count` reste nul.
-  // Afficher « 0 eleve » dans une ecole qui en compte huit cents est pire que
-  // de ne rien afficher — on prefere taire la section.
-  const compte = (r: { count: number | null; error: unknown } | null): number | null =>
-    r && !r.error ? (r.count ?? 0) : null;
-  const studentsCounted = compte(studentsTotal);
-
   return {
     kind: 'staff',
     students:
-      studentsTotal && studentsCounted !== null
-        ? { total: studentsCounted, new30d: compte(studentsNew) ?? 0 }
-        : null,
+      canStudents && counts.students_total !== undefined ? { total: counts.students_total, new30d: counts.students_new ?? 0 } : null,
     capacity,
-    parents,
+    parents: hasPermission(ctx, 'access_accounts.view') ? (counts.parents ?? null) : null,
     teachers,
     personnel,
     classes: classesLoaded ? classesLoaded.classes.length : null,
     levelDistribution,
     weekly,
-    pendingJustifications: compte(pendingJust),
-    scheduleGenerated: canSchedule && yearId ? (compte(scheduleVersion) ?? 0) > 0 : null,
+    pendingJustifications: canJustify ? (counts.pending_justifications ?? null) : null,
+    scheduleGenerated: canSchedule && yearId ? (counts.schedule_published ?? 0) > 0 : null,
     subscription: subscription ? { status: subscription.status, planName: subscription.plans?.name ?? null } : null,
   };
 }

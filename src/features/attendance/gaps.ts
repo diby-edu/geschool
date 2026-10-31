@@ -69,6 +69,8 @@ export async function listMissingCalls(ctx: TenantContext, from: string, to: str
       reason: string | null;
       note: string | null;
       reviewed_at: string | null;
+      course_hours?: number;
+      missing_hours?: number;
     }[]).map((o) => ({
       occurrenceId: o.occurrence_id,
       date: o.occurs_on,
@@ -81,6 +83,7 @@ export async function listMissingCalls(ctx: TenantContext, from: string, to: str
       reason: o.reason,
       note: o.note,
       reviewedAt: o.reviewed_at,
+      ...(o.course_hours ? { courseHours: o.course_hours, missingHours: o.missing_hours ?? o.course_hours } : {}),
     }));
   }
   if (direct.error.code !== 'PGRST202' && direct.error.code !== '42883') throw direct.error;

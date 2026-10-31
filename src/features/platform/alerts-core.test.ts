@@ -67,11 +67,11 @@ describe('réglages et nuit', () => {
     expect(s.thresholds.smsCredit).toBe(500);
   });
 
-  it('nuit calme : pas de SMS à 23 h, sauf urgence', () => {
+  it('le SMS ne part que pour une urgence, de jour comme de nuit', () => {
     const s = normalizeAlertSettings({ quietNight: true });
     const night = new Date('2026-10-28T23:00:00Z');
     expect(smsAllowedNow(s, { urgent: false }, night)).toBe(false);
     expect(smsAllowedNow(s, { urgent: true }, night)).toBe(true);
-    expect(smsAllowedNow(s, { urgent: false }, new Date('2026-10-28T09:00:00Z'))).toBe(true);
+    expect(smsAllowedNow(s, { urgent: false }, new Date('2026-10-28T09:00:00Z'))).toBe(false);
   });
 });

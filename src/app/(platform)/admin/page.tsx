@@ -6,6 +6,7 @@ import { getPlatformCockpit, isAtRisk, money } from '@/features/platform-dashboa
 import { schoolsHref } from '@/features/platform-schools/filters';
 import { smsBalance } from '@/features/sms/balance';
 import { getAuthenticatedUser } from '@/lib/supabase/server';
+import { PlatformNotificationsModule } from '@/features/platform/components/PlatformNotificationsModule';
 import { Alert } from '@/components/ui/alert';
 import { Hero, type HeroAction } from '@/features/dashboard/components/Hero';
 import { dateFr } from '@/features/dashboard/components/DayBlock';
@@ -83,6 +84,9 @@ export default async function PlatformDashboardPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-7">
+      {/* Alertes et notifications (0171) : ce qui ne va pas, ce qui est nouveau. */}
+      {user ? <PlatformNotificationsModule userId={user.id} /> : null}
+
       <Hero
         name={name}
         roleText="Super Admin"

@@ -376,19 +376,24 @@ export async function transitionMany(ctx: TenantContext, ids: string[], action: 
   const supabase = await createClient();
 
   let changed = 0;
+  const published: string[] = [];
   for (let i = 0; i < ids.length; i += 200) {
     const patch: Record<string, unknown> = { status: rule.to };
     if (rule.to === 'PUBLISHED') patch.published_at = new Date().toISOString();
     if (rule.to === 'DRAFT') patch.published_at = null;
-    const { error, count } = await supabase
+    const { data, error } = await supabase
       .from('assessments')
-      .update(patch as never, { count: 'exact' })
+      .update(patch as never)
       .eq('school_id', ctx.school.id)
       .in('status', rule.from)
-      .in('id', ids.slice(i, i + 200));
+      .in('id', ids.slice(i, i + 200))
+      .select('id');
     if (error) throw error;
-    changed += count ?? 0;
+    changed += data?.length ?? 0;
+    if (rule.to === 'PUBLISHED') published.push(...(data ?? []).map((r) => (r as { id: string }).id));
   }
+  // Les familles reçoivent chaque note publiée (0171), sans faire attendre l'écran.
+  if (published.length > 0) void import('@/services/family-notifications').then((m) => m.notifyGradesPublished(ctx.school.id, published));
 
   await audit(ctx, {
     action: rule.audit,
@@ -447,4 +452,5 @@ export async function transitionAssessment(ctx: TenantContext, id: string, actio
   const { error } = await supabase.from('assessments').update(patch as never).eq('school_id', ctx.school.id).eq('id', id);
   if (error) throw error;
   await audit(ctx, { action: rule.audit, module: 'assessments', entityType: 'assessment', entityId: id, after: { status: rule.to } });
+  if (rule.to === 'PUBLISHED') void import('@/services/family-notifications').then((m) => m.notifyGradesPublished(ctx.school.id, [id]));
 }

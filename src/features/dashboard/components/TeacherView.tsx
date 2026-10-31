@@ -7,6 +7,7 @@ import type { TeacherOverview } from '../types';
 import { WelcomeBanner } from './WelcomeBanner';
 import { KpiGrid, type KpiTile } from './RoleBlocks';
 import { BlocHead, Card, Pill, fr, plural } from './ui';
+import { NotificationsModule } from '@/features/notifications/components/NotificationsModule';
 
 type Sp = Record<string, string | string[] | undefined>;
 
@@ -82,16 +83,8 @@ export function TeacherView({ ctx, data, sp }: { ctx: TenantContext; data: Teach
       <h1 className="sr-only">Tableau de bord</h1>
       <WelcomeBanner name={ctx.user.displayName} schoolName={ctx.school.name} {...bannerFor(ctx, data)} />
 
-      {data.unreadNotifications > 0 ? (
-        <Card className="flex items-center justify-between py-3">
-          <span className="text-sm">
-            <strong>{data.unreadNotifications}</strong> notification(s) non lue(s)
-          </span>
-          <Link href={`${base}/notifications`} className="text-sm font-medium text-[color:var(--color-brand)] hover:underline">
-            Consulter
-          </Link>
-        </Card>
-      ) : null}
+      {/* Alertes et notifications (0171), à la place du simple compteur. */}
+      <NotificationsModule ctx={ctx} />
 
       <KpiGrid kpis={kpis} title="Ma journée" sub={ctx.academicYear ? `Année ${ctx.academicYear.name}` : 'Aucune année active'} columns={4} />
 

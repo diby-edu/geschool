@@ -53,12 +53,16 @@ export type StartInput = {
   schoolId: string;
   slug: string;
   userId: string;
-  purpose: 'SUBSCRIPTION' | 'SMS_PACK';
+  purpose: 'SUBSCRIPTION' | 'SMS_PACK' | 'PARENT_ACCESS';
   amount: number;
   description: string;
   items: InvoiceItem[];
   moduleIds?: string[];
   smsQuantity?: number;
+  /** Espace Parent (0172) : les enfants débloqués à la confirmation. */
+  studentIds?: string[];
+  /** Abonnement (0172) : réduction gagnée par les élèves activés, déjà appliquée au montant. */
+  discountPct?: number;
 };
 
 /** Crée le paiement « en attente » et la facture PayDunya ; renvoie l'adresse de la page de paiement. */
@@ -86,6 +90,8 @@ export async function startOnlinePayment(input: StartInput): Promise<{ paymentId
       module_ids: input.moduleIds ?? [],
       sms_quantity: input.smsQuantity ?? null,
       fee_amount: fee,
+      ...(input.studentIds?.length ? { student_ids: input.studentIds } : {}),
+      ...(input.discountPct ? { discount_pct: input.discountPct } : {}),
     } as never)
     .select('id')
     .single();
@@ -143,6 +149,7 @@ export async function checkOnlinePayment(paymentId: string): Promise<OnlineState
       p_details: { receiptUrl: s.receiptUrl, customer: s.customer, mode: s.raw.mode ?? null },
     } as never);
     if (error) throw new Error(error.message);
+    await announcePayment(paymentId, p.amount + (p.fee_amount ?? 0));
     return { status: 'PAID', receipt: (number as unknown as string) ?? null, reason: null };
   }
   if (s.status === 'cancelled' || s.status === 'failed') {
@@ -150,6 +157,65 @@ export async function checkOnlinePayment(paymentId: string): Promise<OnlineState
     return { status: s.status === 'failed' ? 'FAILED' : 'CANCELLED', receipt: null, reason: s.failReason };
   }
   return { status: 'PENDING', receipt: null, reason: null };
+}
+
+/**
+ * Paiement en ligne réussi : l'école (ceux qui suivent l'abonnement) et le Super
+ * Admin sont prévenus, dans la cloche et sur leur téléphone (0171).
+ */
+async function announcePayment(paymentId: string, total: number): Promise<void> {
+  try {
+    const { data } = await admin().from('payments').select('school_id, purpose, recorded_by, student_ids, schools(name)').eq('id', paymentId).maybeSingle();
+    const row = data as unknown as { school_id: string; purpose: string | null; recorded_by: string | null; student_ids: string[] | null; schools: { name: string } | null } | null;
+    if (!row) return;
+    // Qui a payé, et pour quels élèves (Espace Parent) — demandé le 2026-10-31.
+    const [{ data: u }, { data: kids }] = await Promise.all([
+      row.recorded_by ? admin().from('users').select('first_name, last_name, display_name').eq('id', row.recorded_by).maybeSingle() : Promise.resolve({ data: null }),
+      row.student_ids?.length
+        ? admin().from('students').select('first_name, last_name, student_enrollments(status, classes(name))').in('id', row.student_ids)
+        : Promise.resolve({ data: [] }),
+    ]);
+    const who = u ? [u.first_name, u.last_name?.toUpperCase()].filter(Boolean).join(' ') || u.display_name : null;
+    const pour = ((kids ?? []) as unknown as { first_name: string; last_name: string; student_enrollments: { status: string; classes: { name: string } | null }[] }[])
+      .map((k) => {
+        const c = k.student_enrollments.find((e) => e.status === 'ENROLLED')?.classes?.name;
+        return `${k.last_name.toUpperCase()} ${k.first_name}${c ? ` (${c})` : ''}`;
+      })
+      .join(', ');
+    const montant = `${Math.round(total).toLocaleString('fr-FR')} F`;
+    const objet = row.purpose === 'SMS_PACK' ? 'achat de SMS' : row.purpose === 'PARENT_ACCESS' ? 'Espace Parent, payé par un parent' : 'abonnement';
+    const { notifyPermission, notifyPlatform } = await import('./notifications');
+    // L'Espace Parent est payé par un parent : l'école n'a rien reçu ni payé.
+    if (row.purpose !== 'PARENT_ACCESS') await notifyPermission(row.school_id, ['billing.view'], {
+      type: 'billing.payment',
+      title: 'Paiement reçu',
+      body: `${montant} en ligne (${objet}). Le reçu est disponible.`,
+      entityType: 'payment',
+      entityId: paymentId,
+    });
+    await notifyPlatform({
+      type: 'platform.payment',
+      title: 'Paiement reçu',
+      body: `${row.schools?.name ?? 'Une école'} — ${montant} en ligne (${objet})${who ? `, payé par ${who}` : ''}${pour ? ` pour ${pour}` : ''}.`,
+      href: `/admin/facturation/${row.school_id}`,
+      schoolId: row.school_id,
+      entityType: 'payment',
+      entityId: paymentId,
+    });
+  } catch (error) {
+    console.error('[paiement] notification impossible', error);
+  }
+}
+
+/** Un paiement, pour la personne qui l'a fait (parent, Espace Parent) : null sinon. */
+export async function paymentOfPayer(paymentId: string, userId: string): Promise<Record<string, unknown> | null> {
+  const { data } = await admin()
+    .from('payments')
+    .select('id, school_id, amount, fee_amount, purpose, sms_quantity, notes, checkout_url, student_ids, recorded_by')
+    .eq('id', paymentId)
+    .maybeSingle();
+  const row = data as unknown as { recorded_by: string | null } | null;
+  return row && row.recorded_by === userId ? (row as unknown as Record<string, unknown>) : null;
 }
 
 /** Le paiement correspondant à un jeton PayDunya (IPN). */

@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { getAuthenticatedUser, createClient } from '@/lib/supabase/server';
 import { AppShell } from '@/components/layout/AppShell';
 import { countOpenRequests } from '@/features/support/requests';
+import { platformBellCount } from '@/features/platform/notifications';
+import { BellMenu } from '@/components/layout/BellMenu';
 
 /**
  * Espace Super Admin (ADR-007). Garde stricte : reservee aux administrateurs
@@ -16,8 +18,9 @@ export default async function PlatformLayout({ children }: { children: React.Rea
   const { data: isAdmin } = await supabase.rpc('is_platform_admin' as never);
   if (isAdmin !== true) notFound();
 
-  // Les demandes sans réponse se voient dans le menu, sans ouvrir la page.
-  const open = await countOpenRequests();
+  // Les demandes sans réponse se voient dans le menu, sans ouvrir la page ; la
+  // cloche compte les alertes ouvertes et les notifications non lues (0171).
+  const [open, bell] = await Promise.all([countOpenRequests(), platformBellCount(user.id).catch(() => 0)]);
 
   const displayName =
     (user.user_metadata?.display_name as string | undefined) ?? user.email ?? 'Super Admin';
@@ -35,6 +38,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
         { href: '/admin/comptes', label: 'Comptes', section: 'Écoles', icon: 'acces' },
         { href: '/admin/paiements', label: 'Paiements', section: 'Argent', icon: 'bulletins' },
         { href: '/admin/plans', label: 'Plans et modules', section: 'Argent', icon: 'parametres' },
+        { href: '/admin/espace-parent', label: 'Espace Parent', section: 'Argent', icon: 'eleves' },
         { href: '/admin/messages', label: 'Messages aux écoles', section: 'Service', icon: 'annonces' },
         { href: '/admin/demandes', label: open > 0 ? `Demandes des écoles (${open})` : 'Demandes des écoles', section: 'Service', icon: 'notifications' },
         { href: '/admin/sms', label: 'SMS', section: 'Service', icon: 'annonces' },
@@ -45,6 +49,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
         { href: '/admin/journal', label: 'Journal', section: 'Sécurité', icon: 'notifications' },
       ]}
       user={{ displayName, roleLabel: 'Super Admin' }}
+      headerExtra={<BellMenu apiHref="/admin/api/notifications" pageHref="/admin/notifications" count={bell} />}
     >
       {children}
     </AppShell>

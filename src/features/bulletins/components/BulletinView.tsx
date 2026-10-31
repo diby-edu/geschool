@@ -212,7 +212,7 @@ export function BulletinView({
       ) : null}
 
       {has('stats') ? (
-        <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
           <Case label="Moyenne de la classe" value={fmt(b.class_average)} />
           {/* Bulletin généré avant le calcul en heures : il garde son ancien chiffre. */}
           {b.absenceHoursUnjustified === null ? (
@@ -220,7 +220,6 @@ export function BulletinView({
           ) : (
             <Case label="Heures d’absence non justifiées" value={formatHours(b.absenceHoursUnjustified)} />
           )}
-          <Case label="Retards" value={String(b.lateness)} />
         </div>
       ) : null}
 
